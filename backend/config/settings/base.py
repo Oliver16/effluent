@@ -24,6 +24,8 @@ INSTALLED_APPS = [
     'apps.core',
     'apps.households',
     'apps.accounts',
+    'apps.flows',
+    'apps.taxes',
 ]
 
 MIDDLEWARE = [
