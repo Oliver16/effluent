@@ -1,0 +1,110 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: effluent
+      POSTGRES_USER: effluent
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - effluent_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U effluent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - effluent-internal
+
+  migrate:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    command: >
+      sh -c "
+        echo 'Waiting for database...' &&
+        while ! nc -z db 5432; do sleep 1; done &&
+        echo 'Running migrations...' &&
+        python manage.py migrate --noinput &&
+        echo 'Migrations complete!'
+      "
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - effluent-internal
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+  backend:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ALLOWED_HOSTS=${BACKEND_HOST},localhost
+      - CORS_ORIGINS=https://${FRONTEND_HOST}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST}`)"
+      - "traefik.http.routers.effluent-api.entrypoints=websecure"
+      - "traefik.http.routers.effluent-api.tls=true"
+      - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
+      - "traefik.docker.network=traefik-public"
+    networks:
+      - effluent-internal
+      - traefik-public
+
+  frontend:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:frontend
+      dockerfile: Dockerfile.prod
+      args:
+        - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST}
+    restart: unless-stopped
+    environment:
+      - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST}
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST}`)"
+      - "traefik.http.routers.effluent-web.entrypoints=websecure"
+      - "traefik.http.routers.effluent-web.tls=true"
+      - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
+      - "traefik.docker.network=traefik-public"
+    networks:
+      - traefik-public
+
+volumes:
+  effluent_postgres:
+
+networks:
+  effluent-internal:
+    driver: bridge
+  traefik-public:
+    external: true
