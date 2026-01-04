@@ -314,7 +314,15 @@ class MetricsCalculator:
         max_income = Decimal('0')
 
         for source in income_sources:
-            if source.is_active_on(self.as_of_date):
+            # Check if source is active on the as_of_date
+            if source.is_active:
+                # Skip if hasn't started yet
+                if source.start_date and source.start_date > self.as_of_date:
+                    continue
+                # Skip if already ended
+                if source.end_date and source.end_date < self.as_of_date:
+                    continue
+
                 annual_income = source.gross_annual
                 total_income += annual_income
                 max_income = max(max_income, annual_income)
@@ -346,22 +354,21 @@ class MetricsCalculator:
         total_monthly_investment = Decimal('0')
 
         for deduction in deductions:
-            if deduction.is_percentage:
-                # Need to calculate from income source
-                if deduction.income_source.gross_annual:
-                    monthly_gross = deduction.income_source.gross_annual / 12
-                    total_monthly_investment += monthly_gross * deduction.amount_or_percentage
-            else:
-                # Fixed amount per paycheck - convert to monthly
+            if deduction.income_source.gross_annual:
+                # Use the model's helper to calculate amount per period
+                gross_per_period = deduction.income_source.gross_per_period
+                amount_per_period = deduction.calculate_per_period(gross_per_period)
+
+                # Convert to monthly based on pay frequency
                 pay_frequency = deduction.income_source.pay_frequency
                 if pay_frequency == 'weekly':
-                    total_monthly_investment += deduction.amount_or_percentage * Decimal('52') / Decimal('12')
+                    total_monthly_investment += amount_per_period * Decimal('52') / Decimal('12')
                 elif pay_frequency == 'biweekly':
-                    total_monthly_investment += deduction.amount_or_percentage * Decimal('26') / Decimal('12')
+                    total_monthly_investment += amount_per_period * Decimal('26') / Decimal('12')
                 elif pay_frequency == 'semimonthly':
-                    total_monthly_investment += deduction.amount_or_percentage * Decimal('2')
+                    total_monthly_investment += amount_per_period * Decimal('24') / Decimal('12')
                 else:  # monthly
-                    total_monthly_investment += deduction.amount_or_percentage
+                    total_monthly_investment += amount_per_period
 
         return total_monthly_investment / income
 
