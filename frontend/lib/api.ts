@@ -90,12 +90,12 @@ export const households = {
 
 // Account endpoints
 export const accounts = {
-  list: () => api.get<Account[]>('/api/v1/accounts/'),
+  list: () => api.get<{ results: Account[] }>('/api/v1/accounts/'),
   get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`),
   create: (data: Partial<Account>) => api.post<Account>('/api/v1/accounts/', data),
   update: (id: string, data: Partial<Account>) => api.patch<Account>(`/api/v1/accounts/${id}/`, data),
-  updateBalance: (id: string, data: { balance: string; asOfDate: string }) =>
-    api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, data),
+  updateBalance: (id: string, balance: string, asOfDate: string) =>
+    api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, { balance, as_of_date: asOfDate }),
 }
 
 // Flow endpoints
@@ -109,8 +109,13 @@ export const flows = {
 // Metrics endpoints
 export const metrics = {
   current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/'),
-  history: (days?: number) => api.get<MetricSnapshot[]>(`/api/v1/metrics/history/?days=${days || 90}`),
-  insights: () => api.get<Insight[]>('/api/v1/metrics/insights/'),
+  history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`),
+}
+
+// Insights endpoints
+export const insights = {
+  insights: () => api.get<{ results: Insight[] }>('/api/v1/insights/'),
+  dismissInsight: (id: string) => api.post<Insight>(`/api/v1/insights/${id}/dismiss/`),
 }
 
 // Onboarding endpoints
