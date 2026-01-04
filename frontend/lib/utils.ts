@@ -27,6 +27,11 @@ export function formatNumber(value: string | number, decimals = 0): string {
   }).format(num)
 }
 
+export function formatDecimal(value: string | number | Decimal, decimals = 2): string {
+  const num = typeof value === 'string' ? parseFloat(value) : typeof value === 'number' ? value : value.toNumber()
+  return num.toFixed(decimals)
+}
+
 export function getMetricStatus(
   value: number,
   warningThreshold: number,
