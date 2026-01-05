@@ -1,4 +1,5 @@
 import os
+from datetime import timedelta
 from pathlib import Path
 from decimal import ROUND_HALF_UP
 import decimal
@@ -84,6 +85,13 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'COERCE_DECIMAL_TO_STRING': True,
+}
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    'ROTATE_REFRESH_TOKENS': True,
+    'UPDATE_LAST_LOGIN': True,
 }
 
 # CORS settings - allow custom headers

@@ -30,6 +30,64 @@ export class ApiError extends Error {
   }
 }
 
+// Token refresh state to prevent concurrent refresh attempts
+let isRefreshing = false
+let refreshPromise: Promise<string | null> | null = null
+
+/**
+ * Attempt to refresh the access token using the refresh token.
+ * Returns the new access token or null if refresh failed.
+ */
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null
+  if (!refreshToken) {
+    return null
+  }
+
+  try {
+    const response = await fetch(`${API_BASE}/api/auth/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh: refreshToken }),
+    })
+
+    if (!response.ok) {
+      return null
+    }
+
+    const data = await response.json()
+    if (data.access) {
+      localStorage.setItem('token', data.access)
+      // Also update refresh token if a new one is provided (when ROTATE_REFRESH_TOKENS is enabled)
+      if (data.refresh) {
+        localStorage.setItem('refreshToken', data.refresh)
+      }
+      return data.access
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Get a refreshed token, handling concurrent refresh attempts.
+ * Multiple calls will share the same refresh promise.
+ */
+async function getRefreshedToken(): Promise<string | null> {
+  if (isRefreshing && refreshPromise) {
+    return refreshPromise
+  }
+
+  isRefreshing = true
+  refreshPromise = refreshAccessToken().finally(() => {
+    isRefreshing = false
+    refreshPromise = null
+  })
+
+  return refreshPromise
+}
+
 /**
  * Normalize API responses that may be either an array or a paginated object with 'results'.
  * This handles both DRF paginated responses ({ results: [...] }) and direct array responses.
@@ -74,7 +132,7 @@ export function toCamelCase<T>(obj: unknown): T {
   return obj as T
 }
 
-async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+async function request<T>(endpoint: string, options: RequestOptions = {}, isRetry = false): Promise<T> {
   const { data, ...fetchOptions } = options
 
   const headers: Record<string, string> = {
@@ -109,6 +167,15 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   })
 
   if (!response.ok) {
+    // If we get a 401 and haven't retried yet, try to refresh the token
+    if (response.status === 401 && !isRetry && typeof window !== 'undefined') {
+      const newToken = await getRefreshedToken()
+      if (newToken) {
+        // Retry the request with the new token
+        return request<T>(endpoint, options, true)
+      }
+    }
+
     const error = await response.json().catch(() => ({}))
     throw new ApiError(response.status, error.detail || 'Request failed', error.errors)
   }
