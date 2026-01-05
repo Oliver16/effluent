@@ -52,6 +52,7 @@ services:
       dockerfile: Dockerfile.prod
       args:
         - NEXT_PUBLIC_API_URL=https://api.effluent.io
+        - INTERNAL_API_URL=http://backend:8000
     restart: unless-stopped
     environment:
       - NEXT_PUBLIC_API_URL=https://api.effluent.io
@@ -62,6 +63,7 @@ services:
       - "traefik.http.routers.effluent-web.entrypoints=web"
       - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
     networks:
+      - effluent-internal
       - proxy
 
 volumes:
