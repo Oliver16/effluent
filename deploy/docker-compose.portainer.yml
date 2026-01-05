@@ -40,13 +40,11 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-localhost}`)"
       - "traefik.http.routers.effluent-api.entrypoints=websecure"
-      - "traefik.http.routers.effluent-api.tls=true"
-      - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
-      - "traefik.docker.network=traefik-public"
+      - "traefik.docker.network=proxy"
     networks:
       - effluent-internal
-      - traefik-public
+      - proxy
 
   frontend:
     build:
@@ -61,12 +59,10 @@ services:
       - "traefik.enable=true"
       - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST:-localhost}`)"
       - "traefik.http.routers.effluent-web.entrypoints=websecure"
-      - "traefik.http.routers.effluent-web.tls=true"
-      - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"
       - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
-      - "traefik.docker.network=traefik-public"
+      - "traefik.docker.network=proxy"
     networks:
-      - traefik-public
+      - proxy
 
 volumes:
   effluent_postgres:
@@ -74,5 +70,5 @@ volumes:
 networks:
   effluent-internal:
     driver: bridge
-  traefik-public:
+  proxy:
     external: true
