@@ -25,18 +25,7 @@ services:
     # Run as root for migrations since we need write access
     user: root
     command: >
-      sh -c "
-        echo 'Waiting for database...' &&
-        while ! nc -z db 5432; do
-          echo 'DB not ready, waiting...'
-          sleep 2
-        done &&
-        echo 'Database is ready!' &&
-        echo 'Running migrations...' &&
-        python manage.py makemigrations --noinput &&
-        python manage.py migrate --noinput &&
-        echo 'Migrations complete!'
-      "
+      sh -c "python manage.py makemigrations --noinput && python manage.py migrate --noinput"
     environment:
       - DEBUG=0
       - SECRET_KEY=${SECRET_KEY}
@@ -45,8 +34,8 @@ services:
       - DB_USER=effluent
       - DB_PASSWORD=${DB_PASSWORD}
       - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - ALLOWED_HOSTS=${BACKEND_HOST},localhost
-      - CORS_ORIGINS=https://${FRONTEND_HOST}
+      - ALLOWED_HOSTS=${BACKEND_HOST:-localhost},localhost
+      - CORS_ORIGINS=https://${FRONTEND_HOST:-localhost}
     depends_on:
       db:
         condition: service_healthy
@@ -69,8 +58,8 @@ services:
       - DB_NAME=effluent
       - DB_USER=effluent
       - DB_PASSWORD=${DB_PASSWORD}
-      - ALLOWED_HOSTS=${BACKEND_HOST},localhost
-      - CORS_ORIGINS=https://${FRONTEND_HOST}
+      - ALLOWED_HOSTS=${BACKEND_HOST:-localhost},localhost
+      - CORS_ORIGINS=https://${FRONTEND_HOST:-localhost}
       - DJANGO_SETTINGS_MODULE=config.settings.prod
     depends_on:
       db:
@@ -79,7 +68,7 @@ services:
         condition: service_completed_successfully
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST}`)"
+      - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-localhost}`)"
       - "traefik.http.routers.effluent-api.entrypoints=websecure"
       - "traefik.http.routers.effluent-api.tls=true"
       - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
@@ -94,13 +83,13 @@ services:
       context: https://github.com/Oliver16/effluent.git#main:frontend
       dockerfile: Dockerfile.prod
       args:
-        - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST}
+        - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST:-localhost}
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST}
+      - NEXT_PUBLIC_API_URL=https://${BACKEND_HOST:-localhost}
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST}`)"
+      - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST:-localhost}`)"
       - "traefik.http.routers.effluent-web.entrypoints=websecure"
       - "traefik.http.routers.effluent-web.tls=true"
       - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"

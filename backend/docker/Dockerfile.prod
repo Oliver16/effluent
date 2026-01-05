@@ -35,11 +35,19 @@ COPY . .
 ARG SECRET_KEY=build-secret-key
 ARG ALLOWED_HOSTS=localhost
 ARG CORS_ORIGINS=https://localhost
+ARG DB_NAME=effluent
+ARG DB_USER=effluent
 ARG DB_PASSWORD=build-password
+ARG DB_HOST=localhost
+ARG DB_PORT=5432
 ENV SECRET_KEY=${SECRET_KEY} \
     ALLOWED_HOSTS=${ALLOWED_HOSTS} \
     CORS_ORIGINS=${CORS_ORIGINS} \
-    DB_PASSWORD=${DB_PASSWORD}
+    DB_NAME=${DB_NAME} \
+    DB_USER=${DB_USER} \
+    DB_PASSWORD=${DB_PASSWORD} \
+    DB_HOST=${DB_HOST} \
+    DB_PORT=${DB_PORT}
 
 # Collect static files
 ENV DJANGO_SETTINGS_MODULE=config.settings.prod

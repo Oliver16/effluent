@@ -1,2 +1,1 @@
-from apps.core.models import Household, HouseholdMember, HouseholdMembership  # noqa: F401
-
+# Households app intentionally defines no models.
