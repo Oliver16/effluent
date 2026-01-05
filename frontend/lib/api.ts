@@ -11,24 +11,9 @@ import type {
   ScenarioProjection,
 } from './types'
 
-const CONFIGURED_API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
-
-const API_BASE = (() => {
-  if (typeof window === 'undefined') {
-    return CONFIGURED_API_BASE
-  }
-
-  if (!CONFIGURED_API_BASE) {
-    return ''
-  }
-
-  try {
-    const apiUrl = new URL(CONFIGURED_API_BASE, window.location.origin)
-    return apiUrl.origin === window.location.origin ? CONFIGURED_API_BASE : ''
-  } catch {
-    return ''
-  }
-})()
+// API base URL - empty string means relative paths
+// Traefik routes /api/* to the backend at the infrastructure level
+const API_BASE = ''
 
 interface RequestOptions extends RequestInit {
   data?: unknown

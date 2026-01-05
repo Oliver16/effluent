@@ -31,17 +31,24 @@ services:
       - DB_USER=effluent
       - DB_PASSWORD=${DB_PASSWORD}
       - ALLOWED_HOSTS=api.effluent.io,app.effluent.io,backend,localhost,192.168.1.20
-      - CORS_ORIGINS=https://app.effluent.io,http://localhost:3000
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - CORS_ORIGINS=https://app.effluent.io,http://app.effluent.io,http://localhost:3000
+      # Settings module: config.settings.internal (HTTP) or config.settings.prod (HTTPS)
+      - DJANGO_SETTINGS_MODULE=${DJANGO_SETTINGS:-config.settings.internal}
     depends_on:
       db:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
+      # Route api.effluent.io to backend
       - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-api.effluent.io}`)"
       - "traefik.http.routers.effluent-api.entrypoints=web"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
+      # Also route /api/* on app.effluent.io to backend (higher priority)
+      - "traefik.http.routers.effluent-app-api.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.effluent-app-api.entrypoints=web"
+      - "traefik.http.routers.effluent-app-api.priority=100"
+      - "traefik.http.routers.effluent-app-api.service=effluent-api"
     networks:
       - effluent-internal
       - proxy
@@ -50,12 +57,8 @@ services:
     build:
       context: https://github.com/Oliver16/effluent.git#main:frontend
       dockerfile: Dockerfile.prod
-      args:
-        - NEXT_PUBLIC_API_URL=https://api.effluent.io
-        - INTERNAL_API_URL=http://backend:8000
     restart: unless-stopped
-    environment:
-      - NEXT_PUBLIC_API_URL=https://api.effluent.io
+    # No API URL config needed - Traefik routes /api/* to backend at infrastructure level
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
