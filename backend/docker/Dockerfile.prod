@@ -32,6 +32,7 @@ RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 COPY . .
 
 # Collect static files
+ENV DJANGO_SETTINGS_MODULE=config.settings.prod
 RUN python manage.py collectstatic --noinput
 
 # Create non-root user
