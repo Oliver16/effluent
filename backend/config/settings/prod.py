@@ -33,6 +33,14 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
+# Add the backend API domain itself for admin login CSRF validation
+# When submitting the admin form, the Origin header is from the admin domain
+for host in ALLOWED_HOSTS:
+    if host and host not in ('localhost', '127.0.0.1') and not host.startswith('192.168.'):
+        https_origin = f'https://{host}'
+        if https_origin not in CSRF_TRUSTED_ORIGINS:
+            CSRF_TRUSTED_ORIGINS.append(https_origin)
+
 # Cross-Origin-Opener-Policy header (requires HTTPS)
 SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
 
