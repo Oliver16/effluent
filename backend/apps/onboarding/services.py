@@ -70,8 +70,16 @@ class OnboardingService:
         while current_step:
             should_skip = False
 
+            # Skip income_details if no income sources exist
+            if current_step == OnboardingStep.INCOME_DETAILS:
+                has_income_sources = IncomeSource.objects.filter(
+                    household=self.household
+                ).exists()
+                if not has_income_sources:
+                    should_skip = True
+
             # Skip withholding step if no W-2 income sources exist
-            if current_step == OnboardingStep.WITHHOLDING:
+            elif current_step == OnboardingStep.WITHHOLDING:
                 has_w2_income = IncomeSource.objects.filter(
                     household=self.household,
                     income_type__in=['w2', 'w2_hourly']
@@ -79,8 +87,18 @@ class OnboardingService:
                 if not has_w2_income:
                     should_skip = True
 
+            # Skip pretax_deductions if no income sources exist
+            elif current_step == OnboardingStep.PRETAX_DEDUCTIONS:
+                has_income_sources = IncomeSource.objects.filter(
+                    household=self.household
+                ).exists()
+                if not has_income_sources:
+                    should_skip = True
+
             if should_skip:
-                self.progress.skipped_steps.append(current_step)
+                # Avoid duplicate entries in skipped_steps
+                if current_step not in self.progress.skipped_steps:
+                    self.progress.skipped_steps.append(current_step)
                 current_step = self.progress.advance(mark_complete=False)
             else:
                 break
@@ -90,7 +108,9 @@ class OnboardingService:
     def skip_step(self) -> dict:
         if not self.progress.can_skip():
             return {'success': False, 'error': 'Cannot skip this step'}
-        self.progress.skipped_steps.append(self.progress.current_step)
+        # Avoid duplicate entries in skipped_steps
+        if self.progress.current_step not in self.progress.skipped_steps:
+            self.progress.skipped_steps.append(self.progress.current_step)
         next_step = self.progress.advance(mark_complete=False)
         return {'success': True, 'nextStep': next_step}
 
@@ -129,6 +149,8 @@ class OnboardingService:
             for i, src in enumerate(data.get('sources', [])):
                 if src.get('income_type') == 'w2' and not src.get('salary'):
                     errors[f'sources.{i}.salary'] = 'Salary required for W-2 income'
+                if src.get('income_type') == 'w2_hourly' and not src.get('hourly_rate'):
+                    errors[f'sources.{i}.hourly_rate'] = 'Hourly rate required for hourly W-2 income'
         elif step == OnboardingStep.WITHHOLDING:
             # Optional step - no required fields
             pass
@@ -276,6 +298,8 @@ class OnboardingService:
                             income_source.pay_frequency = src['frequency']
                         if src.get('hourly_rate'):
                             income_source.hourly_rate = Decimal(str(src['hourly_rate']))
+                        if src.get('expected_annual_hours'):
+                            income_source.expected_annual_hours = int(src['expected_annual_hours'])
                         income_source.save()
 
         elif step == OnboardingStep.WITHHOLDING:

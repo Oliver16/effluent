@@ -1319,7 +1319,7 @@ export default function OnboardingPage() {
             </Button>
             {investments.length === 0 && (
               <p className="text-sm text-muted-foreground text-center">
-                No investment accounts? You can skip this step.
+                No investment accounts? You can continue without adding any.
               </p>
             )}
           </div>
