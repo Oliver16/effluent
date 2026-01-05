@@ -206,7 +206,7 @@ export default function OnboardingPage() {
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted">
       <div className="w-full max-w-2xl">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold mb-2">Begin Infusing Model DNA</h1>
+          <h1 className="text-3xl font-bold mb-2">Build Your Financial Model</h1>
           <div className="w-full bg-muted rounded-full h-2 mb-2">
             <div
               className="bg-primary h-2 rounded-full transition-all"
