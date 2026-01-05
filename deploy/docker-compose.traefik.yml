@@ -1,0 +1,39 @@
+# Traefik configuration for HAProxy TLS termination (Option A)
+# HAProxy handles HTTPS and forwards HTTP to Traefik on port 80
+# This file is a reference for deploying Traefik alongside the Effluent stack
+version: "3.8"
+
+services:
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    command:
+      # Entrypoints - HTTP only (HAProxy handles TLS)
+      - "--entrypoints.web.address=:80"
+      # Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=proxy"
+      # Dashboard (optional, for debugging)
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      # Logging
+      - "--log.level=INFO"
+      - "--accesslog=true"
+    ports:
+      - "80:80"
+      - "8080:8080"  # Dashboard (optional, remove in production)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - proxy
+    labels:
+      - "traefik.enable=true"
+      # Dashboard route (optional, for debugging)
+      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
+      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
+      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+
+networks:
+  proxy:
+    external: true
