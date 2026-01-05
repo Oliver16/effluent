@@ -61,6 +61,8 @@ ONBOARDING_FLOW = [
 ]
 
 SKIPPABLE_STEPS = {
+    OnboardingStep.INCOME_DETAILS, OnboardingStep.WITHHOLDING,
+    OnboardingStep.PRETAX_DEDUCTIONS,
     OnboardingStep.REAL_ESTATE, OnboardingStep.VEHICLES,
     OnboardingStep.MORTGAGES, OnboardingStep.CREDIT_CARDS,
     OnboardingStep.STUDENT_LOANS, OnboardingStep.OTHER_DEBTS,

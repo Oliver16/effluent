@@ -10,6 +10,7 @@ import type {
   Scenario,
   ScenarioChange,
   ScenarioProjection,
+  IncomeSourceDetail,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -207,6 +208,17 @@ export const onboarding = {
     .then(data => toCamelCase<{ success: boolean; nextStep: string }>(data)),
   back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/')
     .then(data => toCamelCase<{ success: boolean; currentStep: string }>(data)),
+}
+
+// Income source endpoints
+export const incomeSources = {
+  list: () =>
+    api.get<IncomeSourceDetail[] | { results: IncomeSourceDetail[] }>('/api/v1/income-sources/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<IncomeSourceDetail[]>(data)),
+  get: (id: string) =>
+    api.get<IncomeSourceDetail>(`/api/v1/income-sources/${id}/`)
+      .then(data => toCamelCase<IncomeSourceDetail>(data)),
 }
 
 // Scenario endpoints
