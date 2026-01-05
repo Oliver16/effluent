@@ -1,4 +1,4 @@
-import type { Household, Account, RecurringFlow, MetricSnapshot, Insight, BalanceSnapshot } from './types'
+import type { Household, Account, RecurringFlow, MetricSnapshot, Insight, BalanceSnapshot, OnboardingStepResponse } from './types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -134,5 +134,3 @@ export const onboarding = {
   skip: () => api.post<{ success: boolean; nextStep: string }>('/api/v1/onboarding/skip/'),
   back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/'),
 }
-
-import type { OnboardingStepResponse } from './types'
