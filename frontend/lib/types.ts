@@ -158,3 +158,47 @@ export interface ScenarioProjection {
   liability_breakdown: Record<string, string>
   computed_at?: string
 }
+
+export interface W2Withholding {
+  id: string
+  filingStatus: string
+  multipleJobsOrSpouseWorks: boolean
+  childTaxCreditDependents: number
+  otherDependents: number
+  otherIncome: string
+  deductions: string
+  extraWithholding: string
+  stateAllowances: number
+  stateAdditionalWithholding: string
+}
+
+export interface PreTaxDeduction {
+  id: string
+  deductionType: string
+  name: string
+  amountType: string
+  amount: string
+  employerMatchPercentage: string
+  employerMatchLimitPercentage: string
+  employerMatchLimitAnnual?: string
+  targetAccount?: string
+  isActive: boolean
+}
+
+export interface IncomeSourceDetail {
+  id: string
+  name: string
+  householdMember: string
+  incomeType: string
+  grossAnnualSalary?: string
+  hourlyRate?: string
+  expectedAnnualHours: number
+  payFrequency: string
+  grossAnnual: string
+  grossPerPeriod: string
+  pretaxDeductions: PreTaxDeduction[]
+  w2Withholding?: W2Withholding
+  isActive: boolean
+  startDate?: string
+  endDate?: string
+}

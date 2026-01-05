@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { onboarding, households, members } from '@/lib/api'
+import { onboarding, households, members, incomeSources } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { OnboardingStepResponse, HouseholdMember } from '@/lib/types'
+import type { OnboardingStepResponse, HouseholdMember, IncomeSourceDetail } from '@/lib/types'
 
 const STEP_LABELS: Record<string, string> = {
   welcome: 'Welcome',
@@ -126,6 +126,35 @@ const PAY_FREQUENCIES = [
   { value: 'monthly', label: 'Monthly (12)' },
 ]
 
+const WITHHOLDING_FILING_STATUSES = [
+  { value: 'single', label: 'Single or Married Filing Separately' },
+  { value: 'married', label: 'Married Filing Jointly' },
+  { value: 'head_of_household', label: 'Head of Household' },
+]
+
+const PRETAX_DEDUCTION_TYPES = [
+  { value: 'traditional_401k', label: '401(k) Traditional' },
+  { value: 'roth_401k', label: '401(k) Roth' },
+  { value: 'traditional_403b', label: '403(b)' },
+  { value: 'tsp_traditional', label: 'TSP Traditional' },
+  { value: 'tsp_roth', label: 'TSP Roth' },
+  { value: 'hsa', label: 'HSA' },
+  { value: 'fsa_health', label: 'Healthcare FSA' },
+  { value: 'fsa_dependent', label: 'Dependent Care FSA' },
+  { value: 'health_insurance', label: 'Health Insurance' },
+  { value: 'dental_insurance', label: 'Dental Insurance' },
+  { value: 'vision_insurance', label: 'Vision Insurance' },
+  { value: 'life_insurance', label: 'Life Insurance' },
+  { value: 'commuter_transit', label: 'Commuter Transit' },
+  { value: 'commuter_parking', label: 'Commuter Parking' },
+  { value: 'other_pretax', label: 'Other Pre-Tax' },
+]
+
+const AMOUNT_TYPES = [
+  { value: 'fixed', label: 'Fixed Amount ($)' },
+  { value: 'percentage', label: 'Percentage (%)' },
+]
+
 const BANK_ACCOUNT_TYPES = [
   { value: 'checking', label: 'Checking Account' },
   { value: 'savings', label: 'Savings Account' },
@@ -192,6 +221,34 @@ interface IncomeSource {
   income_type: string
   salary?: number
   frequency: string
+}
+
+interface IncomeSourceWithDetails {
+  id: string
+  name: string
+  income_type: string
+  salary?: number
+  hourly_rate?: number
+  expected_annual_hours?: number
+  frequency: string
+}
+
+interface WithholdingData {
+  income_source_id: string
+  filing_status: string
+  multiple_jobs: boolean
+  child_dependents: number
+  other_dependents: number
+  extra_withholding: number
+}
+
+interface DeductionData {
+  income_source_id: string
+  type: string
+  name: string
+  amount_type: string
+  amount: number
+  employer_match: number
 }
 
 interface BankAccount {
@@ -282,6 +339,7 @@ export default function OnboardingPage() {
   const [stepData, setStepData] = useState<OnboardingStepResponse | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([])
+  const [existingIncomeSources, setExistingIncomeSources] = useState<IncomeSourceDetail[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -331,6 +389,59 @@ export default function OnboardingPage() {
       if (['income_sources', 'income_details', 'withholding', 'pretax_deductions'].includes(data.step)) {
         const memberList = await members.list()
         setHouseholdMembers(memberList)
+      }
+
+      // Fetch existing income sources for detail/withholding/deduction steps
+      if (['income_details', 'withholding', 'pretax_deductions'].includes(data.step)) {
+        const sourceList = await incomeSources.list()
+        setExistingIncomeSources(sourceList)
+
+        // Initialize form data with existing income sources if no draft data
+        if (data.step === 'income_details' && (!data.draftData || !data.draftData.sources)) {
+          const sources = sourceList.map(src => ({
+            id: src.id,
+            name: src.name,
+            income_type: src.incomeType,
+            salary: src.grossAnnualSalary ? parseFloat(src.grossAnnualSalary) : undefined,
+            hourly_rate: src.hourlyRate ? parseFloat(src.hourlyRate) : undefined,
+            expected_annual_hours: src.expectedAnnualHours || 2080,
+            frequency: src.payFrequency,
+          }))
+          setFormData({ ...data.draftData, sources })
+        }
+
+        if (data.step === 'withholding' && (!data.draftData || !data.draftData.withholdings)) {
+          // Initialize withholding data for W-2 income sources
+          const w2Sources = sourceList.filter(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
+          const withholdings = w2Sources.map(src => ({
+            income_source_id: src.id,
+            income_source_name: src.name,
+            filing_status: src.w2Withholding?.filingStatus || 'single',
+            multiple_jobs: src.w2Withholding?.multipleJobsOrSpouseWorks || false,
+            child_dependents: src.w2Withholding?.childTaxCreditDependents || 0,
+            other_dependents: src.w2Withholding?.otherDependents || 0,
+            extra_withholding: src.w2Withholding?.extraWithholding ? parseFloat(src.w2Withholding.extraWithholding) : 0,
+          }))
+          setFormData({ ...data.draftData, withholdings })
+        }
+
+        if (data.step === 'pretax_deductions' && (!data.draftData || !data.draftData.deductions)) {
+          // Initialize with existing deductions if any
+          const deductions: DeductionData[] = []
+          sourceList.forEach(src => {
+            src.pretaxDeductions?.forEach(ded => {
+              deductions.push({
+                income_source_id: src.id,
+                type: ded.deductionType,
+                name: ded.name,
+                amount_type: ded.amountType,
+                amount: parseFloat(ded.amount),
+                employer_match: ded.employerMatchPercentage ? parseFloat(ded.employerMatchPercentage) * 100 : 0,
+              })
+            })
+          })
+          setFormData({ ...data.draftData, deductions })
+        }
       }
     } catch {
       setError('Failed to load onboarding progress')
@@ -663,16 +774,360 @@ export default function OnboardingPage() {
         )
 
       case 'income_details':
-      case 'withholding':
-      case 'pretax_deductions':
+        const incomeDetailSources = (formData.sources as IncomeSourceWithDetails[]) || []
         return (
-          <div className="text-center py-6">
-            <p className="text-muted-foreground">
-              This step allows you to configure additional income details.
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Review and update the details for each income source you added. For hourly workers, enter your hourly rate instead of annual salary.
             </p>
-            <p className="text-sm text-muted-foreground mt-2">
-              You can skip this for now and configure it later from your dashboard.
+            {incomeDetailSources.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">No income sources found.</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Go back to add income sources, or skip this step.
+                </p>
+              </div>
+            ) : (
+              incomeDetailSources.map((source, index) => (
+                <div key={source.id || index} className="border rounded-lg p-4 space-y-3">
+                  <div className="font-medium">{source.name}</div>
+                  <div className="text-sm text-muted-foreground mb-2">
+                    {INCOME_TYPES.find(t => t.value === source.income_type)?.label || source.income_type}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {source.income_type === 'w2_hourly' ? (
+                      <>
+                        <div>
+                          <Label>Hourly Rate ($)</Label>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            value={source.hourly_rate ?? ''}
+                            onChange={(e) => {
+                              const newSources = [...incomeDetailSources]
+                              newSources[index] = { ...source, hourly_rate: parseFloat(e.target.value) || undefined }
+                              handleFormChange({ ...formData, sources: newSources })
+                            }}
+                            placeholder="25.00"
+                          />
+                        </div>
+                        <div>
+                          <Label>Expected Annual Hours</Label>
+                          <Input
+                            type="number"
+                            value={source.expected_annual_hours ?? 2080}
+                            onChange={(e) => {
+                              const newSources = [...incomeDetailSources]
+                              newSources[index] = { ...source, expected_annual_hours: parseInt(e.target.value) || 2080 }
+                              handleFormChange({ ...formData, sources: newSources })
+                            }}
+                            placeholder="2080"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Full-time = 2080 hours</p>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="col-span-2">
+                        <Label>Annual Salary/Income ($)</Label>
+                        <Input
+                          type="number"
+                          value={source.salary ?? ''}
+                          onChange={(e) => {
+                            const newSources = [...incomeDetailSources]
+                            newSources[index] = { ...source, salary: parseFloat(e.target.value) || undefined }
+                            handleFormChange({ ...formData, sources: newSources })
+                          }}
+                          placeholder="75000"
+                        />
+                      </div>
+                    )}
+                    <div>
+                      <Label>Pay Frequency</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={source.frequency || 'biweekly'}
+                        onChange={(e) => {
+                          const newSources = [...incomeDetailSources]
+                          newSources[index] = { ...source, frequency: e.target.value }
+                          handleFormChange({ ...formData, sources: newSources })
+                        }}
+                      >
+                        {PAY_FREQUENCIES.map(f => (
+                          <option key={f.value} value={f.value}>{f.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )
+
+      case 'withholding':
+        const withholdings = (formData.withholdings as (WithholdingData & { income_source_name?: string })[]) || []
+        const w2SourcesExist = existingIncomeSources.some(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Configure your W-4 tax withholding settings for each W-2 income source. This affects how much federal tax is withheld from each paycheck.
             </p>
+            {!w2SourcesExist ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">No W-2 income sources found.</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  This step only applies to W-2 employment income. You can skip it.
+                </p>
+              </div>
+            ) : withholdings.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">Loading withholding data...</p>
+              </div>
+            ) : (
+              withholdings.map((wh, index) => (
+                <div key={wh.income_source_id || index} className="border rounded-lg p-4 space-y-3">
+                  <div className="font-medium">{wh.income_source_name || `Income Source ${index + 1}`}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="col-span-2">
+                      <Label>Filing Status (W-4 Step 1)</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={wh.filing_status || 'single'}
+                        onChange={(e) => {
+                          const newWithholdings = [...withholdings]
+                          newWithholdings[index] = { ...wh, filing_status: e.target.value }
+                          handleFormChange({ ...formData, withholdings: newWithholdings })
+                        }}
+                      >
+                        {WITHHOLDING_FILING_STATUSES.map(s => (
+                          <option key={s.value} value={s.value}>{s.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="col-span-2 flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id={`multiple-jobs-${index}`}
+                        checked={wh.multiple_jobs || false}
+                        onChange={(e) => {
+                          const newWithholdings = [...withholdings]
+                          newWithholdings[index] = { ...wh, multiple_jobs: e.target.checked }
+                          handleFormChange({ ...formData, withholdings: newWithholdings })
+                        }}
+                      />
+                      <Label htmlFor={`multiple-jobs-${index}`}>
+                        Multiple jobs or spouse works (W-4 Step 2c)
+                      </Label>
+                    </div>
+                    <div>
+                      <Label>Child dependents (under 17)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={wh.child_dependents ?? 0}
+                        onChange={(e) => {
+                          const newWithholdings = [...withholdings]
+                          newWithholdings[index] = { ...wh, child_dependents: parseInt(e.target.value) || 0 }
+                          handleFormChange({ ...formData, withholdings: newWithholdings })
+                        }}
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">$2,000 credit each</p>
+                    </div>
+                    <div>
+                      <Label>Other dependents</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={wh.other_dependents ?? 0}
+                        onChange={(e) => {
+                          const newWithholdings = [...withholdings]
+                          newWithholdings[index] = { ...wh, other_dependents: parseInt(e.target.value) || 0 }
+                          handleFormChange({ ...formData, withholdings: newWithholdings })
+                        }}
+                        placeholder="0"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">$500 credit each</p>
+                    </div>
+                    <div className="col-span-2">
+                      <Label>Extra withholding per paycheck ($)</Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={wh.extra_withholding ?? 0}
+                        onChange={(e) => {
+                          const newWithholdings = [...withholdings]
+                          newWithholdings[index] = { ...wh, extra_withholding: parseFloat(e.target.value) || 0 }
+                          handleFormChange({ ...formData, withholdings: newWithholdings })
+                        }}
+                        placeholder="0.00"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">W-4 Step 4c - Additional amount to withhold</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )
+
+      case 'pretax_deductions':
+        const deductions = (formData.deductions as DeductionData[]) || []
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Add pre-tax deductions like 401(k) contributions, HSA, health insurance premiums, etc. These reduce your taxable income.
+            </p>
+            {existingIncomeSources.length === 0 ? (
+              <div className="text-center py-6">
+                <p className="text-muted-foreground">No income sources found.</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  Go back to add income sources, or skip this step.
+                </p>
+              </div>
+            ) : (
+              <>
+                {deductions.map((ded, index) => {
+                  return (
+                    <div key={index} className="border rounded-lg p-4 space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium">Deduction {index + 1}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            const newDeductions = deductions.filter((_, i) => i !== index)
+                            handleFormChange({ ...formData, deductions: newDeductions })
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label>Income Source</Label>
+                          <select
+                            className="w-full h-10 rounded-md border border-input bg-background px-3"
+                            value={ded.income_source_id || ''}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, income_source_id: e.target.value }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                          >
+                            <option value="">Select income source...</option>
+                            {existingIncomeSources.map(src => (
+                              <option key={src.id} value={src.id}>{src.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label>Deduction Type</Label>
+                          <select
+                            className="w-full h-10 rounded-md border border-input bg-background px-3"
+                            value={ded.type || ''}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, type: e.target.value }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                          >
+                            <option value="">Select type...</option>
+                            {PRETAX_DEDUCTION_TYPES.map(t => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label>Name (optional)</Label>
+                          <Input
+                            value={ded.name || ''}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, name: e.target.value }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                            placeholder="e.g., Company 401(k)"
+                          />
+                        </div>
+                        <div>
+                          <Label>Amount Type</Label>
+                          <select
+                            className="w-full h-10 rounded-md border border-input bg-background px-3"
+                            value={ded.amount_type || 'fixed'}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, amount_type: e.target.value }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                          >
+                            {AMOUNT_TYPES.map(t => (
+                              <option key={t.value} value={t.value}>{t.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <Label>
+                            {ded.amount_type === 'percentage' ? 'Percentage (%)' : 'Amount per Paycheck ($)'}
+                          </Label>
+                          <Input
+                            type="number"
+                            step={ded.amount_type === 'percentage' ? '0.1' : '0.01'}
+                            value={ded.amount ?? ''}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, amount: parseFloat(e.target.value) || 0 }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                            placeholder={ded.amount_type === 'percentage' ? '6' : '500'}
+                          />
+                        </div>
+                        <div>
+                          <Label>Employer Match (%)</Label>
+                          <Input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="100"
+                            value={ded.employer_match ?? ''}
+                            onChange={(e) => {
+                              const newDeductions = [...deductions]
+                              newDeductions[index] = { ...ded, employer_match: parseFloat(e.target.value) || 0 }
+                              handleFormChange({ ...formData, deductions: newDeductions })
+                            }}
+                            placeholder="0"
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">e.g., 50 = employer matches 50% of your contribution</p>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const defaultSourceId = existingIncomeSources[0]?.id || ''
+                    const newDeduction: DeductionData = {
+                      income_source_id: defaultSourceId,
+                      type: 'traditional_401k',
+                      name: '',
+                      amount_type: 'percentage',
+                      amount: 0,
+                      employer_match: 0,
+                    }
+                    handleFormChange({ ...formData, deductions: [...deductions, newDeduction] })
+                  }}
+                >
+                  + Add Pre-Tax Deduction
+                </Button>
+                {deductions.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    No pre-tax deductions? You can skip this step.
+                  </p>
+                )}
+              </>
+            )}
           </div>
         )
 
