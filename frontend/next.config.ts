@@ -3,6 +3,9 @@ import type { NextConfig } from 'next'
 const nextConfig: NextConfig = {
   output: 'standalone',
   typedRoutes: true,
+  // Preserve trailing slashes to match Django's APPEND_SLASH behavior
+  // Without this, Next.js strips trailing slashes (308) but Django adds them back (301) = redirect loop
+  trailingSlash: true,
   async rewrites() {
     // Use INTERNAL_API_URL for server-side rewrites (Docker internal networking)
     // Falls back to NEXT_PUBLIC_API_URL for backwards compatibility
