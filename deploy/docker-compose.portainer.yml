@@ -22,14 +22,19 @@ services:
     build:
       context: https://github.com/Oliver16/effluent.git#main:backend
       dockerfile: docker/Dockerfile.prod
+    # Run as root for migrations since we need write access
+    user: root
     command: >
-      sh -exc "
-        echo 'ENV:' &&
-        env | sort &&
+      sh -c "
         echo 'Waiting for database...' &&
-        while ! nc -z db 5432; do sleep 1; done &&
+        while ! nc -z db 5432; do
+          echo 'DB not ready, waiting...'
+          sleep 2
+        done &&
+        echo 'Database is ready!' &&
         echo 'Running migrations...' &&
-        python -v manage.py migrate --noinput
+        python manage.py migrate --noinput &&
+        echo 'Migrations complete!'
       "
     environment:
       - DEBUG=0
