@@ -29,8 +29,10 @@ USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 
 # Session and CSRF settings
-SESSION_COOKIE_SECURE = True
-CSRF_COOKIE_SECURE = True
+# Enable secure cookies only when TLS is terminated upstream (set SECURE_COOKIES=true)
+_secure_cookies = os.environ.get('SECURE_COOKIES', 'false').lower() == 'true'
+SESSION_COOKIE_SECURE = _secure_cookies
+CSRF_COOKIE_SECURE = _secure_cookies
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
 # Add the backend API domain itself for admin login CSRF validation
@@ -41,8 +43,8 @@ for host in ALLOWED_HOSTS:
         if https_origin not in CSRF_TRUSTED_ORIGINS:
             CSRF_TRUSTED_ORIGINS.append(https_origin)
 
-# Cross-Origin-Opener-Policy header (requires HTTPS)
-SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+# Cross-Origin-Opener-Policy header (requires HTTPS, disabled when not using secure cookies)
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin' if _secure_cookies else None
 
 # WhiteNoise for static file serving with compression
 STORAGES = {
