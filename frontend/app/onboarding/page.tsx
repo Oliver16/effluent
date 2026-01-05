@@ -1,40 +1,73 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { onboarding, households } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import type { OnboardingStepResponse } from '@/lib/types'
 
-const STEP_LABELS: Record<string, string> = {
-  welcome: 'Welcome',
-  household_info: 'Household Info',
-  members: 'Family Members',
-  tax_filing: 'Tax Filing',
-  income_sources: 'Income Sources',
-  income_details: 'Income Details',
-  withholding: 'Withholding',
-  pretax_deductions: 'Pre-Tax Deductions',
-  bank_accounts: 'Bank Accounts',
-  investments: 'Investments',
-  retirement: 'Retirement Accounts',
-  real_estate: 'Real Estate',
-  vehicles: 'Vehicles',
-  mortgages: 'Mortgages',
-  credit_cards: 'Credit Cards',
-  student_loans: 'Student Loans',
-  other_debts: 'Other Debts',
-  housing_expenses: 'Housing Expenses',
-  utilities: 'Utilities',
-  insurance: 'Insurance',
-  transportation: 'Transportation',
-  food: 'Food',
-  other_expenses: 'Other Expenses',
-  review: 'Review',
-  complete: 'Complete',
+// Import all step components
+import {
+  WelcomeStep,
+  HouseholdInfoStep,
+  MembersStep,
+  TaxFilingStep,
+  IncomeSourcesStep,
+  IncomeDetailsStep,
+  WithholdingStep,
+  PretaxDeductionsStep,
+  BankAccountsStep,
+  InvestmentsStep,
+  RetirementStep,
+  RealEstateStep,
+  VehiclesStep,
+  MortgagesStep,
+  CreditCardsStep,
+  StudentLoansStep,
+  OtherDebtsStep,
+  HousingExpensesStep,
+  UtilitiesStep,
+  InsuranceStep,
+  TransportationStep,
+  FoodStep,
+  OtherExpensesStep,
+  ReviewStep,
+  CompleteStep,
+  STEP_CONFIG,
+} from '@/components/onboarding/steps'
+
+// Map step names to components
+const STEP_COMPONENTS: Record<string, React.ComponentType<{
+  formData: Record<string, unknown>
+  setFormData: (data: Record<string, unknown>) => void
+  errors?: Record<string, string>
+}>> = {
+  welcome: WelcomeStep,
+  household_info: HouseholdInfoStep,
+  members: MembersStep,
+  tax_filing: TaxFilingStep,
+  income_sources: IncomeSourcesStep,
+  income_details: IncomeDetailsStep,
+  withholding: WithholdingStep,
+  pretax_deductions: PretaxDeductionsStep,
+  bank_accounts: BankAccountsStep,
+  investments: InvestmentsStep,
+  retirement: RetirementStep,
+  real_estate: RealEstateStep,
+  vehicles: VehiclesStep,
+  mortgages: MortgagesStep,
+  credit_cards: CreditCardsStep,
+  student_loans: StudentLoansStep,
+  other_debts: OtherDebtsStep,
+  housing_expenses: HousingExpensesStep,
+  utilities: UtilitiesStep,
+  insurance: InsuranceStep,
+  transportation: TransportationStep,
+  food: FoodStep,
+  other_expenses: OtherExpensesStep,
+  review: ReviewStep,
+  complete: CompleteStep,
 }
 
 export default function OnboardingPage() {
@@ -45,11 +78,20 @@ export default function OnboardingPage() {
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
 
-  useEffect(() => {
-    checkAuthAndLoadStep()
+  const loadCurrentStep = useCallback(async () => {
+    setIsLoading(true)
+    try {
+      const data = await onboarding.getProgress()
+      setStepData(data)
+      setFormData(data.draftData || {})
+    } catch {
+      setError('Failed to load onboarding progress')
+    } finally {
+      setIsLoading(false)
+    }
   }, [])
 
-  const checkAuthAndLoadStep = async () => {
+  const checkAuthAndLoadStep = useCallback(async () => {
     const token = localStorage.getItem('token')
     if (!token) {
       router.push('/')
@@ -57,16 +99,13 @@ export default function OnboardingPage() {
     }
 
     try {
-      // Ensure we have a household
       const householdList = await households.list()
       if (householdList.length === 0) {
-        // Create a new household
         const newHousehold = await households.create({ name: 'My Household' })
         localStorage.setItem('householdId', newHousehold.id)
       } else {
         const household = householdList[0]
         localStorage.setItem('householdId', household.id)
-        // Handle both camelCase and snake_case from API
         const onboardingComplete = household.onboardingCompleted ??
           (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
         if (onboardingComplete) {
@@ -79,20 +118,11 @@ export default function OnboardingPage() {
     } catch {
       router.push('/')
     }
-  }
+  }, [router, loadCurrentStep])
 
-  const loadCurrentStep = async () => {
-    setIsLoading(true)
-    try {
-      const data = await onboarding.getProgress()
-      setStepData(data)
-      setFormData(data.draftData || {})
-    } catch (err) {
-      setError('Failed to load onboarding progress')
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  useEffect(() => {
+    checkAuthAndLoadStep()
+  }, [checkAuthAndLoadStep])
 
   const handleNext = async () => {
     setIsSaving(true)
@@ -143,6 +173,21 @@ export default function OnboardingPage() {
     }
   }
 
+  // Auto-save draft on form changes (debounced)
+  useEffect(() => {
+    if (!stepData || isLoading) return
+
+    const timer = setTimeout(async () => {
+      try {
+        await onboarding.saveStep(formData)
+      } catch {
+        // Silent fail for auto-save
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [formData, stepData, isLoading])
+
   if (isLoading) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-6">
@@ -154,7 +199,8 @@ export default function OnboardingPage() {
   }
 
   const currentStep = stepData?.step || 'welcome'
-  const stepLabel = STEP_LABELS[currentStep] || currentStep
+  const stepConfig = STEP_CONFIG[currentStep] || { title: currentStep, description: '' }
+  const StepComponent = STEP_COMPONENTS[currentStep]
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted">
@@ -174,67 +220,16 @@ export default function OnboardingPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>{stepLabel}</CardTitle>
-            <CardDescription>
-              {currentStep === 'welcome' && 'Configure your household\'s operating model'}
-              {currentStep === 'household_info' && 'Tell us about your household'}
-              {currentStep === 'members' && 'Add family members'}
-              {currentStep === 'bank_accounts' && 'Add your bank accounts'}
-              {currentStep === 'complete' && 'You\'re all set!'}
-            </CardDescription>
+            <CardTitle>{stepConfig.title}</CardTitle>
+            <CardDescription>{stepConfig.description}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {currentStep === 'welcome' && (
-              <div className="text-center py-6">
-                <p className="text-lg mb-4">
-                  Your household is a business. It's time to model it like one.
-                </p>
-                <p className="text-muted-foreground mb-4">
-                  We'll walk through your income, assets, liabilities, and expenses to
-                  build a complete financial picture. Skip what you don't need—you can
-                  always add it later.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  Your data is encrypted end-to-end and never shared.
-                </p>
-              </div>
-            )}
-
-            {currentStep === 'household_info' && (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="name">Household Name</Label>
-                  <Input
-                    id="name"
-                    value={(formData.name as string) || ''}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., The Smith Family"
-                  />
-                </div>
-              </div>
-            )}
-
-            {currentStep === 'complete' && (
-              <div className="text-center py-6">
-                <p className="text-lg mb-4">
-                  Congratulations! Your financial profile is set up.
-                </p>
-                <p className="text-muted-foreground">
-                  You can now view your dashboard and start modeling scenarios.
-                </p>
-              </div>
-            )}
-
-            {/* Generic form for other steps */}
-            {!['welcome', 'household_info', 'complete'].includes(currentStep) && (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground">
-                  Step: {stepLabel}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  This step can be configured in more detail later.
-                </p>
-              </div>
+            {StepComponent && (
+              <StepComponent
+                formData={formData}
+                setFormData={setFormData}
+                errors={stepData?.validationErrors}
+              />
             )}
 
             {error && (
