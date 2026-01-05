@@ -131,16 +131,16 @@ export const insights = {
 
 // Onboarding endpoints
 export const onboarding = {
-  getProgress: () => api.get<OnboardingStepResponse>('/api/v1/onboarding/'),
+  getProgress: () => api.get<OnboardingStepResponse>('/api/v1/onboarding/current/'),
   saveStep: (data: Record<string, unknown>) =>
     api.post<{ saved: boolean; isValid: boolean; errors: Record<string, string> }>(
       '/api/v1/onboarding/save/',
-      { data }
+      data
     ),
   completeStep: (data: Record<string, unknown>) =>
     api.post<{ success: boolean; nextStep?: string; errors?: Record<string, string> }>(
       '/api/v1/onboarding/complete/',
-      { data }
+      data
     ),
   skip: () => api.post<{ success: boolean; nextStep: string }>('/api/v1/onboarding/skip/'),
   back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/'),
