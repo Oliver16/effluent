@@ -6,7 +6,7 @@ class ScenarioChangeSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScenarioChange
         fields = [
-            'id', 'change_type', 'name', 'description', 'effective_date',
+            'id', 'scenario', 'change_type', 'name', 'description', 'effective_date',
             'end_date', 'source_account_id', 'source_flow_id', 'parameters',
             'display_order', 'is_enabled'
         ]

@@ -1,6 +1,7 @@
 import { type ClassValue, clsx } from 'clsx'
 import { twMerge } from 'tailwind-merge'
 import Decimal from 'decimal.js'
+import { format, parseISO } from 'date-fns'
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
@@ -45,6 +46,15 @@ export function formatDecimal(value: string | number | Decimal, decimals = 2): s
     return '0.00'
   }
   return num.toFixed(decimals)
+}
+
+export function formatDate(value?: string | Date, formatStr = 'MMM d, yyyy'): string {
+  if (!value) return '—'
+  const date = typeof value === 'string' ? parseISO(value) : value
+  if (Number.isNaN(date.getTime())) {
+    return '—'
+  }
+  return format(date, formatStr)
 }
 
 export function getMetricStatus(

@@ -1,0 +1,92 @@
+'use client';
+
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { scenarios } from '@/lib/api';
+import { ScenarioChange } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { formatDate } from '@/lib/utils';
+import { ToggleLeft, ToggleRight, Trash2 } from 'lucide-react';
+
+interface ScenarioChangesProps {
+  scenarioId: string;
+  initialChanges?: ScenarioChange[];
+}
+
+export function ScenarioChanges({ scenarioId, initialChanges }: ScenarioChangesProps) {
+  const queryClient = useQueryClient();
+
+  const { data } = useQuery({
+    queryKey: ['scenarios', scenarioId, 'changes'],
+    queryFn: () => scenarios.listChanges(scenarioId).then(r => r),
+    initialData: initialChanges,
+  });
+
+  const changes = (data as { results?: ScenarioChange[] })?.results || (data as ScenarioChange[]) || [];
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<ScenarioChange> }) =>
+      scenarios.updateChange(id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios', scenarioId, 'changes'] }),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => scenarios.deleteChange(id),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios', scenarioId, 'changes'] }),
+  });
+
+  if (!changes.length) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No changes added yet.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      {changes.map((change) => (
+        <Card key={change.id}>
+          <CardHeader className="flex flex-row items-start justify-between gap-4">
+            <div>
+              <CardTitle className="text-base">{change.name}</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {change.change_type.replace(/_/g, ' ')} • Effective {formatDate(change.effective_date)}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() =>
+                  updateMutation.mutate({
+                    id: change.id,
+                    data: { is_enabled: !change.is_enabled },
+                  })
+                }
+                aria-label={change.is_enabled ? 'Disable change' : 'Enable change'}
+              >
+                {change.is_enabled ? (
+                  <ToggleRight className="h-4 w-4" />
+                ) : (
+                  <ToggleLeft className="h-4 w-4" />
+                )}
+              </Button>
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={() => deleteMutation.mutate(change.id)}
+                aria-label="Delete change"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground">
+            {change.description || 'No description provided.'}
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}

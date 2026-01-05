@@ -1,4 +1,15 @@
-import type { Household, Account, RecurringFlow, MetricSnapshot, Insight, BalanceSnapshot, OnboardingStepResponse } from './types'
+import type {
+  Household,
+  Account,
+  RecurringFlow,
+  MetricSnapshot,
+  Insight,
+  BalanceSnapshot,
+  OnboardingStepResponse,
+  Scenario,
+  ScenarioChange,
+  ScenarioProjection,
+} from './types'
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
@@ -133,4 +144,27 @@ export const onboarding = {
     ),
   skip: () => api.post<{ success: boolean; nextStep: string }>('/api/v1/onboarding/skip/'),
   back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/'),
+}
+
+// Scenario endpoints
+export const scenarios = {
+  list: () => api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/'),
+  get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`),
+  create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', data),
+  update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, data),
+  delete: (id: string) => api.delete<void>(`/api/v1/scenarios/${id}/`),
+  compute: (id: string) => api.post<{ status: string; projection_count: number }>(`/api/v1/scenarios/${id}/compute/`),
+  getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`),
+  listChanges: (scenarioId: string) =>
+    api.get<ScenarioChange[] | { results: ScenarioChange[] }>(`/api/v1/scenario-changes/?scenario=${scenarioId}`),
+  addChange: (data: Partial<ScenarioChange>) =>
+    api.post<ScenarioChange>('/api/v1/scenario-changes/', data),
+  updateChange: (changeId: string, data: Partial<ScenarioChange>) =>
+    api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, data),
+  deleteChange: (changeId: string) => api.delete<void>(`/api/v1/scenario-changes/${changeId}/`),
+  compare: (scenarioIds: string[]) =>
+    api.post<{ results: Array<{ scenario: Scenario; projections: ScenarioProjection[] }> }>(
+      '/api/v1/scenarios/compare/',
+      { scenario_ids: scenarioIds }
+    ),
 }
