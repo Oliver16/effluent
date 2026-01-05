@@ -11,7 +11,24 @@ import type {
   ScenarioProjection,
 } from './types'
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+const CONFIGURED_API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+
+const API_BASE = (() => {
+  if (typeof window === 'undefined') {
+    return CONFIGURED_API_BASE
+  }
+
+  if (!CONFIGURED_API_BASE) {
+    return ''
+  }
+
+  try {
+    const apiUrl = new URL(CONFIGURED_API_BASE, window.location.origin)
+    return apiUrl.origin === window.location.origin ? CONFIGURED_API_BASE : ''
+  } catch {
+    return ''
+  }
+})()
 
 interface RequestOptions extends RequestInit {
   data?: unknown
