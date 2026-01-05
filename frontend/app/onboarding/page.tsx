@@ -160,7 +160,7 @@ export default function OnboardingPage() {
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted">
       <div className="w-full max-w-2xl">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold mb-2">Begin Infusing Model DNA</h1>
+          <h1 className="text-3xl font-bold mb-2">Build Your Financial Model</h1>
           <div className="w-full bg-muted rounded-full h-2 mb-2">
             <div
               className="bg-primary h-2 rounded-full transition-all"
@@ -176,7 +176,7 @@ export default function OnboardingPage() {
           <CardHeader>
             <CardTitle>{stepLabel}</CardTitle>
             <CardDescription>
-              {currentStep === 'welcome' && 'Let\'s set up your financial profile'}
+              {currentStep === 'welcome' && 'Configure your household\'s operating model'}
               {currentStep === 'household_info' && 'Tell us about your household'}
               {currentStep === 'members' && 'Add family members'}
               {currentStep === 'bank_accounts' && 'Add your bank accounts'}
@@ -187,17 +187,15 @@ export default function OnboardingPage() {
             {currentStep === 'welcome' && (
               <div className="text-center py-6">
                 <p className="text-lg mb-4">
-                  Follow this guided workflow to design your model input parameters to
-                  supercharge your new financial planning engine.
+                  Your household is a business. It's time to model it like one.
+                </p>
+                <p className="text-muted-foreground mb-4">
+                  We'll walk through your income, assets, liabilities, and expenses to
+                  build a complete financial picture. Skip what you don't need—you can
+                  always add it later.
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  Your financial and personal information is encrypted and secure using
-                  AES-256 and TLS 1.3 with multi-layer protection at both the application
-                  and database levels.
-                </p>
-                <p className="text-muted-foreground">
-                  This wizard will guide you through setting up your accounts, income,
-                  and expenses. You can skip optional sections and come back later.
+                  Your data is encrypted end-to-end and never shared.
                 </p>
               </div>
             )}
