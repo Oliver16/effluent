@@ -166,36 +166,6 @@ services:
     networks:
       - effluent-internal
 
-  migrate:
-    build:
-      context: https://github.com/Oliver16/effluent.git#main:backend
-      dockerfile: docker/Dockerfile.prod
-    command: >
-      sh -c "
-        echo 'Waiting for database...' &&
-        while ! nc -z db 5432; do sleep 1; done &&
-        echo 'Running migrations...' &&
-        python manage.py migrate --noinput &&
-        echo 'Migrations complete!'
-      "
-    environment:
-      - DEBUG=0
-      - SECRET_KEY=${SECRET_KEY}
-      - DB_HOST=db
-      - DB_NAME=effluent
-      - DB_USER=effluent
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - effluent-internal
-    deploy:
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
-
   backend:
     build:
       context: https://github.com/Oliver16/effluent.git#main:backend
@@ -214,8 +184,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST}`)"
@@ -259,6 +227,15 @@ networks:
 ```
 
 ---
+
+## Operational Step: Run Migrations Manually
+
+After deploying the stack without the `migrate` service, run migrations manually from the host
+or the Portainer console:
+
+```bash
+docker compose -f deploy/docker-compose.portainer.yml run --rm backend python manage.py migrate --noinput
+```
 
 ## File Structure After Completion
 

@@ -18,34 +18,6 @@ services:
     networks:
       - effluent-internal
 
-  migrate:
-    build:
-      context: https://github.com/Oliver16/effluent.git#main:backend
-      dockerfile: docker/Dockerfile.prod
-    # Run as root for migrations since we need write access
-    user: root
-    command: >
-      sh -c "python manage.py makemigrations --noinput && python manage.py migrate --noinput"
-    environment:
-      - DEBUG=0
-      - SECRET_KEY=${SECRET_KEY}
-      - DB_HOST=db
-      - DB_NAME=effluent
-      - DB_USER=effluent
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DJANGO_SETTINGS_MODULE=config.settings.prod
-      - ALLOWED_HOSTS=${BACKEND_HOST:-localhost},localhost
-      - CORS_ORIGINS=https://${FRONTEND_HOST:-localhost}
-    depends_on:
-      db:
-        condition: service_healthy
-    networks:
-      - effluent-internal
-    deploy:
-      restart_policy:
-        condition: on-failure
-        max_attempts: 3
-
   backend:
     build:
       context: https://github.com/Oliver16/effluent.git#main:backend
@@ -64,8 +36,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      migrate:
-        condition: service_completed_successfully
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-localhost}`)"
