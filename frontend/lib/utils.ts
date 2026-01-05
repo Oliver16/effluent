@@ -7,7 +7,13 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(value: string | number | Decimal, currency = 'USD'): string {
+export function formatCurrency(value: string | number | Decimal | null | undefined, currency = 'USD'): string {
+  if (value == null) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency,
+    }).format(0)
+  }
   const num = typeof value === 'string' ? parseFloat(value) : typeof value === 'number' ? value : value.toNumber()
   if (isNaN(num)) {
     return new Intl.NumberFormat('en-US', {
@@ -21,7 +27,10 @@ export function formatCurrency(value: string | number | Decimal, currency = 'USD
   }).format(num)
 }
 
-export function formatPercent(value: string | number | Decimal, decimals = 1): string {
+export function formatPercent(value: string | number | Decimal | null | undefined, decimals = 1): string {
+  if (value == null) {
+    return '0.0%'
+  }
   const num = typeof value === 'string' ? parseFloat(value) : typeof value === 'number' ? value : value.toNumber()
   if (isNaN(num)) {
     return '0.0%'
@@ -29,7 +38,10 @@ export function formatPercent(value: string | number | Decimal, decimals = 1): s
   return `${(num * 100).toFixed(decimals)}%`
 }
 
-export function formatNumber(value: string | number, decimals = 0): string {
+export function formatNumber(value: string | number | null | undefined, decimals = 0): string {
+  if (value == null) {
+    return '0'
+  }
   const num = typeof value === 'string' ? parseFloat(value) : value
   if (isNaN(num)) {
     return '0'
@@ -40,7 +52,10 @@ export function formatNumber(value: string | number, decimals = 0): string {
   }).format(num)
 }
 
-export function formatDecimal(value: string | number | Decimal, decimals = 2): string {
+export function formatDecimal(value: string | number | Decimal | null | undefined, decimals = 2): string {
+  if (value == null) {
+    return '0.00'
+  }
   const num = typeof value === 'string' ? parseFloat(value) : typeof value === 'number' ? value : value.toNumber()
   if (isNaN(num)) {
     return '0.00'
