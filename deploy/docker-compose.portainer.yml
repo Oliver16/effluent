@@ -51,11 +51,13 @@ services:
       context: https://github.com/Oliver16/effluent.git#main:frontend
       dockerfile: Dockerfile.prod
       args:
-        - NEXT_PUBLIC_API_URL=https://api.effluent.io
+        # Internal URL for build-time configuration
+        - NEXT_PUBLIC_API_URL=http://backend:8000
         - INTERNAL_API_URL=http://backend:8000
     restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_API_URL=https://api.effluent.io
+      # Internal routing - no HTTPS needed, Next.js rewrites proxy to backend
+      - INTERNAL_API_URL=http://backend:8000
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
