@@ -11,24 +11,9 @@ import type {
   ScenarioProjection,
 } from './types'
 
-const CONFIGURED_API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
-
-const API_BASE = (() => {
-  if (typeof window === 'undefined') {
-    return CONFIGURED_API_BASE
-  }
-
-  if (!CONFIGURED_API_BASE) {
-    return ''
-  }
-
-  try {
-    const apiUrl = new URL(CONFIGURED_API_BASE, window.location.origin)
-    return apiUrl.origin === window.location.origin ? CONFIGURED_API_BASE : ''
-  } catch {
-    return ''
-  }
-})()
+// API base URL from environment - supports cross-origin requests to api.effluent.io
+// CORS is configured on the backend to allow requests from app.effluent.io
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
 
 interface RequestOptions extends RequestInit {
   data?: unknown
