@@ -25,7 +25,7 @@ class W2WithholdingSerializer(serializers.ModelSerializer):
 
 class IncomeSourceSerializer(serializers.ModelSerializer):
     gross_annual = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True, source='gross_annual'
+        max_digits=12, decimal_places=2, read_only=True
     )
 
     class Meta:
@@ -39,10 +39,10 @@ class IncomeSourceSerializer(serializers.ModelSerializer):
 
 class IncomeSourceDetailSerializer(serializers.ModelSerializer):
     gross_annual = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True, source='gross_annual'
+        max_digits=12, decimal_places=2, read_only=True
     )
     gross_per_period = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True, source='gross_per_period'
+        max_digits=12, decimal_places=2, read_only=True
     )
     pretax_deductions = PreTaxDeductionSerializer(many=True, read_only=True)
     w2_withholding = W2WithholdingSerializer(read_only=True)
