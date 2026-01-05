@@ -33,6 +33,19 @@ SESSION_COOKIE_SECURE = True
 CSRF_COOKIE_SECURE = True
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
+# Cross-Origin-Opener-Policy header (requires HTTPS)
+SECURE_CROSS_ORIGIN_OPENER_POLICY = 'same-origin'
+
+# WhiteNoise for static file serving with compression
+STORAGES = {
+    'default': {
+        'BACKEND': 'django.core.files.storage.FileSystemStorage',
+    },
+    'staticfiles': {
+        'BACKEND': 'whitenoise.storage.CompressedManifestStaticFilesStorage',
+    },
+}
+
 # Logging for debugging deployment issues
 LOGGING = {
     'version': 1,
