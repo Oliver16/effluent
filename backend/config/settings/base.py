@@ -87,6 +87,20 @@ REST_FRAMEWORK = {
     'COERCE_DECIMAL_TO_STRING': True,
 }
 
+# CORS settings - allow custom headers
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+    'x-household-id',
+]
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
