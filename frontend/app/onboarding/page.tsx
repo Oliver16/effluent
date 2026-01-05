@@ -7,7 +7,32 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import type { OnboardingStepResponse } from '@/lib/types'
+
+interface MemberFormData {
+  name: string
+  relationship: string
+  employment_status: string
+  is_primary: boolean
+}
+
+const RELATIONSHIP_OPTIONS = [
+  { value: 'self', label: 'Self' },
+  { value: 'spouse', label: 'Spouse' },
+  { value: 'partner', label: 'Partner' },
+  { value: 'child', label: 'Child' },
+  { value: 'dependent', label: 'Other Dependent' },
+]
+
+const EMPLOYMENT_OPTIONS = [
+  { value: 'employed_w2', label: 'W-2 Employee' },
+  { value: 'self_employed', label: 'Self-Employed' },
+  { value: 'both', label: 'Both W-2 and Self-Employed' },
+  { value: 'unemployed', label: 'Unemployed' },
+  { value: 'retired', label: 'Retired' },
+  { value: 'student', label: 'Student' },
+]
 
 const STEP_LABELS: Record<string, string> = {
   welcome: 'Welcome',
@@ -225,8 +250,132 @@ export default function OnboardingPage() {
               </div>
             )}
 
+            {currentStep === 'members' && (
+              <div className="space-y-4">
+                {((formData.members as MemberFormData[]) || []).map((member, index) => (
+                  <div key={index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium">
+                        {member.is_primary ? 'Primary Member' : `Member ${index + 1}`}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const members = [...(formData.members as MemberFormData[] || [])]
+                          members.splice(index, 1)
+                          // If we removed the primary, make the first one primary
+                          if (member.is_primary && members.length > 0) {
+                            members[0].is_primary = true
+                          }
+                          setFormData({ ...formData, members })
+                        }}
+                        className="text-destructive hover:text-destructive"
+                      >
+                        Remove
+                      </Button>
+                    </div>
+                    <div className="grid gap-3">
+                      <div>
+                        <Label htmlFor={`member-name-${index}`}>Name</Label>
+                        <Input
+                          id={`member-name-${index}`}
+                          value={member.name}
+                          onChange={(e) => {
+                            const members = [...(formData.members as MemberFormData[])]
+                            members[index] = { ...members[index], name: e.target.value }
+                            setFormData({ ...formData, members })
+                          }}
+                          placeholder="Full name"
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor={`member-relationship-${index}`}>Relationship</Label>
+                          <Select
+                            value={member.relationship}
+                            onValueChange={(value) => {
+                              const members = [...(formData.members as MemberFormData[])]
+                              members[index] = { ...members[index], relationship: value }
+                              setFormData({ ...formData, members })
+                            }}
+                          >
+                            <SelectTrigger id={`member-relationship-${index}`}>
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {RELATIONSHIP_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <Label htmlFor={`member-employment-${index}`}>Employment</Label>
+                          <Select
+                            value={member.employment_status}
+                            onValueChange={(value) => {
+                              const members = [...(formData.members as MemberFormData[])]
+                              members[index] = { ...members[index], employment_status: value }
+                              setFormData({ ...formData, members })
+                            }}
+                          >
+                            <SelectTrigger id={`member-employment-${index}`}>
+                              <SelectValue placeholder="Select..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {EMPLOYMENT_OPTIONS.map(opt => (
+                                <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                      {!member.is_primary && (formData.members as MemberFormData[]).length > 1 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const members = (formData.members as MemberFormData[]).map((m, i) => ({
+                              ...m,
+                              is_primary: i === index
+                            }))
+                            setFormData({ ...formData, members })
+                          }}
+                        >
+                          Set as Primary
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const members = [...(formData.members as MemberFormData[] || [])]
+                    const isFirst = members.length === 0
+                    members.push({
+                      name: '',
+                      relationship: isFirst ? 'self' : 'spouse',
+                      employment_status: 'employed_w2',
+                      is_primary: isFirst,
+                    })
+                    setFormData({ ...formData, members })
+                  }}
+                  className="w-full"
+                >
+                  + Add Family Member
+                </Button>
+                {((formData.members as MemberFormData[]) || []).length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    Add at least one family member to continue.
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Generic form for other steps */}
-            {!['welcome', 'household_info', 'complete'].includes(currentStep) && (
+            {!['welcome', 'household_info', 'members', 'complete'].includes(currentStep) && (
               <div className="text-center py-6">
                 <p className="text-muted-foreground">
                   Step: {stepLabel}
