@@ -42,6 +42,9 @@ services:
       - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-api.effluent.io}`)"
       - "traefik.http.routers.effluent-api.entrypoints=web"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
+      # Middleware to set X-Forwarded-Proto for HAProxy TLS termination
+      - "traefik.http.middlewares.api-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.effluent-api.middlewares=api-headers"
     networks:
       - effluent-internal
       - proxy
@@ -64,6 +67,9 @@ services:
       - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`)"
       - "traefik.http.routers.effluent-web.entrypoints=web"
       - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
+      # Middleware to set X-Forwarded-Proto for HAProxy TLS termination
+      - "traefik.http.middlewares.web-headers.headers.customrequestheaders.X-Forwarded-Proto=https"
+      - "traefik.http.routers.effluent-web.middlewares=web-headers"
     networks:
       - effluent-internal
       - proxy

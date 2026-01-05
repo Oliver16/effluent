@@ -10,6 +10,8 @@ services:
     command:
       # Entrypoints - HTTP only (HAProxy handles TLS)
       - "--entrypoints.web.address=:80"
+      # Trust forwarded headers from HAProxy (for X-Forwarded-Proto)
+      - "--entrypoints.web.forwardedHeaders.insecure=true"
       # Docker provider
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
