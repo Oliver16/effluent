@@ -47,6 +47,25 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         serializer = ScenarioProjectionSerializer(projections, many=True)
         return Response(serializer.data)
 
+    @action(detail=False, methods=['post'])
+    def compare(self, request):
+        """Compare projections across scenarios."""
+        scenario_ids = request.data.get('scenario_ids', [])
+        scenarios = Scenario.objects.filter(
+            household=request.household,
+            id__in=scenario_ids
+        )
+
+        comparisons = []
+        for scenario in scenarios:
+            projections = scenario.projections.all()
+            comparisons.append({
+                'scenario': ScenarioSerializer(scenario).data,
+                'projections': ScenarioProjectionSerializer(projections, many=True).data,
+            })
+
+        return Response({'results': comparisons})
+
 
 class ScenarioChangeViewSet(viewsets.ModelViewSet):
     serializer_class = ScenarioChangeSerializer
