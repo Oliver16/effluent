@@ -9,12 +9,6 @@ import { Plus, ArrowRight } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { Scenario } from '@/lib/types';
 
-function getScenarioList(data?: Scenario[] | { results: Scenario[] }) {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return data.results || [];
-}
-
 function isBaseline(scenario: Scenario) {
   return scenario.is_baseline === true || (scenario as Scenario & { isBaseline?: boolean }).isBaseline === true;
 }
@@ -26,9 +20,9 @@ function todayString() {
 export default function ScenariosPage() {
   const queryClient = useQueryClient();
 
-  const { data, isLoading } = useQuery({
+  const { data: scenarioList = [], isLoading } = useQuery({
     queryKey: ['scenarios'],
-    queryFn: () => scenarios.list().then(r => r),
+    queryFn: scenarios.list,
   });
 
   const createMutation = useMutation({
@@ -47,8 +41,6 @@ export default function ScenariosPage() {
   };
 
   if (isLoading) return <div>Loading...</div>;
-
-  const scenarioList = getScenarioList(data);
   const baseline = scenarioList.find(isBaseline);
   const others = scenarioList.filter((scenario) => !isBaseline(scenario));
 

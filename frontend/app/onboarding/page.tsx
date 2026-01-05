@@ -64,8 +64,12 @@ export default function OnboardingPage() {
         const newHousehold = await households.create({ name: 'My Household' })
         localStorage.setItem('householdId', newHousehold.id)
       } else {
-        localStorage.setItem('householdId', householdList[0].id)
-        if (householdList[0].onboardingCompleted) {
+        const household = householdList[0]
+        localStorage.setItem('householdId', household.id)
+        // Handle both camelCase and snake_case from API
+        const onboardingComplete = household.onboardingCompleted ??
+          (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
+        if (onboardingComplete) {
           router.push('/dashboard')
           return
         }

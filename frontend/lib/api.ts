@@ -17,11 +17,23 @@ interface RequestOptions extends RequestInit {
   data?: unknown
 }
 
-class ApiError extends Error {
+export class ApiError extends Error {
   constructor(public status: number, message: string, public errors?: Record<string, string>) {
     super(message)
     this.name = 'ApiError'
   }
+}
+
+/**
+ * Normalize API responses that may be either an array or a paginated object with 'results'.
+ * This handles both DRF paginated responses ({ results: [...] }) and direct array responses.
+ */
+export function normalizeListResponse<T>(data: T[] | { results: T[] } | { data: T[] } | undefined): T[] {
+  if (!data) return []
+  if (Array.isArray(data)) return data
+  if ('results' in data) return data.results || []
+  if ('data' in data) return data.data || []
+  return []
 }
 
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
@@ -148,7 +160,9 @@ export const onboarding = {
 
 // Scenario endpoints
 export const scenarios = {
-  list: () => api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/'),
+  list: () =>
+    api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/')
+      .then(normalizeListResponse),
   get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`),
   create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', data),
   update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, data),
@@ -156,7 +170,8 @@ export const scenarios = {
   compute: (id: string) => api.post<{ status: string; projection_count: number }>(`/api/v1/scenarios/${id}/compute/`),
   getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`),
   listChanges: (scenarioId: string) =>
-    api.get<ScenarioChange[] | { results: ScenarioChange[] }>(`/api/v1/scenario-changes/?scenario=${scenarioId}`),
+    api.get<ScenarioChange[] | { results: ScenarioChange[] }>(`/api/v1/scenario-changes/?scenario=${scenarioId}`)
+      .then(normalizeListResponse),
   addChange: (data: Partial<ScenarioChange>) =>
     api.post<ScenarioChange>('/api/v1/scenario-changes/', data),
   updateChange: (changeId: string, data: Partial<ScenarioChange>) =>

@@ -4,31 +4,23 @@ import { useMemo, useState } from 'react';
 import { useQueries, useQuery } from '@tanstack/react-query';
 import { AreaChart } from '@tremor/react';
 import { scenarios } from '@/lib/api';
-import { Scenario, ScenarioProjection } from '@/lib/types';
+import { ScenarioProjection } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
 
-function getScenarioList(data?: Scenario[] | { results: Scenario[] }) {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return data.results || [];
-}
-
 export default function ScenarioComparePage() {
   const [selected, setSelected] = useState<string[]>([]);
 
-  const { data } = useQuery({
+  const { data: scenarioList = [] } = useQuery({
     queryKey: ['scenarios'],
-    queryFn: () => scenarios.list().then(r => r),
+    queryFn: scenarios.list,
   });
-
-  const scenarioList = getScenarioList(data);
 
   const projectionQueries = useQueries({
     queries: selected.map((scenarioId) => ({
       queryKey: ['scenarios', scenarioId, 'projections'],
-      queryFn: () => scenarios.getProjections(scenarioId).then(r => r),
+      queryFn: () => scenarios.getProjections(scenarioId),
       enabled: selected.length > 0,
     })),
   });

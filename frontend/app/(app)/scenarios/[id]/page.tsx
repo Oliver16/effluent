@@ -14,12 +14,6 @@ import { AddChangeDialog } from '@/components/scenarios/add-change-dialog';
 import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
 import { Scenario, ScenarioProjection } from '@/lib/types';
 
-function getScenarioList(data?: Scenario[] | { results: Scenario[] }) {
-  if (!data) return [];
-  if (Array.isArray(data)) return data;
-  return data.results || [];
-}
-
 function isBaseline(scenario: Scenario) {
   return scenario.is_baseline === true || (scenario as Scenario & { isBaseline?: boolean }).isBaseline === true;
 }
@@ -33,28 +27,27 @@ export default function ScenarioDetailPage() {
 
   const { data: scenario, isLoading } = useQuery({
     queryKey: ['scenarios', scenarioId],
-    queryFn: () => scenarios.get(scenarioId).then(r => r),
+    queryFn: () => scenarios.get(scenarioId),
   });
 
   const { data: projectionsData } = useQuery({
     queryKey: ['scenarios', scenarioId, 'projections'],
-    queryFn: () => scenarios.getProjections(scenarioId).then(r => r),
+    queryFn: () => scenarios.getProjections(scenarioId),
     enabled: !!scenario,
   });
 
-  const { data: allScenarios } = useQuery({
+  const { data: allScenarios = [] } = useQuery({
     queryKey: ['scenarios'],
-    queryFn: () => scenarios.list().then(r => r),
+    queryFn: scenarios.list,
   });
 
   const baselineScenario = useMemo(() => {
-    const list = getScenarioList(allScenarios);
-    return list.find(isBaseline);
+    return allScenarios.find(isBaseline);
   }, [allScenarios]);
 
   const { data: baselineProjections } = useQuery({
     queryKey: ['scenarios', baselineScenario?.id, 'projections'],
-    queryFn: () => scenarios.getProjections(baselineScenario?.id as string).then(r => r),
+    queryFn: () => scenarios.getProjections(baselineScenario?.id as string),
     enabled: !!baselineScenario && baselineScenario.id !== scenarioId,
   });
 
