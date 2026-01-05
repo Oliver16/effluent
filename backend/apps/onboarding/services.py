@@ -91,6 +91,8 @@ class OnboardingService:
                 errors['state'] = 'Required'
         elif step == OnboardingStep.INCOME_SOURCES:
             for i, src in enumerate(data.get('sources', [])):
+                if not src.get('member_id'):
+                    errors[f'sources.{i}.member_id'] = 'Household member is required'
                 if not src.get('name'):
                     errors[f'sources.{i}.name'] = 'Required'
         elif step == OnboardingStep.INCOME_DETAILS:

@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { onboarding, households } from '@/lib/api'
+import { onboarding, households, members } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { OnboardingStepResponse } from '@/lib/types'
+import type { OnboardingStepResponse, HouseholdMember } from '@/lib/types'
 
 const STEP_LABELS: Record<string, string> = {
   welcome: 'Welcome',
@@ -281,6 +281,7 @@ export default function OnboardingPage() {
   const router = useRouter()
   const [stepData, setStepData] = useState<OnboardingStepResponse | null>(null)
   const [formData, setFormData] = useState<Record<string, unknown>>({})
+  const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -325,6 +326,12 @@ export default function OnboardingPage() {
       const data = await onboarding.getProgress()
       setStepData(data)
       setFormData(data.draftData || {})
+
+      // Fetch household members for income-related steps
+      if (['income_sources', 'income_details', 'withholding', 'pretax_deductions'].includes(data.step)) {
+        const memberList = await members.list()
+        setHouseholdMembers(memberList)
+      }
     } catch {
       setError('Failed to load onboarding progress')
     } finally {
@@ -577,6 +584,9 @@ export default function OnboardingPage() {
         const sources = (formData.sources as IncomeSource[]) || []
         return (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Add each income source for all household members. Each person&apos;s income should be entered separately.
+            </p>
             {sources.map((source, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
@@ -586,6 +596,19 @@ export default function OnboardingPage() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Household Member</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={source.member_id || ''}
+                      onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { member_id: e.target.value })}
+                    >
+                      <option value="">Select member...</option>
+                      {householdMembers.map(m => (
+                        <option key={m.id} value={m.id}>{m.name}</option>
+                      ))}
+                    </select>
+                  </div>
                   <div>
                     <Label>Name/Employer</Label>
                     <Input
@@ -632,7 +655,7 @@ export default function OnboardingPage() {
             ))}
             <Button
               variant="outline"
-              onClick={() => addArrayItem<IncomeSource>('sources', { name: '', income_type: 'w2', frequency: 'biweekly' })}
+              onClick={() => addArrayItem<IncomeSource>('sources', { name: '', member_id: householdMembers[0]?.id || '', income_type: 'w2', frequency: 'biweekly' })}
             >
               + Add Income Source
             </Button>
