@@ -11,9 +11,11 @@ import type {
   ScenarioProjection,
 } from './types'
 
-// API base URL from environment - supports cross-origin requests to api.effluent.io
-// CORS is configured on the backend to allow requests from app.effluent.io
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || ''
+// API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
+// Server-side requests use the configured URL directly
+const API_BASE = typeof window === 'undefined'
+  ? (process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || '')
+  : ''
 
 interface RequestOptions extends RequestInit {
   data?: unknown
