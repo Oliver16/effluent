@@ -28,6 +28,7 @@ INSTALLED_APPS = [
     'apps.taxes',
     'apps.metrics',
     'apps.onboarding',
+    'apps.scenarios',
 ]
 
 MIDDLEWARE = [
