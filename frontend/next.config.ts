@@ -4,13 +4,13 @@ const nextConfig: NextConfig = {
   output: 'standalone',
   typedRoutes: true,
   async rewrites() {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL
+    // Use INTERNAL_API_URL for server-side rewrites (Docker internal networking)
+    // Falls back to NEXT_PUBLIC_API_URL for backwards compatibility
+    const apiUrl = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL
     if (!apiUrl) {
-      // Log warning at build time - NEXT_PUBLIC_API_URL is required for API routing
-      // Without it, /api/* requests will 404 as they hit the Next.js app instead of the backend
       console.warn(
-        '\x1b[33m⚠️  NEXT_PUBLIC_API_URL is not set. API routing will be disabled.\n' +
-        '   Set NEXT_PUBLIC_API_URL to your backend URL (e.g., https://api.effluent.io)\n' +
+        '\x1b[33m⚠️  Neither INTERNAL_API_URL nor NEXT_PUBLIC_API_URL is set. API routing will be disabled.\n' +
+        '   Set INTERNAL_API_URL to your internal backend URL (e.g., http://backend:8000)\n' +
         '   to enable /api/* request proxying.\x1b[0m'
       )
       return []
