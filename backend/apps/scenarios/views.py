@@ -81,10 +81,6 @@ class ScenarioChangeViewSet(viewsets.ModelViewSet):
         return ScenarioChange.objects.filter(scenario__household=self.request.household)
 
     def perform_create(self, serializer):
-        # Ensure the scenario belongs to the user's household
-        scenario = serializer.validated_data['scenario']
-        if scenario.household != self.request.household:
-            raise PermissionError("Cannot add changes to scenarios in other households")
         serializer.save()
 
 

@@ -3,6 +3,14 @@ from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioCompar
 
 
 class ScenarioChangeSerializer(serializers.ModelSerializer):
+    def validate_scenario(self, scenario):
+        request = self.context.get('request')
+        if request and scenario.household != request.household:
+            raise serializers.ValidationError(
+                "Cannot add changes to scenarios in other households."
+            )
+        return scenario
+
     class Meta:
         model = ScenarioChange
         fields = [
