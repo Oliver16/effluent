@@ -37,12 +37,16 @@ class LiabilityDetailsSerializer(serializers.ModelSerializer):
 
 
 class AccountSerializer(serializers.ModelSerializer):
+    current_balance = serializers.DecimalField(
+        max_digits=14, decimal_places=2, read_only=True
+    )
+
     class Meta:
         model = Account
         fields = [
             'id', 'name', 'account_type', 'institution', 'account_number_last4',
             'is_active', 'display_order', 'asset_group', 'owner', 'employer_name',
-            'notes', 'created_at'
+            'notes', 'current_balance', 'created_at'
         ]
 
 

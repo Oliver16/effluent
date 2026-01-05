@@ -40,6 +40,38 @@ export function normalizeListResponse<T>(data: T[] | { results: T[] } | { data: 
   return []
 }
 
+/**
+ * Convert a snake_case string to camelCase.
+ */
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+/**
+ * Recursively transform all snake_case keys in an object to camelCase.
+ * Handles nested objects and arrays.
+ */
+export function toCamelCase<T>(obj: unknown): T {
+  if (obj === null || obj === undefined) {
+    return obj as T
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => toCamelCase(item)) as T
+  }
+
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const camelKey = snakeToCamel(key)
+      result[camelKey] = toCamelCase(value)
+    }
+    return result as T
+  }
+
+  return obj as T
+}
+
 async function request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
   const { data, ...fetchOptions } = options
 
@@ -110,56 +142,63 @@ export const auth = {
 
 // Household endpoints
 export const households = {
-  list: () => api.get<Household[]>('/api/v1/households/'),
-  get: (id: string) => api.get<Household>(`/api/v1/households/${id}/`),
-  create: (data: Partial<Household>) => api.post<Household>('/api/v1/households/', data),
+  list: () => api.get<Household[]>('/api/v1/households/').then(data => toCamelCase<Household[]>(data)),
+  get: (id: string) => api.get<Household>(`/api/v1/households/${id}/`).then(data => toCamelCase<Household>(data)),
+  create: (data: Partial<Household>) => api.post<Household>('/api/v1/households/', data).then(data => toCamelCase<Household>(data)),
 }
 
 // Account endpoints
 export const accounts = {
-  list: () => api.get<{ results: Account[] }>('/api/v1/accounts/'),
-  get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`),
-  create: (data: Partial<Account>) => api.post<Account>('/api/v1/accounts/', data),
-  update: (id: string, data: Partial<Account>) => api.patch<Account>(`/api/v1/accounts/${id}/`, data),
+  list: () => api.get<{ results: Account[] }>('/api/v1/accounts/').then(data => ({
+    results: toCamelCase<Account[]>(data.results || [])
+  })),
+  get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`).then(data => toCamelCase<Account>(data)),
+  create: (data: Partial<Account>) => api.post<Account>('/api/v1/accounts/', data).then(data => toCamelCase<Account>(data)),
+  update: (id: string, data: Partial<Account>) => api.patch<Account>(`/api/v1/accounts/${id}/`, data).then(data => toCamelCase<Account>(data)),
   updateBalance: (id: string, balance: string, asOfDate: string) =>
-    api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, { balance, as_of_date: asOfDate }),
+    api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, { balance, as_of_date: asOfDate }).then(data => toCamelCase<BalanceSnapshot>(data)),
 }
 
 // Flow endpoints
 export const flows = {
-  list: () => api.get<RecurringFlow[]>('/api/v1/flows/'),
-  create: (data: Partial<RecurringFlow>) => api.post<RecurringFlow>('/api/v1/flows/', data),
+  list: () => api.get<RecurringFlow[]>('/api/v1/flows/').then(data => toCamelCase<RecurringFlow[]>(data)),
+  create: (data: Partial<RecurringFlow>) => api.post<RecurringFlow>('/api/v1/flows/', data).then(data => toCamelCase<RecurringFlow>(data)),
   update: (id: string, data: Partial<RecurringFlow>) =>
-    api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, data),
+    api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, data).then(data => toCamelCase<RecurringFlow>(data)),
 }
 
 // Metrics endpoints
 export const metrics = {
-  current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/'),
-  history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`),
+  current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/').then(data => toCamelCase<MetricSnapshot>(data)),
+  history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`)
+    .then(data => ({ results: toCamelCase<MetricSnapshot[]>(data.results || []) })),
 }
 
 // Insights endpoints
 export const insights = {
-  insights: () => api.get<{ results: Insight[] }>('/api/v1/insights/'),
-  dismissInsight: (id: string) => api.post<Insight>(`/api/v1/insights/${id}/dismiss/`),
+  insights: () => api.get<{ results: Insight[] }>('/api/v1/insights/')
+    .then(data => ({ results: toCamelCase<Insight[]>(data.results || []) })),
+  dismissInsight: (id: string) => api.post<Insight>(`/api/v1/insights/${id}/dismiss/`).then(data => toCamelCase<Insight>(data)),
 }
 
 // Onboarding endpoints
 export const onboarding = {
-  getProgress: () => api.get<OnboardingStepResponse>('/api/v1/onboarding/current/'),
+  getProgress: () => api.get<OnboardingStepResponse>('/api/v1/onboarding/current/')
+    .then(data => toCamelCase<OnboardingStepResponse>(data)),
   saveStep: (data: Record<string, unknown>) =>
     api.post<{ saved: boolean; isValid: boolean; errors: Record<string, string> }>(
       '/api/v1/onboarding/save/',
       data
-    ),
+    ).then(data => toCamelCase<{ saved: boolean; isValid: boolean; errors: Record<string, string> }>(data)),
   completeStep: (data: Record<string, unknown>) =>
     api.post<{ success: boolean; nextStep?: string; errors?: Record<string, string> }>(
       '/api/v1/onboarding/complete/',
       data
-    ),
-  skip: () => api.post<{ success: boolean; nextStep: string }>('/api/v1/onboarding/skip/'),
-  back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/'),
+    ).then(data => toCamelCase<{ success: boolean; nextStep?: string; errors?: Record<string, string> }>(data)),
+  skip: () => api.post<{ success: boolean; nextStep: string }>('/api/v1/onboarding/skip/')
+    .then(data => toCamelCase<{ success: boolean; nextStep: string }>(data)),
+  back: () => api.post<{ success: boolean; currentStep: string }>('/api/v1/onboarding/back/')
+    .then(data => toCamelCase<{ success: boolean; currentStep: string }>(data)),
 }
 
 // Scenario endpoints
