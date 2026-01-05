@@ -23,12 +23,13 @@ services:
       context: https://github.com/Oliver16/effluent.git#main:backend
       dockerfile: docker/Dockerfile.prod
     command: >
-      sh -c "
+      sh -exc "
+        echo 'ENV:' &&
+        env | sort &&
         echo 'Waiting for database...' &&
         while ! nc -z db 5432; do sleep 1; done &&
         echo 'Running migrations...' &&
-        python manage.py migrate --noinput &&
-        echo 'Migrations complete!'
+        python -v manage.py migrate --noinput
       "
     environment:
       - DEBUG=0
