@@ -15,7 +15,7 @@ const STEP_LABELS: Record<string, string> = {
   members: 'Family Members',
   tax_filing: 'Tax Filing',
   income_sources: 'Income Sources',
-  income_details: 'Income Details',
+  business_expenses: 'Business & Rental Expenses',
   withholding: 'Withholding',
   pretax_deductions: 'Pre-Tax Deductions',
   bank_accounts: 'Bank Accounts',
@@ -42,9 +42,9 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
   household_info: 'Give your household a name',
   members: 'Add the people in your household',
   tax_filing: 'Set your tax filing status and state',
-  income_sources: 'Add your sources of income',
-  income_details: 'Provide details about your income',
-  withholding: 'Configure your tax withholding settings',
+  income_sources: 'Add your sources of income with full details',
+  business_expenses: 'Enter expenses for your business or rental income to calculate net taxable income',
+  withholding: 'Configure your W-4 withholding settings for W-2 income',
   pretax_deductions: 'Add pre-tax deductions like 401(k) contributions',
   bank_accounts: 'Add your checking and savings accounts',
   investments: 'Add your investment and brokerage accounts',
@@ -208,6 +208,33 @@ const TRANSPORT_CATEGORIES = [
   { value: 'public_transit', label: 'Public Transit' },
 ]
 
+const BUSINESS_EXPENSE_CATEGORIES = [
+  { value: 'business_office', label: 'Office Expenses' },
+  { value: 'business_supplies', label: 'Business Supplies' },
+  { value: 'business_advertising', label: 'Advertising & Marketing' },
+  { value: 'business_professional', label: 'Professional Services' },
+  { value: 'business_travel', label: 'Business Travel' },
+  { value: 'business_vehicle', label: 'Business Vehicle/Mileage' },
+  { value: 'business_rent', label: 'Business Rent/Lease' },
+  { value: 'business_utilities', label: 'Business Utilities' },
+  { value: 'business_equipment', label: 'Equipment & Tools' },
+  { value: 'business_insurance', label: 'Business Insurance' },
+  { value: 'business_license', label: 'Licenses & Permits' },
+  { value: 'business_software', label: 'Software & Subscriptions' },
+  { value: 'business_contractor', label: 'Contract Labor' },
+  { value: 'business_other', label: 'Other Business Expense' },
+]
+
+const RENTAL_EXPENSE_CATEGORIES = [
+  { value: 'rental_mortgage', label: 'Rental Property Mortgage' },
+  { value: 'rental_insurance', label: 'Rental Property Insurance' },
+  { value: 'rental_repairs', label: 'Rental Repairs & Maintenance' },
+  { value: 'rental_management', label: 'Property Management' },
+  { value: 'rental_utilities', label: 'Rental Property Utilities' },
+  { value: 'rental_tax', label: 'Rental Property Tax' },
+  { value: 'rental_other', label: 'Other Rental Expense' },
+]
+
 interface Member {
   name: string
   relationship: string
@@ -220,7 +247,16 @@ interface IncomeSource {
   member_id?: string
   income_type: string
   salary?: number
+  hourly_rate?: number
+  expected_annual_hours?: number
   frequency: string
+}
+
+interface BusinessExpense {
+  name: string
+  category: string
+  amount: number
+  frequency?: string
 }
 
 interface IncomeSourceWithDetails {
@@ -235,7 +271,6 @@ interface IncomeSourceWithDetails {
 
 interface WithholdingData {
   income_source_id: string
-  filing_status: string
   multiple_jobs: boolean
   child_dependents: number
   other_dependents: number
@@ -402,38 +437,23 @@ export default function OnboardingPage() {
       setFormData(data.draftData || {})
 
       // Fetch household members for income-related steps
-      if (['income_sources', 'income_details', 'withholding', 'pretax_deductions'].includes(data.step)) {
+      if (['income_sources', 'business_expenses', 'withholding', 'pretax_deductions'].includes(data.step)) {
         const memberList = await members.list()
         setHouseholdMembers(memberList)
       }
 
-      // Fetch existing income sources for detail/withholding/deduction steps
-      if (['income_details', 'withholding', 'pretax_deductions'].includes(data.step)) {
+      // Fetch existing income sources for business expenses/withholding/deduction steps
+      if (['business_expenses', 'withholding', 'pretax_deductions'].includes(data.step)) {
         const sourceList = await incomeSources.list()
         setExistingIncomeSources(sourceList)
 
-        // Always initialize form data from existing DB records to show current state
-        // This ensures data persists when navigating back/forward through the form
-        if (data.step === 'income_details') {
-          const sources = sourceList.map(src => ({
-            id: src.id,
-            name: src.name,
-            income_type: src.incomeType,
-            salary: src.grossAnnualSalary ? parseFloat(src.grossAnnualSalary) : undefined,
-            hourly_rate: src.hourlyRate ? parseFloat(src.hourlyRate) : undefined,
-            expected_annual_hours: src.expectedAnnualHours || 2080,
-            frequency: src.payFrequency,
-          }))
-          setFormData({ ...data.draftData, sources })
-        }
-
         if (data.step === 'withholding') {
           // Initialize withholding data for W-2 income sources only
+          // Filing status is derived from household tax filing status on the backend
           const w2Sources = sourceList.filter(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
           const withholdings = w2Sources.map(src => ({
             income_source_id: src.id,
             income_source_name: src.name,
-            filing_status: src.w2Withholding?.filingStatus || 'single',
             multiple_jobs: src.w2Withholding?.multipleJobsOrSpouseWorks || false,
             child_dependents: src.w2Withholding?.childTaxCreditDependents || 0,
             other_dependents: src.w2Withholding?.otherDependents || 0,
@@ -722,8 +742,13 @@ export default function OnboardingPage() {
         return (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Add each income source for all household members. Each person&apos;s income should be entered separately.
+              Add each income source for all household members. At least one income source is required.
             </p>
+            {sources.length === 0 && (
+              <p className="text-sm text-amber-600 text-center py-2">
+                Please add at least one income source to continue.
+              </p>
+            )}
             {sources.map((source, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
@@ -759,22 +784,54 @@ export default function OnboardingPage() {
                     <select
                       className="w-full h-10 rounded-md border border-input bg-background px-3"
                       value={source.income_type || 'w2'}
-                      onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { income_type: e.target.value })}
+                      onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { income_type: e.target.value, salary: undefined, hourly_rate: undefined })}
                     >
                       {INCOME_TYPES.map(t => (
                         <option key={t.value} value={t.value}>{t.label}</option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <Label>Annual Salary/Income</Label>
-                    <Input
-                      type="number"
-                      value={source.salary || ''}
-                      onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { salary: parseFloat(e.target.value) || undefined })}
-                      placeholder="75000"
-                    />
-                  </div>
+                  {source.income_type === 'w2_hourly' ? (
+                    <>
+                      <div>
+                        <Label>Hourly Rate ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={source.hourly_rate ?? ''}
+                          onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { hourly_rate: parseFloat(e.target.value) || undefined })}
+                          placeholder="25.00"
+                        />
+                      </div>
+                      <div>
+                        <Label>Expected Annual Hours</Label>
+                        <Input
+                          type="number"
+                          value={source.expected_annual_hours ?? 2080}
+                          onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { expected_annual_hours: parseInt(e.target.value) || 2080 })}
+                          placeholder="2080"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">Full-time = 2080 hours</p>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <Label>
+                        {source.income_type === 'rental' ? 'Annual Gross Rental Income ($)' :
+                         source.income_type === 'self_employed' ? 'Annual Gross Revenue ($)' :
+                         'Annual Salary/Income ($)'}
+                      </Label>
+                      <Input
+                        type="number"
+                        value={source.salary ?? ''}
+                        onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { salary: parseFloat(e.target.value) || undefined })}
+                        placeholder="75000"
+                      />
+                      {(source.income_type === 'self_employed' || source.income_type === 'rental') && (
+                        <p className="text-xs text-muted-foreground mt-1">Enter gross income before expenses</p>
+                      )}
+                    </div>
+                  )}
                   <div>
                     <Label>Pay Frequency</Label>
                     <select
@@ -799,93 +856,80 @@ export default function OnboardingPage() {
           </div>
         )
 
-      case 'income_details':
-        const incomeDetailSources = (formData.sources as IncomeSourceWithDetails[]) || []
+      case 'business_expenses':
+        const businessExpenses = (formData.expenses as BusinessExpense[]) || []
+        // Determine which expense categories to show based on income types
+        const incomeSources = (formData.sources as IncomeSource[]) || []
+        const hasSelfEmployment = existingIncomeSources.some(s => s.incomeType === 'self_employed') ||
+          incomeSources.some(s => s.income_type === 'self_employed')
+        const hasRentalIncome = existingIncomeSources.some(s => s.incomeType === 'rental') ||
+          incomeSources.some(s => s.income_type === 'rental')
+        const availableCategories = [
+          ...(hasSelfEmployment ? BUSINESS_EXPENSE_CATEGORIES : []),
+          ...(hasRentalIncome ? RENTAL_EXPENSE_CATEGORIES : []),
+        ]
         return (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Review and update the details for each income source you added. For hourly workers, enter your hourly rate instead of annual salary.
+              Enter your business or rental property expenses to calculate your net taxable income.
+              These expenses reduce your taxable income from self-employment or rental sources.
             </p>
-            {incomeDetailSources.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground">No income sources found.</p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Go back to add income sources, or skip this step.
-                </p>
-              </div>
-            ) : (
-              incomeDetailSources.map((source, index) => (
-                <div key={source.id || index} className="border rounded-lg p-4 space-y-3">
-                  <div className="font-medium">{source.name}</div>
-                  <div className="text-sm text-muted-foreground mb-2">
-                    {INCOME_TYPES.find(t => t.value === source.income_type)?.label || source.income_type}
+            {businessExpenses.map((expense, index) => (
+              <div key={index} className="border rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Expense {index + 1}</span>
+                  <Button variant="ghost" size="sm" onClick={() => removeArrayItem('expenses', index)}>
+                    Remove
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Expense Name</Label>
+                    <Input
+                      value={expense.name || ''}
+                      onChange={(e) => updateArrayItem<BusinessExpense>('expenses', index, { name: e.target.value })}
+                      placeholder="e.g., Office Rent"
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    {source.income_type === 'w2_hourly' ? (
-                      <>
-                        <div>
-                          <Label>Hourly Rate ($)</Label>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            value={source.hourly_rate ?? ''}
-                            onChange={(e) => {
-                              const newSources = [...incomeDetailSources]
-                              newSources[index] = { ...source, hourly_rate: parseFloat(e.target.value) || undefined }
-                              handleFormChange({ ...formData, sources: newSources })
-                            }}
-                            placeholder="25.00"
-                          />
-                        </div>
-                        <div>
-                          <Label>Expected Annual Hours</Label>
-                          <Input
-                            type="number"
-                            value={source.expected_annual_hours ?? 2080}
-                            onChange={(e) => {
-                              const newSources = [...incomeDetailSources]
-                              newSources[index] = { ...source, expected_annual_hours: parseInt(e.target.value) || 2080 }
-                              handleFormChange({ ...formData, sources: newSources })
-                            }}
-                            placeholder="2080"
-                          />
-                          <p className="text-xs text-muted-foreground mt-1">Full-time = 2080 hours</p>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="col-span-2">
-                        <Label>Annual Salary/Income ($)</Label>
-                        <Input
-                          type="number"
-                          value={source.salary ?? ''}
-                          onChange={(e) => {
-                            const newSources = [...incomeDetailSources]
-                            newSources[index] = { ...source, salary: parseFloat(e.target.value) || undefined }
-                            handleFormChange({ ...formData, sources: newSources })
-                          }}
-                          placeholder="75000"
-                        />
-                      </div>
-                    )}
-                    <div>
-                      <Label>Pay Frequency</Label>
-                      <select
-                        className="w-full h-10 rounded-md border border-input bg-background px-3"
-                        value={source.frequency || 'biweekly'}
-                        onChange={(e) => {
-                          const newSources = [...incomeDetailSources]
-                          newSources[index] = { ...source, frequency: e.target.value }
-                          handleFormChange({ ...formData, sources: newSources })
-                        }}
-                      >
-                        {PAY_FREQUENCIES.map(f => (
-                          <option key={f.value} value={f.value}>{f.label}</option>
-                        ))}
-                      </select>
-                    </div>
+                  <div>
+                    <Label>Category</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={expense.category || availableCategories[0]?.value || 'business_other'}
+                      onChange={(e) => updateArrayItem<BusinessExpense>('expenses', index, { category: e.target.value })}
+                    >
+                      {availableCategories.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Monthly Amount ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={expense.amount ?? ''}
+                      onChange={(e) => updateArrayItem<BusinessExpense>('expenses', index, { amount: parseFloat(e.target.value) || 0 })}
+                      placeholder="500.00"
+                    />
                   </div>
                 </div>
-              ))
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => addArrayItem<BusinessExpense>('expenses', {
+                name: '',
+                category: availableCategories[0]?.value || 'business_other',
+                amount: 0
+              })}
+            >
+              + Add Business/Rental Expense
+            </Button>
+            {businessExpenses.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center">
+                No expenses yet? Click the button above to add business or rental expenses.
+              </p>
             )}
           </div>
         )
@@ -900,7 +944,8 @@ export default function OnboardingPage() {
         return (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
-              Configure your W-4 tax withholding settings for each W-2 income source. This affects how much federal tax is withheld from each paycheck.
+              Configure your W-4 tax withholding settings for each W-2 income source.
+              Your filing status is based on your household tax filing selection from earlier.
             </p>
             {!w2SourcesExist ? (
               <div className="text-center py-6">
@@ -927,22 +972,6 @@ export default function OnboardingPage() {
                       </Button>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="col-span-2">
-                        <Label>Filing Status (W-4 Step 1)</Label>
-                        <select
-                          className="w-full h-10 rounded-md border border-input bg-background px-3"
-                          value={wh.filing_status || 'single'}
-                          onChange={(e) => {
-                            const newWithholdings = [...withholdings]
-                            newWithholdings[index] = { ...wh, filing_status: e.target.value }
-                            handleFormChange({ ...formData, withholdings: newWithholdings })
-                          }}
-                        >
-                          {WITHHOLDING_FILING_STATUSES.map(s => (
-                            <option key={s.value} value={s.value}>{s.label}</option>
-                          ))}
-                        </select>
-                      </div>
                       <div className="col-span-2 flex items-center gap-2">
                         <input
                           type="checkbox"
@@ -1015,7 +1044,6 @@ export default function OnboardingPage() {
                       const newWithholding = {
                         income_source_id: src.id,
                         income_source_name: src.name,
-                        filing_status: 'single',
                         multiple_jobs: false,
                         child_dependents: 0,
                         other_dependents: 0,

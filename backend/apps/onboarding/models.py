@@ -10,7 +10,7 @@ class OnboardingStep(models.TextChoices):
     MEMBERS = 'members', 'Members'
     TAX_FILING = 'tax_filing', 'Tax Filing'
     INCOME_SOURCES = 'income_sources', 'Income Sources'
-    INCOME_DETAILS = 'income_details', 'Income Details'
+    BUSINESS_EXPENSES = 'business_expenses', 'Business & Rental Expenses'
     WITHHOLDING = 'withholding', 'Withholding'
     PRETAX_DEDUCTIONS = 'pretax_deductions', 'Pre-Tax Deductions'
     BANK_ACCOUNTS = 'bank_accounts', 'Bank Accounts'
@@ -38,7 +38,7 @@ ONBOARDING_FLOW = [
     OnboardingStep.MEMBERS,
     OnboardingStep.TAX_FILING,
     OnboardingStep.INCOME_SOURCES,
-    OnboardingStep.INCOME_DETAILS,
+    OnboardingStep.BUSINESS_EXPENSES,
     OnboardingStep.WITHHOLDING,
     OnboardingStep.PRETAX_DEDUCTIONS,
     OnboardingStep.BANK_ACCOUNTS,
@@ -60,8 +60,10 @@ ONBOARDING_FLOW = [
     OnboardingStep.COMPLETE,
 ]
 
+# Income sources is NOT skippable - at least one income source is required
+# Business expenses auto-skips if no business/rental/self-employment income
 SKIPPABLE_STEPS = {
-    OnboardingStep.INCOME_DETAILS, OnboardingStep.WITHHOLDING,
+    OnboardingStep.WITHHOLDING,
     OnboardingStep.PRETAX_DEDUCTIONS,
     OnboardingStep.REAL_ESTATE, OnboardingStep.VEHICLES,
     OnboardingStep.MORTGAGES, OnboardingStep.CREDIT_CARDS,

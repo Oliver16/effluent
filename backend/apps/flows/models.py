@@ -154,6 +154,31 @@ class ExpenseCategory(models.TextChoices):
     # Taxes
     ESTIMATED_TAX = 'estimated_tax', 'Estimated Tax Payments'
 
+    # Business/Self-Employment Expenses
+    BUSINESS_OFFICE = 'business_office', 'Office Expenses'
+    BUSINESS_SUPPLIES = 'business_supplies', 'Business Supplies'
+    BUSINESS_ADVERTISING = 'business_advertising', 'Advertising & Marketing'
+    BUSINESS_PROFESSIONAL = 'business_professional', 'Professional Services'
+    BUSINESS_TRAVEL = 'business_travel', 'Business Travel'
+    BUSINESS_VEHICLE = 'business_vehicle', 'Business Vehicle/Mileage'
+    BUSINESS_RENT = 'business_rent', 'Business Rent/Lease'
+    BUSINESS_UTILITIES = 'business_utilities', 'Business Utilities'
+    BUSINESS_EQUIPMENT = 'business_equipment', 'Equipment & Tools'
+    BUSINESS_INSURANCE = 'business_insurance', 'Business Insurance'
+    BUSINESS_LICENSE = 'business_license', 'Licenses & Permits'
+    BUSINESS_SOFTWARE = 'business_software', 'Software & Subscriptions'
+    BUSINESS_CONTRACTOR = 'business_contractor', 'Contract Labor'
+    BUSINESS_OTHER = 'business_other', 'Other Business Expense'
+
+    # Rental Property Expenses
+    RENTAL_MORTGAGE = 'rental_mortgage', 'Rental Property Mortgage'
+    RENTAL_INSURANCE = 'rental_insurance', 'Rental Property Insurance'
+    RENTAL_REPAIRS = 'rental_repairs', 'Rental Repairs & Maintenance'
+    RENTAL_MANAGEMENT = 'rental_management', 'Property Management'
+    RENTAL_UTILITIES = 'rental_utilities', 'Rental Property Utilities'
+    RENTAL_TAX = 'rental_tax', 'Rental Property Tax'
+    RENTAL_OTHER = 'rental_other', 'Other Rental Expense'
+
     # Other
     ALIMONY_PAID = 'alimony_paid', 'Alimony Paid'
     HOUSEHOLD_SUPPLIES = 'household_supplies', 'Household Supplies'
@@ -195,6 +220,23 @@ DEBT_PAYMENT_CATEGORIES = {
     ExpenseCategory.AUTO_LOAN, ExpenseCategory.STUDENT_LOAN,
     ExpenseCategory.PERSONAL_LOAN, ExpenseCategory.CREDIT_CARD_PAYMENT,
     ExpenseCategory.HELOC_PAYMENT, ExpenseCategory.OTHER_DEBT,
+}
+
+BUSINESS_EXPENSE_CATEGORIES = {
+    ExpenseCategory.BUSINESS_OFFICE, ExpenseCategory.BUSINESS_SUPPLIES,
+    ExpenseCategory.BUSINESS_ADVERTISING, ExpenseCategory.BUSINESS_PROFESSIONAL,
+    ExpenseCategory.BUSINESS_TRAVEL, ExpenseCategory.BUSINESS_VEHICLE,
+    ExpenseCategory.BUSINESS_RENT, ExpenseCategory.BUSINESS_UTILITIES,
+    ExpenseCategory.BUSINESS_EQUIPMENT, ExpenseCategory.BUSINESS_INSURANCE,
+    ExpenseCategory.BUSINESS_LICENSE, ExpenseCategory.BUSINESS_SOFTWARE,
+    ExpenseCategory.BUSINESS_CONTRACTOR, ExpenseCategory.BUSINESS_OTHER,
+}
+
+RENTAL_EXPENSE_CATEGORIES = {
+    ExpenseCategory.RENTAL_MORTGAGE, ExpenseCategory.RENTAL_INSURANCE,
+    ExpenseCategory.RENTAL_REPAIRS, ExpenseCategory.RENTAL_MANAGEMENT,
+    ExpenseCategory.RENTAL_UTILITIES, ExpenseCategory.RENTAL_TAX,
+    ExpenseCategory.RENTAL_OTHER,
 }
 
 

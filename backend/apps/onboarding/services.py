@@ -70,12 +70,13 @@ class OnboardingService:
         while current_step:
             should_skip = False
 
-            # Skip income_details if no income sources exist
-            if current_step == OnboardingStep.INCOME_DETAILS:
-                has_income_sources = IncomeSource.objects.filter(
-                    household=self.household
+            # Skip business_expenses if no self-employment/rental/business income
+            if current_step == OnboardingStep.BUSINESS_EXPENSES:
+                has_business_income = IncomeSource.objects.filter(
+                    household=self.household,
+                    income_type__in=['self_employed', 'rental']
                 ).exists()
-                if not has_income_sources:
+                if not has_business_income:
                     should_skip = True
 
             # Skip withholding step if no W-2 income sources exist
@@ -87,12 +88,14 @@ class OnboardingService:
                 if not has_w2_income:
                     should_skip = True
 
-            # Skip pretax_deductions if no income sources exist
+            # Skip pretax_deductions if no W-2 income sources exist
+            # (pre-tax deductions only apply to W-2 employment)
             elif current_step == OnboardingStep.PRETAX_DEDUCTIONS:
-                has_income_sources = IncomeSource.objects.filter(
-                    household=self.household
+                has_w2_income = IncomeSource.objects.filter(
+                    household=self.household,
+                    income_type__in=['w2', 'w2_hourly']
                 ).exists()
-                if not has_income_sources:
+                if not has_w2_income:
                     should_skip = True
 
             if should_skip:
@@ -140,17 +143,31 @@ class OnboardingService:
             if not data.get('state'):
                 errors['state'] = 'Required'
         elif step == OnboardingStep.INCOME_SOURCES:
-            for i, src in enumerate(data.get('sources', [])):
+            # At least one income source is required
+            sources = data.get('sources', [])
+            if not sources:
+                errors['sources'] = 'At least one income source is required'
+            for i, src in enumerate(sources):
                 if not src.get('member_id'):
                     errors[f'sources.{i}.member_id'] = 'Household member is required'
                 if not src.get('name'):
                     errors[f'sources.{i}.name'] = 'Required'
-        elif step == OnboardingStep.INCOME_DETAILS:
-            for i, src in enumerate(data.get('sources', [])):
-                if src.get('income_type') == 'w2' and not src.get('salary'):
+                income_type = src.get('income_type', 'w2')
+                # Validate salary/income based on income type
+                if income_type == 'w2' and not src.get('salary'):
                     errors[f'sources.{i}.salary'] = 'Salary required for W-2 income'
-                if src.get('income_type') == 'w2_hourly' and not src.get('hourly_rate'):
-                    errors[f'sources.{i}.hourly_rate'] = 'Hourly rate required for hourly W-2 income'
+                if income_type == 'w2_hourly' and not src.get('hourly_rate'):
+                    errors[f'sources.{i}.hourly_rate'] = 'Hourly rate required for hourly income'
+                if income_type in ['self_employed', 'rental', 'investment', 'retirement', 'other'] and not src.get('salary'):
+                    errors[f'sources.{i}.salary'] = 'Annual income amount is required'
+        elif step == OnboardingStep.BUSINESS_EXPENSES:
+            # Business expenses are required if user has business/rental income
+            # At minimum, validate any expenses entered have required fields
+            for i, exp in enumerate(data.get('expenses', [])):
+                if not exp.get('name'):
+                    errors[f'expenses.{i}.name'] = 'Required'
+                if exp.get('amount') is None:
+                    errors[f'expenses.{i}.amount'] = 'Required'
         elif step == OnboardingStep.WITHHOLDING:
             # Optional step - no required fields
             pass
@@ -271,38 +288,58 @@ class OnboardingService:
             self.household.save()
 
         elif step == OnboardingStep.INCOME_SOURCES:
+            # Delete existing income sources to prevent duplication when going back
+            IncomeSource.objects.filter(household=self.household).delete()
             for src in data.get('sources', []):
                 member = HouseholdMember.objects.filter(
                     household=self.household, id=src.get('member_id')
                 ).first()
-                IncomeSource.objects.create(
+                income_type = src.get('income_type', 'w2')
+                # Create income source with all details in one step
+                income_source = IncomeSource.objects.create(
                     household=self.household,
                     household_member=member,
                     name=src['name'],
-                    income_type=src.get('income_type', 'w2'),
-                    gross_annual_salary=src.get('salary'),
+                    income_type=income_type,
+                    gross_annual_salary=Decimal(str(src['salary'])) if src.get('salary') else None,
+                    hourly_rate=Decimal(str(src['hourly_rate'])) if src.get('hourly_rate') else None,
+                    expected_annual_hours=int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
                     pay_frequency=src.get('frequency', 'biweekly'),
                 )
 
-        elif step == OnboardingStep.INCOME_DETAILS:
-            # Update existing income sources with details
-            for src in data.get('sources', []):
-                if src.get('id'):
-                    income_source = IncomeSource.objects.filter(
-                        household=self.household, id=src['id']
-                    ).first()
-                    if income_source:
-                        if src.get('salary'):
-                            income_source.gross_annual_salary = Decimal(str(src['salary']))
-                        if src.get('frequency'):
-                            income_source.pay_frequency = src['frequency']
-                        if src.get('hourly_rate'):
-                            income_source.hourly_rate = Decimal(str(src['hourly_rate']))
-                        if src.get('expected_annual_hours'):
-                            income_source.expected_annual_hours = int(src['expected_annual_hours'])
-                        income_source.save()
+        elif step == OnboardingStep.BUSINESS_EXPENSES:
+            # Delete any existing business expenses to prevent duplication
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__startswith='business_'
+            ).delete()
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__startswith='rental_'
+            ).delete()
+            for exp in data.get('expenses', []):
+                RecurringFlow.objects.create(
+                    household=self.household,
+                    name=exp['name'],
+                    flow_type=FlowType.EXPENSE,
+                    expense_category=exp.get('category', ExpenseCategory.BUSINESS_OTHER),
+                    amount=Decimal(str(exp['amount'])),
+                    frequency=exp.get('frequency', Frequency.MONTHLY),
+                    start_date=date.today(),
+                )
 
         elif step == OnboardingStep.WITHHOLDING:
+            # Derive W-4 filing status from household tax filing status
+            household_filing = self.household.tax_filing_status
+            # Map household filing status to W-4 filing status
+            w4_filing_map = {
+                'single': 'single',
+                'married_jointly': 'married',
+                'married_separately': 'single',  # For W-4, married filing separately uses single
+                'head_of_household': 'head_of_household',
+            }
+            default_w4_filing = w4_filing_map.get(household_filing, 'single')
+
             for wh in data.get('withholdings', []):
                 if wh.get('income_source_id'):
                     income_source = IncomeSource.objects.filter(
@@ -312,7 +349,7 @@ class OnboardingService:
                         W2Withholding.objects.update_or_create(
                             income_source=income_source,
                             defaults={
-                                'filing_status': wh.get('filing_status', 'single'),
+                                'filing_status': default_w4_filing,
                                 'multiple_jobs_or_spouse_works': wh.get('multiple_jobs', False),
                                 'child_tax_credit_dependents': wh.get('child_dependents', 0),
                                 'other_dependents': wh.get('other_dependents', 0),
