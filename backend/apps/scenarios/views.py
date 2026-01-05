@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 
 from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison
 from .serializers import (
@@ -84,7 +85,7 @@ class ScenarioChangeViewSet(viewsets.ModelViewSet):
         # Ensure the scenario belongs to the user's household
         scenario = serializer.validated_data['scenario']
         if scenario.household != self.request.household:
-            raise PermissionError("Cannot add changes to scenarios in other households")
+            raise PermissionDenied("Cannot add changes to scenarios in other households")
         serializer.save()
 
 
