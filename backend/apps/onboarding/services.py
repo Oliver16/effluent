@@ -21,12 +21,13 @@ class OnboardingService:
         )
         return {
             'step': self.progress.current_step,
-            'progress_percentage': self.progress.progress_percentage,
-            'can_skip': self.progress.can_skip(),
-            'can_go_back': self.progress.get_previous_step() is not None,
-            'draft_data': step_data.data,
-            'is_valid': step_data.is_valid,
-            'errors': step_data.validation_errors,
+            'stepLabel': OnboardingStep(self.progress.current_step).label,
+            'progressPercentage': self.progress.progress_percentage,
+            'canSkip': self.progress.can_skip(),
+            'canGoBack': self.progress.get_previous_step() is not None,
+            'draftData': step_data.data,
+            'isValid': step_data.is_valid,
+            'validationErrors': step_data.validation_errors,
         }
 
     def save_draft(self, data: dict) -> dict:
@@ -39,7 +40,7 @@ class OnboardingService:
         step_data.is_valid = is_valid
         step_data.validation_errors = errors
         step_data.save()
-        return {'saved': True, 'is_valid': is_valid, 'errors': errors}
+        return {'saved': True, 'isValid': is_valid, 'errors': errors}
 
     def complete_step(self, data: dict) -> dict:
         """Validate, save data, create records, advance to next step."""
@@ -54,14 +55,14 @@ class OnboardingService:
         except Exception as e:
             return {'success': False, 'errors': {'_general': str(e)}}
 
-        return {'success': True, 'next_step': next_step}
+        return {'success': True, 'nextStep': next_step}
 
     def skip_step(self) -> dict:
         if not self.progress.can_skip():
             return {'success': False, 'error': 'Cannot skip this step'}
         self.progress.skipped_steps.append(self.progress.current_step)
         next_step = self.progress.advance(mark_complete=False)
-        return {'success': True, 'next_step': next_step}
+        return {'success': True, 'nextStep': next_step}
 
     def go_back(self) -> dict:
         prev = self.progress.get_previous_step()
@@ -69,7 +70,7 @@ class OnboardingService:
             return {'success': False, 'error': 'At first step'}
         self.progress.current_step = prev
         self.progress.save()
-        return {'success': True, 'step': prev}
+        return {'success': True, 'currentStep': prev}
 
     def _validate(self, step: str, data: dict) -> tuple[bool, dict]:
         errors = {}
