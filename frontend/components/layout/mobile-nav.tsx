@@ -22,7 +22,7 @@ const navigation = [
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
   { name: 'Settings', href: '/settings', icon: Settings },
-]
+] as const
 
 interface MobileNavProps {
   onLogout: () => void
