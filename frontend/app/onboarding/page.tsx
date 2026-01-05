@@ -160,7 +160,7 @@ export default function OnboardingPage() {
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gradient-to-b from-background to-muted">
       <div className="w-full max-w-2xl">
         <div className="mb-6 text-center">
-          <h1 className="text-3xl font-bold mb-2">Effluent.io Setup</h1>
+          <h1 className="text-3xl font-bold mb-2">Begin Infusing Model DNA</h1>
           <div className="w-full bg-muted rounded-full h-2 mb-2">
             <div
               className="bg-primary h-2 rounded-full transition-all"
@@ -187,8 +187,13 @@ export default function OnboardingPage() {
             {currentStep === 'welcome' && (
               <div className="text-center py-6">
                 <p className="text-lg mb-4">
-                  Welcome to Effluent.io! We'll help you set up your financial profile
-                  so you can model and forecast your personal finances.
+                  Follow this guided workflow to design your model input parameters to
+                  supercharge your new financial planning engine.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Your financial and personal information is encrypted and secure using
+                  AES-256 and TLS 1.3 with multi-layer protection at both the application
+                  and database levels.
                 </p>
                 <p className="text-muted-foreground">
                   This wizard will guide you through setting up your accounts, income,
