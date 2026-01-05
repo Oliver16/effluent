@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { onboarding, households, members, incomeSources } from '@/lib/api'
+import { onboarding, households, members, incomeSources, ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -345,6 +345,18 @@ export default function OnboardingPage() {
   const [error, setError] = useState('')
   const [autoSaveTimeout, setAutoSaveTimeout] = useState<NodeJS.Timeout | null>(null)
 
+  // Helper to handle authentication errors - sign user out on token expiration
+  const handleAuthError = useCallback((error: unknown): boolean => {
+    if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+      localStorage.removeItem('token')
+      localStorage.removeItem('refreshToken')
+      localStorage.removeItem('householdId')
+      router.push('/')
+      return true
+    }
+    return false
+  }, [router])
+
   useEffect(() => {
     checkAuthAndLoadStep()
   }, [])
@@ -373,8 +385,12 @@ export default function OnboardingPage() {
       }
 
       await loadCurrentStep()
-    } catch {
-      router.push('/')
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        // Non-auth error - could be network issue, show error
+        setError('Unable to connect to server')
+        setIsLoading(false)
+      }
     }
   }
 
@@ -396,8 +412,9 @@ export default function OnboardingPage() {
         const sourceList = await incomeSources.list()
         setExistingIncomeSources(sourceList)
 
-        // Initialize form data with existing income sources if no draft data
-        if (data.step === 'income_details' && (!data.draftData || !data.draftData.sources)) {
+        // Always initialize form data from existing DB records to show current state
+        // This ensures data persists when navigating back/forward through the form
+        if (data.step === 'income_details') {
           const sources = sourceList.map(src => ({
             id: src.id,
             name: src.name,
@@ -410,8 +427,8 @@ export default function OnboardingPage() {
           setFormData({ ...data.draftData, sources })
         }
 
-        if (data.step === 'withholding' && (!data.draftData || !data.draftData.withholdings)) {
-          // Initialize withholding data for W-2 income sources
+        if (data.step === 'withholding') {
+          // Initialize withholding data for W-2 income sources only
           const w2Sources = sourceList.filter(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
           const withholdings = w2Sources.map(src => ({
             income_source_id: src.id,
@@ -425,8 +442,8 @@ export default function OnboardingPage() {
           setFormData({ ...data.draftData, withholdings })
         }
 
-        if (data.step === 'pretax_deductions' && (!data.draftData || !data.draftData.deductions)) {
-          // Initialize with existing deductions if any
+        if (data.step === 'pretax_deductions') {
+          // Initialize with existing deductions from DB
           const deductions: DeductionData[] = []
           sourceList.forEach(src => {
             src.pretaxDeductions?.forEach(ded => {
@@ -443,8 +460,10 @@ export default function OnboardingPage() {
           setFormData({ ...data.draftData, deductions })
         }
       }
-    } catch {
-      setError('Failed to load onboarding progress')
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        setError('Failed to load onboarding progress')
+      }
     } finally {
       setIsLoading(false)
     }
@@ -454,10 +473,11 @@ export default function OnboardingPage() {
   const autoSave = useCallback(async (data: Record<string, unknown>) => {
     try {
       await onboarding.saveStep(data)
-    } catch {
-      // Silent fail for auto-save
+    } catch (error) {
+      // Sign out on auth errors, otherwise silent fail for auto-save
+      handleAuthError(error)
     }
-  }, [])
+  }, [handleAuthError])
 
   const handleFormChange = useCallback((newData: Record<string, unknown>) => {
     setFormData(newData)
@@ -486,8 +506,10 @@ export default function OnboardingPage() {
       } else if (result.errors) {
         setError(Object.values(result.errors).join(', '))
       }
-    } catch {
-      setError('Failed to save step')
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        setError('Failed to save step')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -500,8 +522,10 @@ export default function OnboardingPage() {
       if (result.success) {
         await loadCurrentStep()
       }
-    } catch {
-      setError('Failed to skip step')
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        setError('Failed to skip step')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -514,8 +538,10 @@ export default function OnboardingPage() {
       if (result.success) {
         await loadCurrentStep()
       }
-    } catch {
-      setError('Failed to go back')
+    } catch (error) {
+      if (!handleAuthError(error)) {
+        setError('Failed to go back')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -866,7 +892,11 @@ export default function OnboardingPage() {
 
       case 'withholding':
         const withholdings = (formData.withholdings as (WithholdingData & { income_source_name?: string })[]) || []
-        const w2SourcesExist = existingIncomeSources.some(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
+        const w2Sources = existingIncomeSources.filter(src => src.incomeType === 'w2' || src.incomeType === 'w2_hourly')
+        const w2SourcesExist = w2Sources.length > 0
+        // Find W-2 sources that don't have withholding entries yet
+        const existingWithholdingSourceIds = new Set(withholdings.map(wh => wh.income_source_id))
+        const availableW2Sources = w2Sources.filter(src => !existingWithholdingSourceIds.has(src.id))
         return (
           <div className="space-y-4">
             <p className="text-sm text-muted-foreground">
@@ -879,95 +909,130 @@ export default function OnboardingPage() {
                   This step only applies to W-2 employment income. You can skip it.
                 </p>
               </div>
-            ) : withholdings.length === 0 ? (
-              <div className="text-center py-6">
-                <p className="text-muted-foreground">Loading withholding data...</p>
-              </div>
             ) : (
-              withholdings.map((wh, index) => (
-                <div key={wh.income_source_id || index} className="border rounded-lg p-4 space-y-3">
-                  <div className="font-medium">{wh.income_source_name || `Income Source ${index + 1}`}</div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="col-span-2">
-                      <Label>Filing Status (W-4 Step 1)</Label>
-                      <select
-                        className="w-full h-10 rounded-md border border-input bg-background px-3"
-                        value={wh.filing_status || 'single'}
-                        onChange={(e) => {
-                          const newWithholdings = [...withholdings]
-                          newWithholdings[index] = { ...wh, filing_status: e.target.value }
+              <>
+                {withholdings.map((wh, index) => (
+                  <div key={wh.income_source_id || index} className="border rounded-lg p-4 space-y-3">
+                    <div className="flex justify-between items-center">
+                      <div className="font-medium">{wh.income_source_name || `Income Source ${index + 1}`}</div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          const newWithholdings = withholdings.filter((_, i) => i !== index)
                           handleFormChange({ ...formData, withholdings: newWithholdings })
                         }}
                       >
-                        {WITHHOLDING_FILING_STATUSES.map(s => (
-                          <option key={s.value} value={s.value}>{s.label}</option>
-                        ))}
-                      </select>
+                        Remove
+                      </Button>
                     </div>
-                    <div className="col-span-2 flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        id={`multiple-jobs-${index}`}
-                        checked={wh.multiple_jobs || false}
-                        onChange={(e) => {
-                          const newWithholdings = [...withholdings]
-                          newWithholdings[index] = { ...wh, multiple_jobs: e.target.checked }
-                          handleFormChange({ ...formData, withholdings: newWithholdings })
-                        }}
-                      />
-                      <Label htmlFor={`multiple-jobs-${index}`}>
-                        Multiple jobs or spouse works (W-4 Step 2c)
-                      </Label>
-                    </div>
-                    <div>
-                      <Label>Child dependents (under 17)</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={wh.child_dependents ?? 0}
-                        onChange={(e) => {
-                          const newWithholdings = [...withholdings]
-                          newWithholdings[index] = { ...wh, child_dependents: parseInt(e.target.value) || 0 }
-                          handleFormChange({ ...formData, withholdings: newWithholdings })
-                        }}
-                        placeholder="0"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">$2,000 credit each</p>
-                    </div>
-                    <div>
-                      <Label>Other dependents</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        value={wh.other_dependents ?? 0}
-                        onChange={(e) => {
-                          const newWithholdings = [...withholdings]
-                          newWithholdings[index] = { ...wh, other_dependents: parseInt(e.target.value) || 0 }
-                          handleFormChange({ ...formData, withholdings: newWithholdings })
-                        }}
-                        placeholder="0"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">$500 credit each</p>
-                    </div>
-                    <div className="col-span-2">
-                      <Label>Extra withholding per paycheck ($)</Label>
-                      <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={wh.extra_withholding ?? 0}
-                        onChange={(e) => {
-                          const newWithholdings = [...withholdings]
-                          newWithholdings[index] = { ...wh, extra_withholding: parseFloat(e.target.value) || 0 }
-                          handleFormChange({ ...formData, withholdings: newWithholdings })
-                        }}
-                        placeholder="0.00"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">W-4 Step 4c - Additional amount to withhold</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="col-span-2">
+                        <Label>Filing Status (W-4 Step 1)</Label>
+                        <select
+                          className="w-full h-10 rounded-md border border-input bg-background px-3"
+                          value={wh.filing_status || 'single'}
+                          onChange={(e) => {
+                            const newWithholdings = [...withholdings]
+                            newWithholdings[index] = { ...wh, filing_status: e.target.value }
+                            handleFormChange({ ...formData, withholdings: newWithholdings })
+                          }}
+                        >
+                          {WITHHOLDING_FILING_STATUSES.map(s => (
+                            <option key={s.value} value={s.value}>{s.label}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-2 flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          id={`multiple-jobs-${index}`}
+                          checked={wh.multiple_jobs || false}
+                          onChange={(e) => {
+                            const newWithholdings = [...withholdings]
+                            newWithholdings[index] = { ...wh, multiple_jobs: e.target.checked }
+                            handleFormChange({ ...formData, withholdings: newWithholdings })
+                          }}
+                        />
+                        <Label htmlFor={`multiple-jobs-${index}`}>
+                          Multiple jobs or spouse works (W-4 Step 2c)
+                        </Label>
+                      </div>
+                      <div>
+                        <Label>Child dependents (under 17)</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={wh.child_dependents ?? 0}
+                          onChange={(e) => {
+                            const newWithholdings = [...withholdings]
+                            newWithholdings[index] = { ...wh, child_dependents: parseInt(e.target.value) || 0 }
+                            handleFormChange({ ...formData, withholdings: newWithholdings })
+                          }}
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">$2,000 credit each</p>
+                      </div>
+                      <div>
+                        <Label>Other dependents</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          value={wh.other_dependents ?? 0}
+                          onChange={(e) => {
+                            const newWithholdings = [...withholdings]
+                            newWithholdings[index] = { ...wh, other_dependents: parseInt(e.target.value) || 0 }
+                            handleFormChange({ ...formData, withholdings: newWithholdings })
+                          }}
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">$500 credit each</p>
+                      </div>
+                      <div className="col-span-2">
+                        <Label>Extra withholding per paycheck ($)</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={wh.extra_withholding ?? 0}
+                          onChange={(e) => {
+                            const newWithholdings = [...withholdings]
+                            newWithholdings[index] = { ...wh, extra_withholding: parseFloat(e.target.value) || 0 }
+                            handleFormChange({ ...formData, withholdings: newWithholdings })
+                          }}
+                          placeholder="0.00"
+                        />
+                        <p className="text-xs text-muted-foreground mt-1">W-4 Step 4c - Additional amount to withhold</p>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))}
+                {availableW2Sources.length > 0 && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      const src = availableW2Sources[0]
+                      const newWithholding = {
+                        income_source_id: src.id,
+                        income_source_name: src.name,
+                        filing_status: 'single',
+                        multiple_jobs: false,
+                        child_dependents: 0,
+                        other_dependents: 0,
+                        extra_withholding: 0,
+                      }
+                      handleFormChange({ ...formData, withholdings: [...withholdings, newWithholding] })
+                    }}
+                  >
+                    + Add Withholding for {availableW2Sources[0].name}
+                  </Button>
+                )}
+                {withholdings.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center">
+                    No withholding entries configured. Click the button above to add one.
+                  </p>
+                )}
+              </>
             )}
           </div>
         )
