@@ -71,13 +71,13 @@ class AccountDetailSerializer(serializers.ModelSerializer):
 class AssetGroupSerializer(serializers.ModelSerializer):
     accounts = AccountSerializer(many=True, read_only=True)
     total_market_value = serializers.DecimalField(
-        max_digits=14, decimal_places=2, read_only=True, source='total_market_value'
+        max_digits=14, decimal_places=2, read_only=True
     )
     total_debt = serializers.DecimalField(
-        max_digits=14, decimal_places=2, read_only=True, source='total_debt'
+        max_digits=14, decimal_places=2, read_only=True
     )
     equity_at_market = serializers.DecimalField(
-        max_digits=14, decimal_places=2, read_only=True, source='equity_at_market'
+        max_digits=14, decimal_places=2, read_only=True
     )
 
     class Meta:

@@ -4,12 +4,12 @@ from .models import RecurringFlow
 
 class RecurringFlowSerializer(serializers.ModelSerializer):
     monthly_amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True, source='monthly_amount'
+        max_digits=12, decimal_places=2, read_only=True
     )
     annual_amount = serializers.DecimalField(
-        max_digits=12, decimal_places=2, read_only=True, source='annual_amount'
+        max_digits=12, decimal_places=2, read_only=True
     )
-    category = serializers.CharField(read_only=True, source='category')
+    category = serializers.CharField(read_only=True)
 
     class Meta:
         model = RecurringFlow

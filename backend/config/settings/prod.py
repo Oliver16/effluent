@@ -4,17 +4,19 @@ from .base import *
 
 DEBUG = False
 
+def _parse_env_list(value: str) -> list[str]:
+    return [item.strip() for item in value.split(',') if item.strip()]
+
+
 # Parse ALLOWED_HOSTS, filtering out empty strings
-_allowed_hosts = os.environ.get('ALLOWED_HOSTS', '')
-ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',') if h.strip()]
+ALLOWED_HOSTS = _parse_env_list(os.environ.get('ALLOWED_HOSTS', ''))
 
 # Fallback if empty
 if not ALLOWED_HOSTS:
     ALLOWED_HOSTS = ['localhost']
 
 # Parse CORS origins, filtering out empty strings
-_cors_origins = os.environ.get('CORS_ORIGINS', '')
-CORS_ALLOWED_ORIGINS = [o.strip() for o in _cors_origins.split(',') if o.strip()]
+CORS_ALLOWED_ORIGINS = _parse_env_list(os.environ.get('CORS_ORIGINS', ''))
 
 # Security settings for production
 SECURE_BROWSER_XSS_FILTER = True
