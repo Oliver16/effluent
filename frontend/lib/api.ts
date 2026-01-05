@@ -1,5 +1,6 @@
 import type {
   Household,
+  HouseholdMember,
   Account,
   RecurringFlow,
   MetricSnapshot,
@@ -145,6 +146,13 @@ export const households = {
   list: () => api.get<Household[]>('/api/v1/households/').then(data => toCamelCase<Household[]>(data)),
   get: (id: string) => api.get<Household>(`/api/v1/households/${id}/`).then(data => toCamelCase<Household>(data)),
   create: (data: Partial<Household>) => api.post<Household>('/api/v1/households/', data).then(data => toCamelCase<Household>(data)),
+}
+
+// Household member endpoints
+export const members = {
+  list: () =>
+    api.get<HouseholdMember[] | { results: HouseholdMember[] }>('/api/v1/members/')
+      .then(normalizeListResponse),
 }
 
 // Account endpoints
