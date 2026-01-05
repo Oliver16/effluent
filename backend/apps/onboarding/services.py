@@ -16,6 +16,12 @@ class OnboardingService:
         self.progress, _ = OnboardingProgress.objects.get_or_create(household=household)
 
     def get_current_step(self) -> dict:
+        # Auto-skip steps that don't apply when loading
+        current = self._auto_skip_inapplicable_steps(self.progress.current_step)
+        if current != self.progress.current_step:
+            self.progress.current_step = current
+            self.progress.save()
+
         step_data, _ = OnboardingStepData.objects.get_or_create(
             progress=self.progress, step=self.progress.current_step
         )
@@ -52,10 +58,34 @@ class OnboardingService:
             with transaction.atomic():
                 self._process_step(self.progress.current_step, data)
                 next_step = self.progress.advance()
+                # Auto-skip steps that don't apply
+                next_step = self._auto_skip_inapplicable_steps(next_step)
         except Exception as e:
             return {'success': False, 'errors': {'_general': str(e)}}
 
         return {'success': True, 'nextStep': next_step}
+
+    def _auto_skip_inapplicable_steps(self, current_step: str) -> str:
+        """Auto-skip steps that don't apply based on household data."""
+        while current_step:
+            should_skip = False
+
+            # Skip withholding step if no W-2 income sources exist
+            if current_step == OnboardingStep.WITHHOLDING:
+                has_w2_income = IncomeSource.objects.filter(
+                    household=self.household,
+                    income_type__in=['w2', 'w2_hourly']
+                ).exists()
+                if not has_w2_income:
+                    should_skip = True
+
+            if should_skip:
+                self.progress.skipped_steps.append(current_step)
+                current_step = self.progress.advance(mark_complete=False)
+            else:
+                break
+
+        return current_step
 
     def skip_step(self) -> dict:
         if not self.progress.can_skip():
