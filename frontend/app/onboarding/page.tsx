@@ -186,6 +186,11 @@ export default function OnboardingPage() {
                   Follow this guided workflow to design your model input parameters to
                   supercharge your new financial planning engine.
                 </p>
+                <p className="text-sm text-muted-foreground">
+                  Your financial and personal information is encrypted and secure using
+                  AES-256 and TLS 1.3 with multi-layer protection at both the application
+                  and database levels.
+                </p>
                 <p className="text-muted-foreground">
                   This wizard will guide you through setting up your accounts, income,
                   and expenses. You can skip optional sections and come back later.
