@@ -431,6 +431,11 @@ export default function OnboardingPage() {
 
   const loadCurrentStep = async () => {
     setIsLoading(true)
+    // Clear any pending auto-save timeout to prevent stale saves
+    if (autoSaveTimeout) {
+      clearTimeout(autoSaveTimeout)
+      setAutoSaveTimeout(null)
+    }
     try {
       const data = await onboarding.getProgress()
       setStepData(data)
@@ -538,6 +543,14 @@ export default function OnboardingPage() {
   const handleSkip = async () => {
     setIsSaving(true)
     try {
+      // Clear any pending auto-save timeout
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout)
+        setAutoSaveTimeout(null)
+      }
+      // Save current step data before skipping
+      await onboarding.saveStep(formData)
+
       const result = await onboarding.skip()
       if (result.success) {
         await loadCurrentStep()
@@ -554,6 +567,14 @@ export default function OnboardingPage() {
   const handleBack = async () => {
     setIsSaving(true)
     try {
+      // Clear any pending auto-save timeout
+      if (autoSaveTimeout) {
+        clearTimeout(autoSaveTimeout)
+        setAutoSaveTimeout(null)
+      }
+      // Save current step data before navigating back
+      await onboarding.saveStep(formData)
+
       const result = await onboarding.back()
       if (result.success) {
         await loadCurrentStep()
