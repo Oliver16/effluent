@@ -2447,13 +2447,37 @@ export default function OnboardingPage() {
           return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num)
         }
 
+        // Asset types - must match backend ASSET_TYPES
         const assetAccounts = reviewData.accountsList.filter(a =>
-          ['checking', 'savings', 'money_market', 'brokerage', 'crypto', 'traditional_401k', 'roth_401k',
-           'traditional_ira', 'roth_ira', 'hsa', 'pension', 'primary_residence', 'rental_property',
-           'vacation_property', 'land', 'vehicle'].includes(a.accountType || '')
+          [
+            // Cash & Equivalents
+            'checking', 'savings', 'money_market', 'cd', 'cash',
+            // Investments
+            'brokerage', 'crypto',
+            // Retirement
+            'traditional_401k', 'roth_401k', 'traditional_ira', 'roth_ira',
+            'sep_ira', 'simple_ira', 'tsp', 'pension', 'annuity', 'hsa',
+            // Real Property
+            'primary_residence', 'rental_property', 'vacation_property', 'land', 'commercial_property',
+            // Personal Property
+            'vehicle', 'boat', 'jewelry', 'other_asset',
+            // Business
+            'business_equity',
+            // Receivables
+            'accounts_receivable', 'loans_receivable', 'tax_refund'
+          ].includes(a.accountType || '')
         )
+        // Liability types - must match backend LIABILITY_TYPES
         const liabilityAccounts = reviewData.accountsList.filter(a =>
-          ['primary_mortgage', 'credit_card', 'student_loan_federal', 'student_loan_private', 'other_liability'].includes(a.accountType || '')
+          [
+            // Revolving Debt
+            'credit_card', 'store_card', 'heloc', 'personal_loc', 'business_loc',
+            // Mortgages
+            'primary_mortgage', 'rental_mortgage', 'second_mortgage',
+            // Installment Loans
+            'auto_loan', 'personal_loan', 'student_loan_federal', 'student_loan_private',
+            'boat_loan', 'medical_debt', 'tax_debt', 'family_loan', 'other_liability'
+          ].includes(a.accountType || '')
         )
         const expenseFlows = reviewData.flowsList.filter(f => f.flowType === 'expense')
 
