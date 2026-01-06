@@ -5,8 +5,10 @@ from decimal import Decimal
 
 from apps.core.models import Household, HouseholdMember
 from apps.accounts.models import Account, BalanceSnapshot, LiabilityDetails
-from apps.flows.models import RecurringFlow, FlowType, ExpenseCategory, Frequency
+from apps.flows.models import RecurringFlow, FlowType, ExpenseCategory, Frequency, IncomeCategory
 from apps.taxes.models import IncomeSource, W2Withholding, PreTaxDeduction
+from apps.taxes.services import PaycheckCalculator
+from apps.taxes.constants import PAY_PERIODS
 from .models import OnboardingProgress, OnboardingStepData, OnboardingStep
 
 
@@ -210,7 +212,7 @@ class OnboardingService:
                     errors[f'sources.{i}.salary'] = 'Salary required for W-2 income'
                 if income_type == 'w2_hourly' and not src.get('hourly_rate'):
                     errors[f'sources.{i}.hourly_rate'] = 'Hourly rate required for hourly income'
-                if income_type in ['self_employed', 'rental', 'investment', 'retirement', 'other'] and not src.get('salary'):
+                if income_type in ['self_employed', 'rental', 'investment', 'retirement', 'social_security', 'other'] and not src.get('salary'):
                     errors[f'sources.{i}.salary'] = 'Annual income amount is required'
         elif step == OnboardingStep.BUSINESS_EXPENSES:
             # Business expenses are required if user has business/rental income
@@ -315,6 +317,17 @@ class OnboardingService:
                     errors[f'expenses.{i}.name'] = 'Required'
                 if exp.get('amount') is None:
                     errors[f'expenses.{i}.amount'] = 'Required'
+            for i, giving in enumerate(data.get('giving', [])):
+                if not giving.get('category'):
+                    errors[f'giving.{i}.category'] = 'Required'
+                amount_type = giving.get('amount_type', 'fixed')
+                if amount_type not in ['fixed', 'percentage']:
+                    errors[f'giving.{i}.amount_type'] = 'Invalid amount type'
+                if amount_type == 'percentage':
+                    if giving.get('percent_base') not in ['gross', 'net']:
+                        errors[f'giving.{i}.percent_base'] = 'Select gross or net'
+                if giving.get('amount') is None:
+                    errors[f'giving.{i}.amount'] = 'Required'
         # WELCOME, REVIEW, COMPLETE don't require validation
         return (len(errors) == 0, errors)
 
@@ -340,6 +353,11 @@ class OnboardingService:
             self.household.save()
 
         elif step == OnboardingStep.INCOME_SOURCES:
+            RecurringFlow.objects.filter(
+                household=self.household,
+                flow_type=FlowType.INCOME,
+                income_source__household=self.household
+            ).delete()
             # Delete existing income sources to prevent duplication when going back
             IncomeSource.objects.filter(household=self.household).delete()
             for src in data.get('sources', []):
@@ -358,6 +376,7 @@ class OnboardingService:
                     expected_annual_hours=int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
                     pay_frequency=src.get('frequency', 'biweekly'),
                 )
+                self._create_income_flow(income_source)
 
         elif step == OnboardingStep.BUSINESS_EXPENSES:
             # Delete any existing business expenses to prevent duplication
@@ -410,6 +429,9 @@ class OnboardingService:
                         )
 
         elif step == OnboardingStep.PRETAX_DEDUCTIONS:
+            PreTaxDeduction.objects.filter(
+                income_source__household=self.household
+            ).delete()
             for ded in data.get('deductions', []):
                 if ded.get('income_source_id'):
                     income_source = IncomeSource.objects.filter(
@@ -426,6 +448,7 @@ class OnboardingService:
                         )
 
         elif step == OnboardingStep.BANK_ACCOUNTS:
+            self._clear_accounts({'checking', 'savings', 'money_market'})
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -440,6 +463,7 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.INVESTMENTS:
+            self._clear_accounts({'brokerage', 'crypto'})
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -456,6 +480,14 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.RETIREMENT:
+            self._clear_accounts({
+                'traditional_401k',
+                'roth_401k',
+                'traditional_ira',
+                'roth_ira',
+                'hsa',
+                'pension',
+            })
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -470,6 +502,12 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.REAL_ESTATE:
+            self._clear_accounts({
+                'primary_residence',
+                'rental_property',
+                'vacation_property',
+                'land',
+            })
             for prop in data.get('properties', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -485,6 +523,7 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.VEHICLES:
+            self._clear_accounts({'vehicle'})
             for veh in data.get('vehicles', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -500,6 +539,7 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.MORTGAGES:
+            self._clear_accounts({'primary_mortgage'})
             for mort in data.get('mortgages', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -520,6 +560,7 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.CREDIT_CARDS:
+            self._clear_accounts({'credit_card'})
             for card in data.get('cards', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -540,6 +581,7 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.STUDENT_LOANS:
+            self._clear_accounts({'student_loan_federal', 'student_loan_private'})
             for loan in data.get('loans', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -560,6 +602,13 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.OTHER_DEBTS:
+            self._clear_accounts({
+                'personal_loan',
+                'medical_debt',
+                'tax_debt',
+                'family_loan',
+                'other_liability',
+            })
             for debt in data.get('debts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -579,6 +628,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.HOUSING_EXPENSES:
+            self._clear_expense_categories({
+                ExpenseCategory.RENT,
+                ExpenseCategory.PROPERTY_TAX,
+                ExpenseCategory.HOA_FEES,
+            })
             if data.get('rent'):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -611,6 +665,15 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.UTILITIES:
+            self._clear_expense_categories({
+                ExpenseCategory.ELECTRICITY,
+                ExpenseCategory.NATURAL_GAS,
+                ExpenseCategory.WATER_SEWER,
+                ExpenseCategory.TRASH,
+                ExpenseCategory.INTERNET,
+                ExpenseCategory.PHONE,
+                ExpenseCategory.CABLE_STREAMING,
+            })
             for util in data.get('utilities', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -623,6 +686,13 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.INSURANCE:
+            self._clear_expense_categories({
+                ExpenseCategory.HEALTH_INSURANCE,
+                ExpenseCategory.DENTAL_INSURANCE,
+                ExpenseCategory.VISION_INSURANCE,
+                ExpenseCategory.LIFE_INSURANCE,
+                ExpenseCategory.DISABILITY_INSURANCE,
+            })
             for ins in data.get('insurance', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -635,6 +705,13 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.TRANSPORTATION:
+            self._clear_expense_categories({
+                ExpenseCategory.AUTO_INSURANCE,
+                ExpenseCategory.GAS_FUEL,
+                ExpenseCategory.AUTO_MAINTENANCE,
+                ExpenseCategory.PARKING,
+                ExpenseCategory.PUBLIC_TRANSIT,
+            })
             for exp in data.get('expenses', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -647,6 +724,10 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.FOOD:
+            self._clear_expense_categories({
+                ExpenseCategory.GROCERIES,
+                ExpenseCategory.DINING_OUT,
+            })
             if data.get('groceries'):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -669,6 +750,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.OTHER_EXPENSES:
+            self._clear_expense_categories({
+                ExpenseCategory.MISCELLANEOUS,
+                ExpenseCategory.CHARITABLE,
+                ExpenseCategory.RELIGIOUS,
+            })
             for exp in data.get('expenses', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -677,6 +763,19 @@ class OnboardingService:
                     expense_category=exp.get('category', ExpenseCategory.MISCELLANEOUS),
                     amount=Decimal(str(exp['amount'])),
                     frequency=exp.get('frequency', Frequency.MONTHLY),
+                    start_date=date.today(),
+                )
+            for giving in data.get('giving', []):
+                amount = self._resolve_giving_amount(giving)
+                if amount is None:
+                    continue
+                RecurringFlow.objects.create(
+                    household=self.household,
+                    name=self._giving_name(giving.get('category')),
+                    flow_type=FlowType.EXPENSE,
+                    expense_category=self._giving_category(giving.get('category')),
+                    amount=amount,
+                    frequency=Frequency.MONTHLY,
                     start_date=date.today(),
                 )
 
@@ -689,3 +788,82 @@ class OnboardingService:
             self.progress.completed_at = timezone.now()
             self.progress.save()
             self.household.save()
+
+    def _clear_expense_categories(self, categories: set[str]) -> None:
+        RecurringFlow.objects.filter(
+            household=self.household,
+            flow_type=FlowType.EXPENSE,
+            expense_category__in=categories,
+        ).delete()
+
+    def _create_income_flow(self, income_source: IncomeSource) -> None:
+        income_category = {
+            'w2': IncomeCategory.SALARY,
+            'w2_hourly': IncomeCategory.HOURLY_WAGES,
+            'self_employed': IncomeCategory.SELF_EMPLOYMENT,
+            'rental': IncomeCategory.RENTAL_INCOME,
+            'investment': IncomeCategory.DIVIDENDS,
+            'retirement': IncomeCategory.PENSION,
+            'social_security': IncomeCategory.SOCIAL_SECURITY,
+            'other': IncomeCategory.OTHER_INCOME,
+        }.get(income_source.income_type, IncomeCategory.OTHER_INCOME)
+
+        RecurringFlow.objects.create(
+            household=self.household,
+            name=income_source.name,
+            flow_type=FlowType.INCOME,
+            income_category=income_category,
+            amount=income_source.gross_per_period,
+            frequency=income_source.pay_frequency,
+            start_date=date.today(),
+            household_member=income_source.household_member,
+            income_source=income_source,
+        )
+
+    def _clear_accounts(self, account_types: set[str]) -> None:
+        Account.objects.filter(
+            household=self.household,
+            account_type__in=account_types,
+        ).delete()
+
+    def _resolve_giving_amount(self, giving: dict) -> Decimal | None:
+        amount_type = giving.get('amount_type', 'fixed')
+        raw_amount = giving.get('amount')
+        if raw_amount in (None, ''):
+            return None
+        if Decimal(str(raw_amount)) <= 0:
+            return None
+
+        if amount_type == 'percentage':
+            base = giving.get('percent_base', 'gross')
+            totals = self._total_income_annual()
+            base_amount = totals['gross'] if base == 'gross' else totals['net']
+            if base_amount == 0:
+                return None
+            percent = Decimal(str(raw_amount)) / Decimal('100')
+            return (base_amount * percent / Decimal('12')).quantize(Decimal('0.01'))
+
+        return Decimal(str(raw_amount))
+
+    def _total_income_annual(self) -> dict[str, Decimal]:
+        gross_total = Decimal('0')
+        net_total = Decimal('0')
+        sources = IncomeSource.objects.filter(household=self.household, is_active=True)
+        for source in sources:
+            gross_total += source.gross_annual
+            if source.income_type in ['w2', 'w2_hourly']:
+                periods = PAY_PERIODS.get(source.pay_frequency, 26)
+                net_total += PaycheckCalculator(source).calculate_paycheck().net_pay * periods
+            else:
+                net_total += source.gross_annual
+        return {'gross': gross_total, 'net': net_total}
+
+    def _giving_category(self, category: str | None) -> str:
+        if category == 'religious':
+            return ExpenseCategory.RELIGIOUS
+        return ExpenseCategory.CHARITABLE
+
+    def _giving_name(self, category: str | None) -> str:
+        if category == 'religious':
+            return 'Tithes/Offerings'
+        return 'Charitable Donations'

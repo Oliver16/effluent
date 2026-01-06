@@ -116,6 +116,7 @@ const INCOME_TYPES = [
   { value: 'rental', label: 'Rental Income' },
   { value: 'investment', label: 'Investment Income' },
   { value: 'retirement', label: 'Retirement/Pension' },
+  { value: 'social_security', label: 'Social Security' },
   { value: 'other', label: 'Other Income' },
 ]
 
@@ -206,6 +207,19 @@ const TRANSPORT_CATEGORIES = [
   { value: 'auto_maintenance', label: 'Auto Maintenance' },
   { value: 'parking', label: 'Parking' },
   { value: 'public_transit', label: 'Public Transit' },
+]
+
+const DEBT_TYPES = [
+  { value: 'personal_loan', label: 'Personal Loan' },
+  { value: 'medical_debt', label: 'Medical Debt' },
+  { value: 'tax_debt', label: 'Tax Debt Owed' },
+  { value: 'family_loan', label: 'Loan from Family/Friends' },
+  { value: 'other_liability', label: 'Other Liability' },
+]
+
+const GIVING_BASES = [
+  { value: 'gross', label: 'Gross Income' },
+  { value: 'net', label: 'Net Income' },
 ]
 
 const BUSINESS_EXPENSE_CATEGORIES = [
@@ -346,6 +360,7 @@ interface StudentLoan {
 interface Debt {
   name: string
   lender: string
+  type?: string
   balance: number
   rate?: number
   payment?: number
@@ -367,6 +382,13 @@ interface Expense {
   name: string
   category: string
   amount: number
+}
+
+interface GivingExpense {
+  category: 'charitable' | 'religious'
+  amount_type: string
+  amount?: number
+  percent_base?: string
 }
 
 export default function OnboardingPage() {
@@ -1794,6 +1816,18 @@ export default function OnboardingPage() {
                     />
                   </div>
                   <div>
+                    <Label>Debt Type</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={debt.type || 'other_liability'}
+                      onChange={(e) => updateArrayItem<Debt>('debts', index, { type: e.target.value })}
+                    >
+                      {DEBT_TYPES.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
                     <Label>Current Balance</Label>
                     <Input
                       type="number"
@@ -1812,12 +1846,21 @@ export default function OnboardingPage() {
                       placeholder="0.00"
                     />
                   </div>
+                  <div>
+                    <Label>Monthly Payment (optional)</Label>
+                    <Input
+                      type="number"
+                      value={debt.payment ?? ''}
+                      onChange={(e) => updateArrayItem<Debt>('debts', index, { payment: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                  </div>
                 </div>
               </div>
             ))}
             <Button
               variant="outline"
-              onClick={() => addArrayItem<Debt>('debts', { name: '', lender: '', balance: 0 })}
+              onClick={() => addArrayItem<Debt>('debts', { name: '', lender: '', type: 'other_liability', balance: 0 })}
             >
               + Add Other Debt
             </Button>
@@ -2061,11 +2104,128 @@ export default function OnboardingPage() {
 
       case 'other_expenses':
         const otherExpenses = (formData.expenses as Expense[]) || []
+        const givingEntries = (formData.giving as GivingExpense[]) || [
+          { category: 'charitable', amount_type: 'fixed', percent_base: 'gross' },
+          { category: 'religious', amount_type: 'fixed', percent_base: 'gross' },
+        ]
+        const updateGivingEntry = (category: GivingExpense['category'], updates: Partial<GivingExpense>) => {
+          const current = (formData.giving as GivingExpense[]) || []
+          const next = [...current]
+          const index = next.findIndex(entry => entry.category === category)
+          if (index === -1) {
+            next.push({ category, amount_type: 'fixed', percent_base: 'gross', ...updates })
+          } else {
+            next[index] = { ...next[index], ...updates }
+          }
+          handleFormChange({ ...formData, giving: next })
+        }
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <p className="text-sm text-muted-foreground">
               Add any other recurring expenses not covered in previous steps.
             </p>
+            <div className="space-y-4 rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Charitable Giving</p>
+                <p className="text-xs text-muted-foreground">
+                  Enter a monthly amount or a percent of your total income.
+                </p>
+              </div>
+              {givingEntries
+                .filter(entry => entry.category === 'charitable')
+                .map(entry => (
+                  <div key="charitable" className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Amount Type</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={entry.amount_type || 'fixed'}
+                        onChange={(e) => updateGivingEntry('charitable', { amount_type: e.target.value })}
+                      >
+                        {AMOUNT_TYPES.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>{entry.amount_type === 'percentage' ? 'Percent' : 'Monthly Amount'}</Label>
+                      <Input
+                        type="number"
+                        step={entry.amount_type === 'percentage' ? '0.1' : '0.01'}
+                        value={entry.amount ?? ''}
+                        onChange={(e) => updateGivingEntry('charitable', {
+                          amount: parseFloat(e.target.value) || undefined,
+                        })}
+                        placeholder={entry.amount_type === 'percentage' ? '10' : '0.00'}
+                      />
+                    </div>
+                    <div>
+                      <Label>Percent Base</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={entry.percent_base || 'gross'}
+                        disabled={entry.amount_type !== 'percentage'}
+                        onChange={(e) => updateGivingEntry('charitable', { percent_base: e.target.value })}
+                      >
+                        {GIVING_BASES.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+            </div>
+            <div className="space-y-4 rounded-lg border p-4">
+              <div>
+                <p className="font-medium">Tithes/Offerings</p>
+                <p className="text-xs text-muted-foreground">
+                  Enter a monthly amount or a percent of your total income.
+                </p>
+              </div>
+              {givingEntries
+                .filter(entry => entry.category === 'religious')
+                .map(entry => (
+                  <div key="religious" className="grid grid-cols-3 gap-3">
+                    <div>
+                      <Label>Amount Type</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={entry.amount_type || 'fixed'}
+                        onChange={(e) => updateGivingEntry('religious', { amount_type: e.target.value })}
+                      >
+                        {AMOUNT_TYPES.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>{entry.amount_type === 'percentage' ? 'Percent' : 'Monthly Amount'}</Label>
+                      <Input
+                        type="number"
+                        step={entry.amount_type === 'percentage' ? '0.1' : '0.01'}
+                        value={entry.amount ?? ''}
+                        onChange={(e) => updateGivingEntry('religious', {
+                          amount: parseFloat(e.target.value) || undefined,
+                        })}
+                        placeholder={entry.amount_type === 'percentage' ? '10' : '0.00'}
+                      />
+                    </div>
+                    <div>
+                      <Label>Percent Base</Label>
+                      <select
+                        className="w-full h-10 rounded-md border border-input bg-background px-3"
+                        value={entry.percent_base || 'gross'}
+                        disabled={entry.amount_type !== 'percentage'}
+                        onChange={(e) => updateGivingEntry('religious', { percent_base: e.target.value })}
+                      >
+                        {GIVING_BASES.map(option => (
+                          <option key={option.value} value={option.value}>{option.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+            </div>
             {otherExpenses.map((exp, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
