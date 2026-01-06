@@ -152,8 +152,22 @@ export interface MetricSnapshot {
   savingsRate: string
   dtiRatio: string
   debtToAssetMarket: string
+  debtToAssetCost: string
   highInterestDebtRatio: string
   housingRatio: string
+  fixedExpenseRatio: string
+  essentialExpenseRatio: string
+  incomeConcentration: string
+  unrealizedGains: string
+  investmentRate: string
+  totalAssetsMarket: string
+  totalAssetsCost: string
+  totalLiabilities: string
+  totalMonthlyIncome: string
+  totalMonthlyExpenses: string
+  totalDebtService: string
+  totalLiquidAssets: string
+  weightedAvgInterestRate: string
 }
 
 export interface Insight {

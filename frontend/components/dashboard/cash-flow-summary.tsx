@@ -10,29 +10,10 @@ interface CashFlowSummaryProps {
 export function CashFlowSummary({ metrics }: CashFlowSummaryProps) {
   if (!metrics) return null;
 
-  // Calculate income and expenses from surplus and savings rate
-  // surplus = income - expenses
-  // savings_rate = surplus / income
-  // So: income = surplus / savings_rate
-  // And: expenses = income - surplus
-  const savingsRate = parseFloat(metrics.savingsRate);
+  // Use actual income and expense values from the API
+  const income = parseFloat(metrics.totalMonthlyIncome || '0');
+  const expenses = parseFloat(metrics.totalMonthlyExpenses || '0');
   const surplus = parseFloat(metrics.monthlySurplus);
-
-  let income = 0;
-  let expenses = 0;
-
-  if (savingsRate > 0 && savingsRate < 1) {
-    income = surplus / savingsRate;
-    expenses = income - surplus;
-  } else if (savingsRate === 0) {
-    // If savings rate is 0, surplus should be 0
-    income = 0;
-    expenses = 0;
-  } else {
-    // Fallback calculation
-    income = surplus;
-    expenses = 0;
-  }
 
   return (
     <Card>
