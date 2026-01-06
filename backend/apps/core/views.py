@@ -17,8 +17,12 @@ from apps.accounts.models import Account
 from apps.accounts.serializers import AccountDetailSerializer
 from apps.flows.models import RecurringFlow
 from apps.flows.serializers import RecurringFlowSerializer
-from apps.taxes.models import IncomeSource
-from apps.taxes.serializers import IncomeSourceSerializer
+from apps.taxes.models import IncomeSource, PreTaxDeduction, PostTaxDeduction, W2Withholding, SelfEmploymentTax
+from apps.taxes.serializers import (
+    IncomeSourceDetailSerializer, PreTaxDeductionSerializer, PostTaxDeductionSerializer,
+    W2WithholdingSerializer, SelfEmploymentTaxSerializer
+)
+from apps.onboarding.models import OnboardingProgress, OnboardingStepData
 from apps.scenarios.models import Scenario, ScenarioChange
 from apps.scenarios.serializers import ScenarioSerializer, ScenarioChangeSerializer
 
@@ -202,6 +206,34 @@ class DataExportView(APIView):
         if not household:
             return Response({'detail': 'No household available.'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Get onboarding progress if exists
+        onboarding_data = None
+        try:
+            onboarding = OnboardingProgress.objects.get(household=household)
+            step_data_list = OnboardingStepData.objects.filter(progress=onboarding)
+            onboarding_data = {
+                'id': str(onboarding.id),
+                'current_step': onboarding.current_step,
+                'completed_steps': onboarding.completed_steps,
+                'skipped_steps': onboarding.skipped_steps,
+                'progress_percentage': onboarding.progress_percentage,
+                'started_at': onboarding.started_at,
+                'completed_at': onboarding.completed_at,
+                'step_data': [
+                    {
+                        'id': str(sd.id),
+                        'step': sd.step,
+                        'data': sd.data,
+                        'is_valid': sd.is_valid,
+                        'validation_errors': sd.validation_errors,
+                        'updated_at': sd.updated_at,
+                    }
+                    for sd in step_data_list
+                ]
+            }
+        except OnboardingProgress.DoesNotExist:
+            pass
+
         data = {
             'exported_at': timezone.now(),
             'user': UserProfileSerializer(request.user).data,
@@ -212,8 +244,22 @@ class DataExportView(APIView):
             'flows': RecurringFlowSerializer(
                 RecurringFlow.objects.filter(household=household), many=True
             ).data,
-            'income_sources': IncomeSourceSerializer(
+            # Use IncomeSourceDetailSerializer to include all deductions (pretax, posttax, w2, se_tax)
+            'income_sources': IncomeSourceDetailSerializer(
                 IncomeSource.objects.filter(household=household), many=True
+            ).data,
+            # Also export deductions separately for easier access
+            'pretax_deductions': PreTaxDeductionSerializer(
+                PreTaxDeduction.objects.filter(income_source__household=household), many=True
+            ).data,
+            'posttax_deductions': PostTaxDeductionSerializer(
+                PostTaxDeduction.objects.filter(income_source__household=household), many=True
+            ).data,
+            'w2_withholdings': W2WithholdingSerializer(
+                W2Withholding.objects.filter(income_source__household=household), many=True
+            ).data,
+            'self_employment_taxes': SelfEmploymentTaxSerializer(
+                SelfEmploymentTax.objects.filter(income_source__household=household), many=True
             ).data,
             'scenarios': ScenarioSerializer(
                 Scenario.objects.filter(household=household), many=True
@@ -221,5 +267,6 @@ class DataExportView(APIView):
             'scenario_changes': ScenarioChangeSerializer(
                 ScenarioChange.objects.filter(household=household), many=True
             ).data,
+            'onboarding': onboarding_data,
         }
         return Response(data)
