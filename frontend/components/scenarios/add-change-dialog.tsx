@@ -1,8 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { scenarios } from '@/lib/api';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { accounts as accountsApi, flows as flowsApi, scenarios, normalizeListResponse } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -31,6 +31,22 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
   const [effectiveDate, setEffectiveDate] = useState('');
   const [params, setParams] = useState<Record<string, string>>({});
 
+  // Fetch accounts and flows for selectors
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => accountsApi.list(),
+    enabled: open,
+  });
+
+  const { data: flowsData } = useQuery({
+    queryKey: ['flows'],
+    queryFn: () => flowsApi.list().then(normalizeListResponse),
+    enabled: open,
+  });
+
+  const accounts = accountsData?.results || [];
+  const flows = flowsData || [];
+
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => scenarios.addChange(data),
     onSuccess: () => {
@@ -55,13 +71,26 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
   );
 
   const handleSubmit = () => {
+    // Convert parameters, mapping specific flow fields back to generic source_flow_id
+    const convertedParams = convertFormParameters(params);
+
+    // Map source_income_flow_id and source_expense_flow_id back to source_flow_id for backend
+    if (convertedParams.source_income_flow_id) {
+      convertedParams.source_flow_id = convertedParams.source_income_flow_id;
+      delete convertedParams.source_income_flow_id;
+    }
+    if (convertedParams.source_expense_flow_id) {
+      convertedParams.source_flow_id = convertedParams.source_expense_flow_id;
+      delete convertedParams.source_expense_flow_id;
+    }
+
     mutation.mutate({
       scenario: scenarioId,
       change_type: changeType,
       name,
       description,
       effective_date: effectiveDate,
-      parameters: convertFormParameters(params),
+      parameters: convertedParams,
       is_enabled: true,
     });
   };
@@ -136,6 +165,8 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
                 config={config}
                 value={params[field] || ''}
                 onChange={(value) => updateParam(field, value)}
+                accounts={accounts}
+                flows={flows}
               />
             );
           })}

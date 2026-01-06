@@ -27,41 +27,113 @@ import {
 import { Plus, RefreshCw, Building2, Wallet, CreditCard, Home, Car, GraduationCap } from 'lucide-react'
 
 const LIABILITY_TYPES = new Set([
-  'credit_card', 'heloc', 'primary_mortgage', 'auto_loan',
-  'student_loan_federal', 'student_loan_private', 'personal_loan'
+  // Credit Cards (Revolving)
+  'credit_card', 'store_card',
+  // Lines of Credit
+  'heloc', 'personal_loc', 'business_loc',
+  // Mortgages
+  'primary_mortgage', 'rental_mortgage', 'second_mortgage',
+  // Installment Loans
+  'auto_loan', 'personal_loan', 'student_loan_federal', 'student_loan_private', 'boat_loan',
+  // Other Liabilities
+  'medical_debt', 'tax_debt', 'family_loan', 'other_liability',
 ])
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
+  // Cash & Equivalents
   checking: 'Checking',
   savings: 'Savings',
   money_market: 'Money Market',
+  cd: 'Certificate of Deposit',
+  cash: 'Cash on Hand',
+  // Investment
   brokerage: 'Brokerage',
-  ira_traditional: 'Traditional IRA',
-  ira_roth: 'Roth IRA',
-  '401k_traditional': '401(k)',
-  '401k_roth': 'Roth 401(k)',
-  '529_plan': '529 Plan',
-  hsa: 'HSA',
-  crypto: 'Crypto',
-  real_estate: 'Real Estate',
+  crypto: 'Cryptocurrency',
+  // Retirement (backend uses traditional_ira, roth_ira format)
+  traditional_401k: '401(k) - Traditional',
+  roth_401k: '401(k) - Roth',
+  traditional_ira: 'IRA - Traditional',
+  roth_ira: 'IRA - Roth',
+  sep_ira: 'SEP IRA',
+  simple_ira: 'SIMPLE IRA',
+  tsp: 'TSP (Federal)',
+  pension: 'Pension',
+  annuity: 'Annuity',
+  hsa: 'Health Savings Account',
+  // Real Property
+  primary_residence: 'Primary Residence',
+  rental_property: 'Rental Property',
+  vacation_property: 'Vacation Property',
+  land: 'Land',
+  commercial_property: 'Commercial Property',
+  // Personal Property
   vehicle: 'Vehicle',
+  boat: 'Boat/RV',
+  jewelry: 'Jewelry/Collectibles',
+  other_asset: 'Other Asset',
+  // Credit Cards (Revolving)
   credit_card: 'Credit Card',
-  heloc: 'HELOC',
-  primary_mortgage: 'Mortgage',
+  store_card: 'Store Credit Card',
+  // Lines of Credit
+  heloc: 'Home Equity Line of Credit',
+  personal_loc: 'Personal Line of Credit',
+  business_loc: 'Business Line of Credit',
+  // Mortgages
+  primary_mortgage: 'Primary Residence Mortgage',
+  rental_mortgage: 'Rental Property Mortgage',
+  second_mortgage: 'Second Mortgage',
+  // Installment Loans
   auto_loan: 'Auto Loan',
+  personal_loan: 'Personal Loan',
   student_loan_federal: 'Federal Student Loan',
   student_loan_private: 'Private Student Loan',
-  personal_loan: 'Personal Loan',
+  boat_loan: 'Boat/RV Loan',
+  // Other Liabilities
+  medical_debt: 'Medical Debt',
+  tax_debt: 'Tax Debt Owed',
+  family_loan: 'Loan from Family/Friends',
+  other_liability: 'Other Liability',
 }
 
 const ACCOUNT_TYPE_ICONS: Record<string, React.ElementType> = {
+  // Cash
   checking: Wallet,
   savings: Wallet,
+  money_market: Wallet,
+  cd: Wallet,
+  cash: Wallet,
+  // Investment
   brokerage: Building2,
-  credit_card: CreditCard,
-  real_estate: Home,
+  crypto: Building2,
+  // Retirement
+  traditional_401k: Building2,
+  roth_401k: Building2,
+  traditional_ira: Building2,
+  roth_ira: Building2,
+  sep_ira: Building2,
+  simple_ira: Building2,
+  tsp: Building2,
+  pension: Building2,
+  annuity: Building2,
+  hsa: Building2,
+  // Real Property
+  primary_residence: Home,
+  rental_property: Home,
+  vacation_property: Home,
+  land: Home,
+  commercial_property: Home,
+  // Personal Property
   vehicle: Car,
+  boat: Car,
+  // Credit
+  credit_card: CreditCard,
+  store_card: CreditCard,
+  heloc: Home,
+  // Mortgages
   primary_mortgage: Home,
+  rental_mortgage: Home,
+  second_mortgage: Home,
+  // Loans
   auto_loan: Car,
   student_loan_federal: GraduationCap,
   student_loan_private: GraduationCap,
@@ -356,35 +428,68 @@ export default function AccountsPage() {
                 value={newAccount.accountType}
                 onChange={(e) => setNewAccount({ ...newAccount, accountType: e.target.value })}
               >
-                <optgroup label="Bank Accounts">
+                <optgroup label="Cash & Equivalents">
                   <option value="checking">Checking</option>
                   <option value="savings">Savings</option>
                   <option value="money_market">Money Market</option>
+                  <option value="cd">Certificate of Deposit</option>
+                  <option value="cash">Cash on Hand</option>
                 </optgroup>
                 <optgroup label="Investment Accounts">
                   <option value="brokerage">Brokerage</option>
-                  <option value="ira_traditional">Traditional IRA</option>
-                  <option value="ira_roth">Roth IRA</option>
-                  <option value="401k_traditional">401(k)</option>
-                  <option value="401k_roth">Roth 401(k)</option>
-                  <option value="529_plan">529 Plan</option>
-                  <option value="hsa">HSA</option>
-                  <option value="crypto">Crypto</option>
+                  <option value="crypto">Cryptocurrency</option>
                 </optgroup>
-                <optgroup label="Property">
-                  <option value="real_estate">Real Estate</option>
+                <optgroup label="Retirement Accounts">
+                  <option value="traditional_401k">401(k) - Traditional</option>
+                  <option value="roth_401k">401(k) - Roth</option>
+                  <option value="traditional_ira">IRA - Traditional</option>
+                  <option value="roth_ira">IRA - Roth</option>
+                  <option value="sep_ira">SEP IRA</option>
+                  <option value="simple_ira">SIMPLE IRA</option>
+                  <option value="tsp">TSP (Federal)</option>
+                  <option value="pension">Pension</option>
+                  <option value="annuity">Annuity</option>
+                  <option value="hsa">Health Savings Account</option>
+                </optgroup>
+                <optgroup label="Real Property">
+                  <option value="primary_residence">Primary Residence</option>
+                  <option value="rental_property">Rental Property</option>
+                  <option value="vacation_property">Vacation Property</option>
+                  <option value="land">Land</option>
+                  <option value="commercial_property">Commercial Property</option>
+                </optgroup>
+                <optgroup label="Personal Property">
                   <option value="vehicle">Vehicle</option>
+                  <option value="boat">Boat/RV</option>
+                  <option value="jewelry">Jewelry/Collectibles</option>
+                  <option value="other_asset">Other Asset</option>
                 </optgroup>
-                <optgroup label="Credit">
+                <optgroup label="Credit Cards">
                   <option value="credit_card">Credit Card</option>
-                  <option value="heloc">HELOC</option>
+                  <option value="store_card">Store Credit Card</option>
                 </optgroup>
-                <optgroup label="Loans">
-                  <option value="primary_mortgage">Mortgage</option>
+                <optgroup label="Lines of Credit">
+                  <option value="heloc">Home Equity Line of Credit</option>
+                  <option value="personal_loc">Personal Line of Credit</option>
+                  <option value="business_loc">Business Line of Credit</option>
+                </optgroup>
+                <optgroup label="Mortgages">
+                  <option value="primary_mortgage">Primary Residence Mortgage</option>
+                  <option value="rental_mortgage">Rental Property Mortgage</option>
+                  <option value="second_mortgage">Second Mortgage</option>
+                </optgroup>
+                <optgroup label="Installment Loans">
                   <option value="auto_loan">Auto Loan</option>
+                  <option value="personal_loan">Personal Loan</option>
                   <option value="student_loan_federal">Federal Student Loan</option>
                   <option value="student_loan_private">Private Student Loan</option>
-                  <option value="personal_loan">Personal Loan</option>
+                  <option value="boat_loan">Boat/RV Loan</option>
+                </optgroup>
+                <optgroup label="Other Liabilities">
+                  <option value="medical_debt">Medical Debt</option>
+                  <option value="tax_debt">Tax Debt Owed</option>
+                  <option value="family_loan">Loan from Family/Friends</option>
+                  <option value="other_liability">Other Liability</option>
                 </optgroup>
               </select>
             </div>
