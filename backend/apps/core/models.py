@@ -25,8 +25,17 @@ class User(AbstractUser):
         return membership.household if membership else None
 
     def get_settings(self):
-        settings, _ = UserSettings.objects.get_or_create(user=self)
-        return settings
+        try:
+            settings, _ = UserSettings.objects.get_or_create(user=self)
+            return settings
+        except Exception:
+            # If get_or_create fails (e.g., due to database issues),
+            # try to get existing settings or return a default object
+            try:
+                return UserSettings.objects.get(user=self)
+            except UserSettings.DoesNotExist:
+                # Return a new unsaved UserSettings with defaults
+                return UserSettings(user=self)
 
 
 class TimestampedModel(models.Model):
