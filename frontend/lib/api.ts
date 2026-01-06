@@ -260,7 +260,14 @@ export const insights = {
 // Onboarding endpoints
 export const onboarding = {
   getProgress: () => api.get<OnboardingStepResponse>('/api/v1/onboarding/current/')
-    .then(data => toCamelCase<OnboardingStepResponse>(data)),
+    .then(data => {
+      // Preserve draftData as-is (frontend uses snake_case keys for form fields)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rawData = data as any
+      const draftData = rawData.draftData || rawData.draft_data || {}
+      const converted = toCamelCase<OnboardingStepResponse>(data)
+      return { ...converted, draftData }
+    }),
   saveStep: (data: Record<string, unknown>) =>
     api.post<{ saved: boolean; isValid: boolean; errors: Record<string, string> }>(
       '/api/v1/onboarding/save/',

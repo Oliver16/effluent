@@ -30,7 +30,7 @@ class OnboardingService:
             'stepLabel': OnboardingStep(self.progress.current_step).label,
             'progressPercentage': self.progress.progress_percentage,
             'canSkip': self.progress.can_skip(),
-            'canGoBack': self.progress.get_previous_step() is not None,
+            'canGoBack': self._get_previous_navigable_step() is not None,
             'draftData': step_data.data,
             'isValid': step_data.is_valid,
             'validationErrors': step_data.validation_errors,
@@ -56,6 +56,15 @@ class OnboardingService:
 
         try:
             with transaction.atomic():
+                # Save draft data so it's available when navigating back
+                step_data, _ = OnboardingStepData.objects.get_or_create(
+                    progress=self.progress, step=self.progress.current_step
+                )
+                step_data.data = data
+                step_data.is_valid = True
+                step_data.validation_errors = {}
+                step_data.save()
+
                 self._process_step(self.progress.current_step, data)
                 next_step = self.progress.advance()
                 # Auto-skip steps that don't apply
@@ -118,12 +127,55 @@ class OnboardingService:
         return {'success': True, 'nextStep': next_step}
 
     def go_back(self) -> dict:
-        prev = self.progress.get_previous_step()
+        prev = self._get_previous_navigable_step()
         if not prev:
             return {'success': False, 'error': 'At first step'}
         self.progress.current_step = prev
         self.progress.save()
         return {'success': True, 'currentStep': prev}
+
+    def _get_previous_navigable_step(self) -> str | None:
+        """
+        Get the previous step, skipping any steps that were auto-skipped.
+        This ensures back navigation respects the same skip logic as forward navigation.
+        """
+        from .models import ONBOARDING_FLOW
+
+        try:
+            current_idx = ONBOARDING_FLOW.index(self.progress.current_step)
+        except ValueError:
+            return None
+
+        # Walk backwards through the flow, skipping auto-skipped steps
+        for idx in range(current_idx - 1, -1, -1):
+            step = ONBOARDING_FLOW[idx]
+            # Skip steps that were auto-skipped (not manually skipped by user clicking "Skip")
+            if step in self.progress.skipped_steps:
+                # Check if this was an auto-skip (step that doesn't apply)
+                if self._should_auto_skip(step):
+                    continue
+            return step
+
+        return None
+
+    def _should_auto_skip(self, step: str) -> bool:
+        """Check if a step should be auto-skipped based on current household data."""
+        if step == OnboardingStep.BUSINESS_EXPENSES:
+            return not IncomeSource.objects.filter(
+                household=self.household,
+                income_type__in=['self_employed', 'rental']
+            ).exists()
+        elif step == OnboardingStep.WITHHOLDING:
+            return not IncomeSource.objects.filter(
+                household=self.household,
+                income_type__in=['w2', 'w2_hourly']
+            ).exists()
+        elif step == OnboardingStep.PRETAX_DEDUCTIONS:
+            return not IncomeSource.objects.filter(
+                household=self.household,
+                income_type__in=['w2', 'w2_hourly']
+            ).exists()
+        return False
 
     def _validate(self, step: str, data: dict) -> tuple[bool, dict]:
         errors = {}
