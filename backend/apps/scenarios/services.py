@@ -199,7 +199,24 @@ class ScenarioEngine:
         expenses = []
         transfers = []
 
-        # Only use baseline flows for projection (scenario-specific flows are added via changes)
+        # Include income from IncomeSource objects (primary source of income data)
+        for source in IncomeSource.objects.filter(household=self.household, is_active=True):
+            # Check if source is active on the start date
+            if source.start_date and source.start_date > self.scenario.start_date:
+                continue
+            if source.end_date and source.end_date < self.scenario.start_date:
+                continue
+            incomes.append({
+                'id': f'income_source_{source.id}',
+                'name': source.name,
+                'category': 'salary' if source.income_type in ('w2', 'w2_hourly') else source.income_type,
+                'amount': source.gross_annual,
+                'frequency': 'annually',
+                'monthly': source.gross_annual / Decimal('12'),
+                'linked_account': None,
+            })
+
+        # Also include baseline flows for projection (scenario-specific flows are added via changes)
         for flow in RecurringFlow.objects.filter(household=self.household, is_active=True, is_baseline=True):
             f = {
                 'id': str(flow.id),
