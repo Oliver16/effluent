@@ -13,6 +13,9 @@ class AccountType(models.TextChoices):
     CD = 'cd', 'Certificate of Deposit'
     CASH = 'cash', 'Cash on Hand'
 
+    # System Accounts (hidden from normal lists)
+    PAYROLL_CLEARING = 'payroll_clearing', 'Payroll Clearing'
+
     # Investment Accounts
     BROKERAGE = 'brokerage', 'Brokerage Account'
     CRYPTO = 'crypto', 'Cryptocurrency'
@@ -134,6 +137,9 @@ LIQUID_TYPES = CASH_TYPES | INVESTMENT_TYPES
 
 TAX_ADVANTAGED_TYPES = RETIREMENT_TYPES | {AccountType.HSA}
 
+# System accounts (hidden from normal lists)
+SYSTEM_ACCOUNT_TYPES = {AccountType.PAYROLL_CLEARING}
+
 
 class AssetGroup(HouseholdOwnedModel):
     """Groups related assets and liabilities (e.g., house + mortgage)."""
@@ -221,6 +227,10 @@ class Account(HouseholdOwnedModel):
     @property
     def is_liquid(self) -> bool:
         return self.account_type in LIQUID_TYPES
+
+    @property
+    def is_system_account(self) -> bool:
+        return self.account_type in SYSTEM_ACCOUNT_TYPES
 
     @property
     def latest_snapshot(self):
