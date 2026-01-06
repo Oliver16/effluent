@@ -33,8 +33,9 @@ class User(AbstractUser):
             # try to get existing settings or return a default object
             try:
                 return UserSettings.objects.get(user=self)
-            except UserSettings.DoesNotExist:
+            except Exception:
                 # Return a new unsaved UserSettings with defaults
+                # This handles both DoesNotExist and database errors (e.g., missing table)
                 return UserSettings(user=self)
 
 
