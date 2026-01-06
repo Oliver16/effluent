@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Household, HouseholdMember, HouseholdMembership
+from .models import Household, HouseholdMember, HouseholdMembership, User, UserSettings
 
 
 class HouseholdMembershipSerializer(serializers.ModelSerializer):
@@ -41,3 +41,33 @@ class HouseholdDetailSerializer(serializers.ModelSerializer):
             'members', 'memberships', 'created_at', 'updated_at'
         ]
         read_only_fields = ['slug']
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'username', 'date_of_birth', 'last_login', 'date_joined']
+        read_only_fields = ['email', 'last_login', 'date_joined']
+
+
+class UserSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSettings
+        fields = [
+            'weekly_summary',
+            'insight_alerts',
+            'balance_reminders',
+            'critical_alerts',
+            'two_factor_enabled',
+        ]
+
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True, min_length=8)
+
+    def validate_current_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError('Current password is incorrect.')
+        return value

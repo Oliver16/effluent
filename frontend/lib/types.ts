@@ -6,6 +6,29 @@ export interface User {
   username: string
 }
 
+export interface UserProfile extends User {
+  dateOfBirth?: string
+  lastLogin?: string
+  dateJoined?: string
+}
+
+export interface UserSettings {
+  weeklySummary: boolean
+  insightAlerts: boolean
+  balanceReminders: boolean
+  criticalAlerts: boolean
+  twoFactorEnabled: boolean
+}
+
+export interface UserSession {
+  id: string
+  ipAddress?: string
+  userAgent?: string
+  lastLogin?: string
+  lastActive?: string
+  isCurrent: boolean
+}
+
 export interface Household {
   id: string
   name: string

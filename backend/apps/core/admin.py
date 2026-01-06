@@ -1,6 +1,6 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import User, Household, HouseholdMember, HouseholdMembership
+from .models import User, Household, HouseholdMember, HouseholdMembership, UserSettings
 
 @admin.register(User)
 class CustomUserAdmin(UserAdmin):
@@ -23,3 +23,16 @@ class HouseholdMemberAdmin(admin.ModelAdmin):
 class HouseholdMembershipAdmin(admin.ModelAdmin):
     list_display = ('user', 'household', 'role', 'is_default')
     list_filter = ('role',)
+
+
+@admin.register(UserSettings)
+class UserSettingsAdmin(admin.ModelAdmin):
+    list_display = (
+        'user',
+        'weekly_summary',
+        'insight_alerts',
+        'balance_reminders',
+        'critical_alerts',
+        'two_factor_enabled',
+        'updated_at',
+    )

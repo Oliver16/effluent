@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { households } from '@/lib/api'
-import { Household } from '@/lib/types'
+import { households, profile as profileApi, settings as settingsApi } from '@/lib/api'
+import { Household, UserProfile, UserSettings, UserSession } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,8 +13,8 @@ import { User, Home, Bell, Shield } from 'lucide-react'
 
 const TAX_FILING_STATUS: Record<string, string> = {
   single: 'Single',
-  married_filing_jointly: 'Married Filing Jointly',
-  married_filing_separately: 'Married Filing Separately',
+  married_jointly: 'Married Filing Jointly',
+  married_separately: 'Married Filing Separately',
   head_of_household: 'Head of Household',
   qualifying_widow: 'Qualifying Widow(er)',
 }
@@ -35,13 +35,35 @@ const US_STATES: Record<string, string> = {
 
 export default function SettingsPage() {
   const [householdData, setHouseholdData] = useState<Partial<Household>>({})
+  const [profileData, setProfileData] = useState<Partial<UserProfile>>({})
+  const [notificationSettings, setNotificationSettings] = useState<Partial<UserSettings>>({})
+  const [sessions, setSessions] = useState<UserSession[]>([])
+  const [passwordForm, setPasswordForm] = useState({ current: '', next: '' })
   const [isSaved, setIsSaved] = useState(false)
+  const [isProfileSaved, setIsProfileSaved] = useState(false)
+  const [isPasswordUpdated, setIsPasswordUpdated] = useState(false)
+  const [isExporting, setIsExporting] = useState(false)
 
   const queryClient = useQueryClient()
 
   const { data: householdList, isLoading } = useQuery({
     queryKey: ['households'],
     queryFn: () => households.list(),
+  })
+
+  const { data: profile, isLoading: isProfileLoading } = useQuery({
+    queryKey: ['profile'],
+    queryFn: () => profileApi.get(),
+  })
+
+  const { data: notificationData, isLoading: isNotificationsLoading } = useQuery({
+    queryKey: ['notification-settings'],
+    queryFn: () => settingsApi.getNotifications(),
+  })
+
+  const { data: sessionsData, refetch: refetchSessions } = useQuery({
+    queryKey: ['sessions'],
+    queryFn: () => settingsApi.sessions(),
   })
 
   const household = householdList?.[0]
@@ -57,11 +79,35 @@ export default function SettingsPage() {
     }
   }, [household])
 
-  const updateMutation = useMutation({
+  useEffect(() => {
+    if (profile) {
+      setProfileData(profile)
+    }
+  }, [profile])
+
+  useEffect(() => {
+    if (notificationData) {
+      setNotificationSettings(notificationData)
+    }
+  }, [notificationData])
+
+  useEffect(() => {
+    if (sessionsData) {
+      setSessions(sessionsData)
+    }
+  }, [sessionsData])
+
+  const updateHouseholdMutation = useMutation({
     mutationFn: (data: Partial<Household>) => {
-      // Note: This would need a households.update() API endpoint
-      // For now, we'll just show the UI
-      return Promise.resolve(data)
+      if (!household?.id) {
+        return Promise.reject(new Error('No household available'))
+      }
+      return households.update(household.id, {
+        name: data.name,
+        currency: data.currency,
+        tax_filing_status: data.taxFilingStatus,
+        state_of_residence: data.stateOfResidence,
+      })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['households'] })
@@ -71,10 +117,83 @@ export default function SettingsPage() {
   })
 
   const handleSave = () => {
-    updateMutation.mutate(householdData)
+    updateHouseholdMutation.mutate(householdData)
   }
 
-  if (isLoading) {
+  const updateNotificationsMutation = useMutation({
+    mutationFn: (data: Partial<UserSettings>) => settingsApi.updateNotifications(data),
+    onSuccess: (data) => {
+      setNotificationSettings(data)
+      queryClient.invalidateQueries({ queryKey: ['notification-settings'] })
+    },
+  })
+
+  const changePasswordMutation = useMutation({
+    mutationFn: () => profileApi.changePassword(passwordForm.current, passwordForm.next),
+    onSuccess: () => {
+      setPasswordForm({ current: '', next: '' })
+      setIsPasswordUpdated(true)
+      setTimeout(() => setIsPasswordUpdated(false), 3000)
+    },
+  })
+
+  const updateProfileMutation = useMutation({
+    mutationFn: () => profileApi.update({
+      username: profileData.username,
+      dateOfBirth: profileData.dateOfBirth,
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['profile'] })
+      setIsProfileSaved(true)
+      setTimeout(() => setIsProfileSaved(false), 3000)
+    },
+  })
+
+  const twoFactorMutation = useMutation({
+    mutationFn: (enabled: boolean) => settingsApi.updateTwoFactor(enabled),
+    onSuccess: (data) => {
+      setNotificationSettings(data)
+    },
+  })
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: () => profileApi.delete(),
+    onSuccess: () => {
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token')
+        localStorage.removeItem('refreshToken')
+        localStorage.removeItem('householdId')
+        window.location.href = '/'
+      }
+    },
+  })
+
+  const handleNotificationToggle = (key: keyof UserSettings) => {
+    const nextValue = !notificationSettings[key]
+    const updated = { ...notificationSettings, [key]: nextValue }
+    setNotificationSettings(updated)
+    updateNotificationsMutation.mutate({ [key]: nextValue })
+  }
+
+  const handleExport = async () => {
+    setIsExporting(true)
+    try {
+      const data = await settingsApi.exportData()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'effluent-export.json'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } finally {
+      setIsExporting(false)
+    }
+  }
+
+  if (isLoading || isProfileLoading || isNotificationsLoading) {
     return (
       <div className="space-y-6">
         <h1 className="text-2xl font-bold">Settings</h1>
@@ -183,8 +302,8 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex items-center gap-4">
-                <Button onClick={handleSave} disabled={updateMutation.isPending}>
-                  {updateMutation.isPending ? 'Saving...' : 'Save Changes'}
+                <Button onClick={handleSave} disabled={updateHouseholdMutation.isPending}>
+                  {updateHouseholdMutation.isPending ? 'Saving...' : 'Save Changes'}
                 </Button>
                 {isSaved && (
                   <span className="text-sm text-green-600">Changes saved successfully!</span>
@@ -204,17 +323,40 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name</Label>
+                <Input
+                  id="displayName"
+                  value={profileData.username || ''}
+                  onChange={(e) => setProfileData({ ...profileData, username: e.target.value })}
+                  placeholder="e.g., alexsmith"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This name appears in shared household views.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="email">Email Address</Label>
                 <Input
                   id="email"
                   type="email"
                   disabled
-                  value="user@example.com"
+                  value={profileData.email || ''}
                   className="bg-muted"
                 />
                 <p className="text-xs text-muted-foreground">
                   Contact support to change your email address
                 </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dob">Date of Birth</Label>
+                <Input
+                  id="dob"
+                  type="date"
+                  value={profileData.dateOfBirth || ''}
+                  onChange={(e) => setProfileData({ ...profileData, dateOfBirth: e.target.value })}
+                />
               </div>
 
               <div className="space-y-2">
@@ -234,6 +376,19 @@ export default function SettingsPage() {
                   )}
                 </div>
               </div>
+
+              <div className="flex items-center gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => updateProfileMutation.mutate()}
+                  disabled={updateProfileMutation.isPending}
+                >
+                  {updateProfileMutation.isPending ? 'Saving...' : 'Save Profile'}
+                </Button>
+                {isProfileSaved && (
+                  <span className="text-sm text-green-600">Profile updated.</span>
+                )}
+              </div>
             </CardContent>
           </Card>
 
@@ -252,7 +407,15 @@ export default function SettingsPage() {
                     Permanently delete your account and all associated data
                   </p>
                 </div>
-                <Button variant="destructive" disabled>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (window.confirm('Are you sure you want to delete your account? This cannot be undone.')) {
+                      deleteAccountMutation.mutate()
+                    }
+                  }}
+                  disabled={deleteAccountMutation.isPending}
+                >
                   Delete Account
                 </Button>
               </div>
@@ -276,7 +439,12 @@ export default function SettingsPage() {
                     Receive a weekly summary of your financial health
                   </p>
                 </div>
-                <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
+                <input
+                  type="checkbox"
+                  checked={!!notificationSettings.weeklySummary}
+                  onChange={() => handleNotificationToggle('weeklySummary')}
+                  className="h-4 w-4 rounded"
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -286,7 +454,12 @@ export default function SettingsPage() {
                     Get notified when new insights are generated
                   </p>
                 </div>
-                <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
+                <input
+                  type="checkbox"
+                  checked={!!notificationSettings.insightAlerts}
+                  onChange={() => handleNotificationToggle('insightAlerts')}
+                  className="h-4 w-4 rounded"
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -296,7 +469,12 @@ export default function SettingsPage() {
                     Monthly reminders to update account balances
                   </p>
                 </div>
-                <input type="checkbox" defaultChecked className="h-4 w-4 rounded" />
+                <input
+                  type="checkbox"
+                  checked={!!notificationSettings.balanceReminders}
+                  onChange={() => handleNotificationToggle('balanceReminders')}
+                  className="h-4 w-4 rounded"
+                />
               </div>
 
               <div className="flex items-center justify-between">
@@ -306,8 +484,16 @@ export default function SettingsPage() {
                     Important alerts about your financial health
                   </p>
                 </div>
-                <input type="checkbox" defaultChecked disabled className="h-4 w-4 rounded" />
+                <input
+                  type="checkbox"
+                  checked={!!notificationSettings.criticalAlerts}
+                  onChange={() => handleNotificationToggle('criticalAlerts')}
+                  className="h-4 w-4 rounded"
+                />
               </div>
+              {updateNotificationsMutation.isPending && (
+                <p className="text-sm text-muted-foreground">Updating preferences...</p>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -328,10 +514,33 @@ export default function SettingsPage() {
                     Update your account password
                   </p>
                 </div>
-                <Button variant="outline" disabled>
-                  Change Password
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="password"
+                    placeholder="Current"
+                    value={passwordForm.current}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, current: e.target.value })}
+                    className="h-9 w-36"
+                  />
+                  <Input
+                    type="password"
+                    placeholder="New"
+                    value={passwordForm.next}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, next: e.target.value })}
+                    className="h-9 w-36"
+                  />
+                  <Button
+                    variant="outline"
+                    onClick={() => changePasswordMutation.mutate()}
+                    disabled={changePasswordMutation.isPending || !passwordForm.current || passwordForm.next.length < 8}
+                  >
+                    {changePasswordMutation.isPending ? 'Saving...' : 'Change'}
+                  </Button>
+                </div>
               </div>
+              {isPasswordUpdated && (
+                <p className="text-sm text-green-600">Password updated successfully.</p>
+              )}
 
               <div className="flex items-center justify-between p-4 border rounded-lg">
                 <div>
@@ -340,8 +549,11 @@ export default function SettingsPage() {
                     Add an extra layer of security to your account
                   </p>
                 </div>
-                <Button variant="outline" disabled>
-                  Enable 2FA
+                <Button
+                  variant="outline"
+                  onClick={() => twoFactorMutation.mutate(!notificationSettings.twoFactorEnabled)}
+                >
+                  {notificationSettings.twoFactorEnabled ? 'Disable 2FA' : 'Enable 2FA'}
                 </Button>
               </div>
 
@@ -352,10 +564,24 @@ export default function SettingsPage() {
                     View and manage your active login sessions
                   </p>
                 </div>
-                <Button variant="outline" disabled>
-                  View Sessions
+                <Button variant="outline" onClick={() => refetchSessions()}>
+                  Refresh
                 </Button>
               </div>
+              {sessions.length > 0 && (
+                <div className="space-y-2">
+                  {sessions.map((session) => (
+                    <div key={session.id} className="rounded border p-3 text-sm">
+                      <div className="font-medium">
+                        {session.isCurrent ? 'Current Session' : 'Session'}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {session.ipAddress || 'Unknown IP'} · {session.userAgent || 'Unknown device'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -374,8 +600,8 @@ export default function SettingsPage() {
                     Download a copy of all your data
                   </p>
                 </div>
-                <Button variant="outline" disabled>
-                  Export
+                <Button variant="outline" onClick={handleExport} disabled={isExporting}>
+                  {isExporting ? 'Exporting...' : 'Export'}
                 </Button>
               </div>
             </CardContent>

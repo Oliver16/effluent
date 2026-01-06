@@ -24,6 +24,10 @@ class User(AbstractUser):
         membership = self.household_memberships.first()
         return membership.household if membership else None
 
+    def get_settings(self):
+        settings, _ = UserSettings.objects.get_or_create(user=self)
+        return settings
+
 
 class TimestampedModel(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
@@ -135,3 +139,15 @@ class HouseholdOwnedModel(TimestampedModel):
 
     class Meta:
         abstract = True
+
+
+class UserSettings(TimestampedModel):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='settings')
+    weekly_summary = models.BooleanField(default=True)
+    insight_alerts = models.BooleanField(default=True)
+    balance_reminders = models.BooleanField(default=True)
+    critical_alerts = models.BooleanField(default=True)
+    two_factor_enabled = models.BooleanField(default=False)
+
+    class Meta:
+        db_table = 'user_settings'
