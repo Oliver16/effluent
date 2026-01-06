@@ -357,11 +357,42 @@ class OnboardingService:
         elif step == OnboardingStep.INCOME_SOURCES:
             # Delete existing income sources to prevent duplication when going back
             IncomeSource.objects.filter(household=self.household).delete()
+            # Also delete any income flows created from onboarding (linked to income sources)
+            RecurringFlow.objects.filter(
+                household=self.household,
+                flow_type=FlowType.INCOME,
+                income_source__isnull=False
+            ).delete()
+            # And delete any orphaned income flows that might be from previous onboarding
+            RecurringFlow.objects.filter(
+                household=self.household,
+                flow_type=FlowType.INCOME,
+                is_baseline=True
+            ).delete()
+
+            # Map income_type to income_category for RecurringFlow
+            INCOME_TYPE_TO_CATEGORY = {
+                'w2': 'salary',
+                'w2_hourly': 'hourly_wages',
+                'self_employed': 'self_employment',
+                'rental': 'rental_income',
+                'investment': 'dividends',
+                'retirement': 'pension',
+                'social_security': 'social_security',
+                'other': 'other_income',
+            }
+
             for src in data.get('sources', []):
                 member = HouseholdMember.objects.filter(
                     household=self.household, id=src.get('member_id')
                 ).first()
+
+                # Validate that member exists
+                if not member:
+                    raise ValueError(f"Invalid household member for income source '{src.get('name', 'Unknown')}'")
+
                 income_type = src.get('income_type', 'w2')
+
                 # Create income source with all details in one step
                 # Use 'is not None' to allow 0 as a valid value
                 income_source = IncomeSource.objects.create(
@@ -374,6 +405,45 @@ class OnboardingService:
                     expected_annual_hours=int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
                     pay_frequency=src.get('frequency', 'biweekly'),
                 )
+
+                # Create corresponding RecurringFlow for income so it shows on the flows page
+                income_category = INCOME_TYPE_TO_CATEGORY.get(income_type, 'other_income')
+
+                # Map pay_frequency to flow frequency
+                PAY_FREQ_TO_FLOW_FREQ = {
+                    'weekly': Frequency.WEEKLY,
+                    'biweekly': Frequency.BIWEEKLY,
+                    'semimonthly': Frequency.SEMIMONTHLY,
+                    'monthly': Frequency.MONTHLY,
+                }
+                flow_frequency = PAY_FREQ_TO_FLOW_FREQ.get(src.get('frequency', 'biweekly'), Frequency.BIWEEKLY)
+
+                # Calculate the per-period amount for the flow
+                annual_amount = income_source.gross_annual
+                if annual_amount:
+                    # Convert annual to per-period based on frequency
+                    PERIODS_PER_YEAR = {
+                        Frequency.WEEKLY: 52,
+                        Frequency.BIWEEKLY: 26,
+                        Frequency.SEMIMONTHLY: 24,
+                        Frequency.MONTHLY: 12,
+                    }
+                    periods = PERIODS_PER_YEAR.get(flow_frequency, 26)
+                    flow_amount = annual_amount / Decimal(str(periods))
+
+                    RecurringFlow.objects.create(
+                        household=self.household,
+                        name=src['name'],
+                        flow_type=FlowType.INCOME,
+                        income_category=income_category,
+                        amount=flow_amount,
+                        frequency=flow_frequency,
+                        start_date=date.today(),
+                        household_member=member,
+                        income_source=income_source,
+                        is_active=True,
+                        is_baseline=True,
+                    )
 
         elif step == OnboardingStep.BUSINESS_EXPENSES:
             # Delete any existing business expenses to prevent duplication
@@ -611,6 +681,12 @@ class OnboardingService:
                 household=self.household,
                 account_type='primary_mortgage'
             ).delete()
+            # Also delete mortgage payment expense flows
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[ExpenseCategory.MORTGAGE_PRINCIPAL, ExpenseCategory.MORTGAGE_INTEREST]
+            ).delete()
+
             for mort in data.get('mortgages', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -630,12 +706,34 @@ class OnboardingService:
                     term_months=mort.get('term', 360),
                 )
 
+                # Create RecurringFlow expense for mortgage payment if payment amount is provided
+                payment_amount = mort.get('payment')
+                if payment_amount:
+                    RecurringFlow.objects.create(
+                        household=self.household,
+                        name=f"{mort['name']} Payment",
+                        flow_type=FlowType.EXPENSE,
+                        expense_category=ExpenseCategory.MORTGAGE_PRINCIPAL,  # Combined P&I payment
+                        amount=Decimal(str(payment_amount)),
+                        frequency=Frequency.MONTHLY,
+                        start_date=date.today(),
+                        linked_account=account,
+                        is_active=True,
+                        is_baseline=True,
+                    )
+
         elif step == OnboardingStep.CREDIT_CARDS:
             # Delete existing credit cards to prevent duplication when going back
             Account.objects.filter(
                 household=self.household,
                 account_type='credit_card'
             ).delete()
+            # Also delete credit card payment expense flows
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category=ExpenseCategory.CREDIT_CARD_PAYMENT
+            ).delete()
+
             for card in data.get('cards', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -655,12 +753,34 @@ class OnboardingService:
                     credit_limit=card.get('limit'),
                 )
 
+                # Create RecurringFlow expense for credit card minimum payment if provided
+                min_payment = card.get('min_payment')
+                if min_payment:
+                    RecurringFlow.objects.create(
+                        household=self.household,
+                        name=f"{card['name']} Payment",
+                        flow_type=FlowType.EXPENSE,
+                        expense_category=ExpenseCategory.CREDIT_CARD_PAYMENT,
+                        amount=Decimal(str(min_payment)),
+                        frequency=Frequency.MONTHLY,
+                        start_date=date.today(),
+                        linked_account=account,
+                        is_active=True,
+                        is_baseline=True,
+                    )
+
         elif step == OnboardingStep.STUDENT_LOANS:
             # Delete existing student loans to prevent duplication when going back
             Account.objects.filter(
                 household=self.household,
                 account_type__in=['student_loan_federal', 'student_loan_private']
             ).delete()
+            # Also delete student loan payment expense flows
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category=ExpenseCategory.STUDENT_LOAN
+            ).delete()
+
             for loan in data.get('loans', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -681,12 +801,34 @@ class OnboardingService:
                     servicer=loan.get('servicer', ''),
                 )
 
+                # Create RecurringFlow expense for student loan payment if provided
+                payment_amount = loan.get('payment')
+                if payment_amount:
+                    RecurringFlow.objects.create(
+                        household=self.household,
+                        name=f"{loan['name']} Payment",
+                        flow_type=FlowType.EXPENSE,
+                        expense_category=ExpenseCategory.STUDENT_LOAN,
+                        amount=Decimal(str(payment_amount)),
+                        frequency=Frequency.MONTHLY,
+                        start_date=date.today(),
+                        linked_account=account,
+                        is_active=True,
+                        is_baseline=True,
+                    )
+
         elif step == OnboardingStep.OTHER_DEBTS:
             # Delete existing other debts to prevent duplication when going back
             Account.objects.filter(
                 household=self.household,
                 account_type='other_liability'
             ).delete()
+            # Also delete other debt payment expense flows
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category=ExpenseCategory.OTHER_DEBT
+            ).delete()
+
             for debt in data.get('debts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -705,6 +847,22 @@ class OnboardingService:
                     minimum_payment=debt.get('payment'),
                     term_months=debt.get('term'),
                 )
+
+                # Create RecurringFlow expense for debt payment if provided
+                payment_amount = debt.get('payment')
+                if payment_amount:
+                    RecurringFlow.objects.create(
+                        household=self.household,
+                        name=f"{debt['name']} Payment",
+                        flow_type=FlowType.EXPENSE,
+                        expense_category=ExpenseCategory.OTHER_DEBT,
+                        amount=Decimal(str(payment_amount)),
+                        frequency=Frequency.MONTHLY,
+                        start_date=date.today(),
+                        linked_account=account,
+                        is_active=True,
+                        is_baseline=True,
+                    )
 
         elif step == OnboardingStep.HOUSING_EXPENSES:
             # Delete existing housing expenses to prevent duplication when going back
