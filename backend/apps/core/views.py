@@ -100,22 +100,33 @@ class ChangePasswordView(APIView):
 class NotificationSettingsView(APIView):
     permission_classes = [IsAuthenticated]
 
+    def _get_default_settings(self):
+        """Return default notification settings."""
+        return {
+            'weekly_summary': True,
+            'insight_alerts': True,
+            'balance_reminders': True,
+            'critical_alerts': True,
+            'two_factor_enabled': False,
+        }
+
     def get(self, request):
         try:
             settings = request.user.get_settings()
-            serializer = UserSettingsSerializer(settings)
-            return Response(serializer.data)
-        except Exception as e:
-            # Return default settings if there's an error
+            # Build response directly from model fields to avoid serializer issues
             return Response({
-                'weekly_summary': True,
-                'insight_alerts': True,
-                'balance_reminders': True,
-                'critical_alerts': True,
-                'two_factor_enabled': False,
+                'weekly_summary': getattr(settings, 'weekly_summary', True),
+                'insight_alerts': getattr(settings, 'insight_alerts', True),
+                'balance_reminders': getattr(settings, 'balance_reminders', True),
+                'critical_alerts': getattr(settings, 'critical_alerts', True),
+                'two_factor_enabled': getattr(settings, 'two_factor_enabled', False),
             })
+        except Exception:
+            # Return default settings if there's any error
+            return Response(self._get_default_settings())
 
     def patch(self, request):
+        defaults = self._get_default_settings()
         try:
             settings = request.user.get_settings()
             # Only save if we have a real database object
@@ -131,15 +142,8 @@ class NotificationSettingsView(APIView):
                 serializer.is_valid(raise_exception=True)
                 serializer.save()
                 return Response(serializer.data)
-        except Exception as e:
+        except Exception:
             # Return the request data merged with defaults if save fails
-            defaults = {
-                'weekly_summary': True,
-                'insight_alerts': True,
-                'balance_reminders': True,
-                'critical_alerts': True,
-                'two_factor_enabled': False,
-            }
             defaults.update(request.data)
             return Response(defaults)
 
@@ -148,16 +152,22 @@ class TwoFactorSettingsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        enabled = bool(request.data.get('enabled'))
         try:
             settings = request.user.get_settings()
-            enabled = bool(request.data.get('enabled'))
             settings.two_factor_enabled = enabled
             if settings.pk:
                 settings.save(update_fields=['two_factor_enabled', 'updated_at'])
             else:
                 settings.save()
-            serializer = UserSettingsSerializer(settings)
-            return Response(serializer.data)
+            # Build response directly from model fields
+            return Response({
+                'weekly_summary': getattr(settings, 'weekly_summary', True),
+                'insight_alerts': getattr(settings, 'insight_alerts', True),
+                'balance_reminders': getattr(settings, 'balance_reminders', True),
+                'critical_alerts': getattr(settings, 'critical_alerts', True),
+                'two_factor_enabled': getattr(settings, 'two_factor_enabled', enabled),
+            })
         except Exception:
             # Return default settings with the new 2FA value
             return Response({
@@ -165,7 +175,7 @@ class TwoFactorSettingsView(APIView):
                 'insight_alerts': True,
                 'balance_reminders': True,
                 'critical_alerts': True,
-                'two_factor_enabled': bool(request.data.get('enabled')),
+                'two_factor_enabled': enabled,
             })
 
 
