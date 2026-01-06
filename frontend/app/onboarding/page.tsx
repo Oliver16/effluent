@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { onboarding, households, members, incomeSources, ApiError } from '@/lib/api'
+import { onboarding, households, members, incomeSources, accounts, flows, ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { OnboardingStepResponse, HouseholdMember, IncomeSourceDetail } from '@/lib/types'
+import type { OnboardingStepResponse, HouseholdMember, IncomeSourceDetail, Account, RecurringFlow, Household } from '@/lib/types'
 
 const STEP_LABELS: Record<string, string> = {
   welcome: 'Welcome',
@@ -325,6 +325,8 @@ interface Mortgage {
   balance: number
   rate: number
   payment?: number
+  term?: number  // Remaining months
+  original_balance?: number
 }
 
 interface CreditCard {
@@ -333,6 +335,7 @@ interface CreditCard {
   balance: number
   rate?: number
   limit?: number
+  min_payment?: number
 }
 
 interface StudentLoan {
@@ -341,6 +344,7 @@ interface StudentLoan {
   balance: number
   rate?: number
   payment?: number
+  term?: number  // Remaining months
 }
 
 interface Debt {
@@ -349,6 +353,7 @@ interface Debt {
   balance: number
   rate?: number
   payment?: number
+  term?: number  // Remaining months
 }
 
 interface Utility {
@@ -375,6 +380,13 @@ export default function OnboardingPage() {
   const [formData, setFormData] = useState<Record<string, unknown>>({})
   const [householdMembers, setHouseholdMembers] = useState<HouseholdMember[]>([])
   const [existingIncomeSources, setExistingIncomeSources] = useState<IncomeSourceDetail[]>([])
+  const [reviewData, setReviewData] = useState<{
+    household: Household | null
+    members: HouseholdMember[]
+    incomeSources: IncomeSourceDetail[]
+    accountsList: Account[]
+    flowsList: RecurringFlow[]
+  }>({ household: null, members: [], incomeSources: [], accountsList: [], flowsList: [] })
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState('')
@@ -484,6 +496,24 @@ export default function OnboardingPage() {
           })
           setFormData({ ...data.draftData, deductions })
         }
+      }
+
+      // Fetch all data for review step
+      if (data.step === 'review') {
+        const [householdList, memberList, sourceList, accountsData, flowsList] = await Promise.all([
+          households.list(),
+          members.list(),
+          incomeSources.list(),
+          accounts.list(),
+          flows.list(),
+        ])
+        setReviewData({
+          household: householdList[0] || null,
+          members: memberList,
+          incomeSources: sourceList,
+          accountsList: accountsData.results || [],
+          flowsList: flowsList,
+        })
       }
     } catch (error) {
       if (!handleAuthError(error)) {
@@ -1590,14 +1620,24 @@ export default function OnboardingPage() {
                       placeholder="6.5"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <Label>Monthly Payment (optional)</Label>
+                  <div>
+                    <Label>Remaining Term (months)</Label>
+                    <Input
+                      type="number"
+                      value={mortgage.term ?? ''}
+                      onChange={(e) => updateArrayItem<Mortgage>('mortgages', index, { term: parseInt(e.target.value) || undefined })}
+                      placeholder="e.g., 300 (25 years)"
+                    />
+                  </div>
+                  <div>
+                    <Label>Monthly Payment</Label>
                     <Input
                       type="number"
                       value={mortgage.payment ?? ''}
                       onChange={(e) => updateArrayItem<Mortgage>('mortgages', index, { payment: parseFloat(e.target.value) || undefined })}
                       placeholder="0.00"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Enter payment OR term + rate to calculate</p>
                   </div>
                 </div>
               </div>
@@ -1664,8 +1704,17 @@ export default function OnboardingPage() {
                       placeholder="24.99"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <Label>Credit Limit (optional)</Label>
+                  <div>
+                    <Label>Minimum Payment</Label>
+                    <Input
+                      type="number"
+                      value={card.min_payment ?? ''}
+                      onChange={(e) => updateArrayItem<CreditCard>('cards', index, { min_payment: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label>Credit Limit</Label>
                     <Input
                       type="number"
                       value={card.limit ?? ''}
@@ -1738,14 +1787,24 @@ export default function OnboardingPage() {
                       placeholder="5.5"
                     />
                   </div>
-                  <div className="col-span-2">
-                    <Label>Monthly Payment (optional)</Label>
+                  <div>
+                    <Label>Remaining Term (months)</Label>
+                    <Input
+                      type="number"
+                      value={loan.term ?? ''}
+                      onChange={(e) => updateArrayItem<StudentLoan>('loans', index, { term: parseInt(e.target.value) || undefined })}
+                      placeholder="e.g., 120 (10 years)"
+                    />
+                  </div>
+                  <div>
+                    <Label>Monthly Payment</Label>
                     <Input
                       type="number"
                       value={loan.payment ?? ''}
                       onChange={(e) => updateArrayItem<StudentLoan>('loans', index, { payment: parseFloat(e.target.value) || undefined })}
                       placeholder="0.00"
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Enter payment OR term + rate to calculate</p>
                   </div>
                 </div>
               </div>
@@ -1811,6 +1870,25 @@ export default function OnboardingPage() {
                       onChange={(e) => updateArrayItem<Debt>('debts', index, { rate: parseFloat(e.target.value) || undefined })}
                       placeholder="0.00"
                     />
+                  </div>
+                  <div>
+                    <Label>Remaining Term (months)</Label>
+                    <Input
+                      type="number"
+                      value={debt.term ?? ''}
+                      onChange={(e) => updateArrayItem<Debt>('debts', index, { term: parseInt(e.target.value) || undefined })}
+                      placeholder="e.g., 60 (5 years)"
+                    />
+                  </div>
+                  <div>
+                    <Label>Monthly Payment</Label>
+                    <Input
+                      type="number"
+                      value={debt.payment ?? ''}
+                      onChange={(e) => updateArrayItem<Debt>('debts', index, { payment: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Enter payment OR term + rate to calculate</p>
                   </div>
                 </div>
               </div>
@@ -2105,14 +2183,156 @@ export default function OnboardingPage() {
         )
 
       case 'review':
+        const formatCurrency = (amount: number | string | undefined) => {
+          if (amount === undefined || amount === null) return '$0'
+          const num = typeof amount === 'string' ? parseFloat(amount) : amount
+          return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(num)
+        }
+
+        const assetAccounts = reviewData.accountsList.filter(a =>
+          ['checking', 'savings', 'money_market', 'brokerage', 'crypto', 'traditional_401k', 'roth_401k',
+           'traditional_ira', 'roth_ira', 'hsa', 'pension', 'primary_residence', 'rental_property',
+           'vacation_property', 'land', 'vehicle'].includes(a.accountType || '')
+        )
+        const liabilityAccounts = reviewData.accountsList.filter(a =>
+          ['primary_mortgage', 'credit_card', 'student_loan_federal', 'student_loan_private', 'other_liability'].includes(a.accountType || '')
+        )
+        const expenseFlows = reviewData.flowsList.filter(f => f.flowType === 'expense')
+
+        const totalAssets = assetAccounts.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0)
+        const totalLiabilities = liabilityAccounts.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0)
+        const totalMonthlyExpenses = expenseFlows.reduce((sum, f) => {
+          const amount = parseFloat(f.amount || '0')
+          switch (f.frequency) {
+            case 'weekly': return sum + (amount * 52 / 12)
+            case 'biweekly': return sum + (amount * 26 / 12)
+            case 'monthly': return sum + amount
+            case 'quarterly': return sum + (amount / 3)
+            case 'annually': return sum + (amount / 12)
+            default: return sum + amount
+          }
+        }, 0)
+        const totalAnnualIncome = reviewData.incomeSources.reduce((sum, src) => {
+          if (src.grossAnnualSalary) return sum + parseFloat(src.grossAnnualSalary)
+          if (src.hourlyRate && src.expectedAnnualHours) {
+            return sum + (parseFloat(src.hourlyRate) * src.expectedAnnualHours)
+          }
+          return sum
+        }, 0)
+
         return (
-          <div className="text-center py-6">
-            <p className="text-lg mb-4">
-              Review your financial profile before completing setup.
+          <div className="space-y-6">
+            <p className="text-muted-foreground text-center mb-4">
+              Review your financial profile before completing setup. You can always update this later.
             </p>
-            <p className="text-muted-foreground">
-              You can always update this information later from your dashboard.
-            </p>
+
+            {/* Summary Cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-green-50 dark:bg-green-950 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">Annual Income</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalAnnualIncome)}</p>
+              </div>
+              <div className="bg-red-50 dark:bg-red-950 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">Monthly Expenses</p>
+                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalMonthlyExpenses)}</p>
+              </div>
+              <div className="bg-blue-50 dark:bg-blue-950 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Assets</p>
+                <p className="text-2xl font-bold text-blue-600">{formatCurrency(totalAssets)}</p>
+              </div>
+              <div className="bg-orange-50 dark:bg-orange-950 p-4 rounded-lg">
+                <p className="text-sm text-muted-foreground">Total Liabilities</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(totalLiabilities)}</p>
+              </div>
+            </div>
+
+            {/* Household & Members */}
+            {reviewData.household && (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Household</h3>
+                <p className="text-sm">{reviewData.household.name}</p>
+                <p className="text-sm text-muted-foreground">
+                  Filing: {FILING_STATUSES.find(s => s.value === reviewData.household?.taxFilingStatus)?.label || reviewData.household.taxFilingStatus}
+                  {reviewData.household.stateOfResidence && ` | State: ${reviewData.household.stateOfResidence}`}
+                </p>
+                {reviewData.members.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-muted-foreground">Members: {reviewData.members.map(m => m.name).join(', ')}</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Income Sources */}
+            {reviewData.incomeSources.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Income Sources ({reviewData.incomeSources.length})</h3>
+                <div className="space-y-2">
+                  {reviewData.incomeSources.map((src, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span>{src.name} ({INCOME_TYPES.find(t => t.value === src.incomeType)?.label || src.incomeType})</span>
+                      <span className="font-medium">
+                        {src.grossAnnualSalary ? formatCurrency(src.grossAnnualSalary) + '/yr' :
+                         src.hourlyRate ? `${formatCurrency(src.hourlyRate)}/hr` : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Assets */}
+            {assetAccounts.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Assets ({assetAccounts.length})</h3>
+                <div className="space-y-2">
+                  {assetAccounts.map((acct, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span>{acct.name}</span>
+                      <span className="font-medium">{formatCurrency(acct.currentBalance)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Liabilities */}
+            {liabilityAccounts.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Liabilities ({liabilityAccounts.length})</h3>
+                <div className="space-y-2">
+                  {liabilityAccounts.map((acct, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span>{acct.name}</span>
+                      <span className="font-medium text-red-600">{formatCurrency(acct.currentBalance)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Expenses */}
+            {expenseFlows.length > 0 && (
+              <div className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-2">Recurring Expenses ({expenseFlows.length})</h3>
+                <div className="space-y-2">
+                  {expenseFlows.map((flow, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span>{flow.name}</span>
+                      <span className="font-medium">{formatCurrency(flow.amount)}/{flow.frequency === 'monthly' ? 'mo' : flow.frequency}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Net Worth */}
+            <div className="bg-gradient-to-r from-indigo-50 to-teal-50 dark:from-indigo-950 dark:to-teal-950 p-4 rounded-lg text-center">
+              <p className="text-sm text-muted-foreground">Net Worth</p>
+              <p className={`text-3xl font-bold ${totalAssets - totalLiabilities >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {formatCurrency(totalAssets - totalLiabilities)}
+              </p>
+            </div>
           </div>
         )
 

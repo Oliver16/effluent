@@ -410,6 +410,10 @@ class OnboardingService:
                         )
 
         elif step == OnboardingStep.PRETAX_DEDUCTIONS:
+            # Delete existing pretax deductions to prevent duplication when going back
+            PreTaxDeduction.objects.filter(
+                income_source__household=self.household
+            ).delete()
             for ded in data.get('deductions', []):
                 if ded.get('income_source_id'):
                     income_source = IncomeSource.objects.filter(
@@ -426,6 +430,11 @@ class OnboardingService:
                         )
 
         elif step == OnboardingStep.BANK_ACCOUNTS:
+            # Delete existing bank accounts to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['checking', 'savings', 'money_market']
+            ).delete()
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -440,6 +449,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.INVESTMENTS:
+            # Delete existing investment accounts to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['brokerage', 'crypto']
+            ).delete()
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -456,6 +470,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.RETIREMENT:
+            # Delete existing retirement accounts to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['traditional_401k', 'roth_401k', 'traditional_ira', 'roth_ira', 'hsa', 'pension']
+            ).delete()
             for acct in data.get('accounts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -470,6 +489,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.REAL_ESTATE:
+            # Delete existing real estate to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['primary_residence', 'rental_property', 'vacation_property', 'land']
+            ).delete()
             for prop in data.get('properties', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -485,6 +509,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.VEHICLES:
+            # Delete existing vehicles to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type='vehicle'
+            ).delete()
             for veh in data.get('vehicles', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -500,6 +529,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.MORTGAGES:
+            # Delete existing mortgages to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type='primary_mortgage'
+            ).delete()
             for mort in data.get('mortgages', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -520,6 +554,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.CREDIT_CARDS:
+            # Delete existing credit cards to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type='credit_card'
+            ).delete()
             for card in data.get('cards', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -540,6 +579,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.STUDENT_LOANS:
+            # Delete existing student loans to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['student_loan_federal', 'student_loan_private']
+            ).delete()
             for loan in data.get('loans', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -556,10 +600,16 @@ class OnboardingService:
                     account=account,
                     interest_rate=Decimal(str(loan.get('rate', 0))) / 100,
                     minimum_payment=loan.get('payment'),
+                    term_months=loan.get('term'),
                     servicer=loan.get('servicer', ''),
                 )
 
         elif step == OnboardingStep.OTHER_DEBTS:
+            # Delete existing other debts to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type='other_liability'
+            ).delete()
             for debt in data.get('debts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -576,9 +626,15 @@ class OnboardingService:
                     account=account,
                     interest_rate=Decimal(str(debt.get('rate', 0))) / 100,
                     minimum_payment=debt.get('payment'),
+                    term_months=debt.get('term'),
                 )
 
         elif step == OnboardingStep.HOUSING_EXPENSES:
+            # Delete existing housing expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[ExpenseCategory.RENT, ExpenseCategory.PROPERTY_TAX, ExpenseCategory.HOA_FEES]
+            ).delete()
             if data.get('rent'):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -611,6 +667,16 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.UTILITIES:
+            # Delete existing utility expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[
+                    ExpenseCategory.ELECTRICITY, ExpenseCategory.NATURAL_GAS,
+                    ExpenseCategory.WATER_SEWER, ExpenseCategory.TRASH,
+                    ExpenseCategory.INTERNET, ExpenseCategory.PHONE,
+                    ExpenseCategory.CABLE_STREAMING
+                ]
+            ).delete()
             for util in data.get('utilities', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -623,6 +689,15 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.INSURANCE:
+            # Delete existing insurance expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[
+                    ExpenseCategory.HEALTH_INSURANCE, ExpenseCategory.DENTAL_INSURANCE,
+                    ExpenseCategory.VISION_INSURANCE, ExpenseCategory.LIFE_INSURANCE,
+                    ExpenseCategory.DISABILITY_INSURANCE
+                ]
+            ).delete()
             for ins in data.get('insurance', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -635,6 +710,15 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.TRANSPORTATION:
+            # Delete existing transportation expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[
+                    ExpenseCategory.AUTO_INSURANCE, ExpenseCategory.GAS_FUEL,
+                    ExpenseCategory.AUTO_MAINTENANCE, ExpenseCategory.PARKING,
+                    ExpenseCategory.PUBLIC_TRANSIT
+                ]
+            ).delete()
             for exp in data.get('expenses', []):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -647,6 +731,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.FOOD:
+            # Delete existing food expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category__in=[ExpenseCategory.GROCERIES, ExpenseCategory.DINING_OUT]
+            ).delete()
             if data.get('groceries'):
                 RecurringFlow.objects.create(
                     household=self.household,
@@ -669,6 +758,11 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.OTHER_EXPENSES:
+            # Delete existing other expenses to prevent duplication when going back
+            RecurringFlow.objects.filter(
+                household=self.household,
+                expense_category=ExpenseCategory.MISCELLANEOUS
+            ).delete()
             for exp in data.get('expenses', []):
                 RecurringFlow.objects.create(
                     household=self.household,
