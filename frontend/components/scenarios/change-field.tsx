@@ -96,12 +96,15 @@ export function ChangeField({ fieldName, config, value, onChange, accounts = [],
     );
   }
 
+  // Default: text or number input (after early returns, only these types remain)
+  const inputType = type === 'number' ? 'number' : 'text';
+
   return (
     <div className="space-y-2">
       <Label htmlFor={fieldName}>{label}</Label>
       <Input
         id={fieldName}
-        type={type === 'account_select' || type === 'flow_select' ? 'text' : type}
+        type={inputType}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
