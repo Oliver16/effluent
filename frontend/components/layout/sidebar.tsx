@@ -30,14 +30,16 @@ export function Sidebar({ onLogout }: SidebarProps) {
 
   return (
     <aside className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-64 lg:flex-col">
-      <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-border bg-card px-6 pb-4">
+      <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-border bg-sidebar px-6 pb-4">
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center">
-          <Link href="/dashboard" className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
+          <Link href="/dashboard" className="flex items-center gap-2 group">
+            <div className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-primary transition-all duration-200 group-hover:shadow-lg group-hover:scale-105">
               <span className="text-primary-foreground font-bold text-lg">E</span>
             </div>
-            <span className="text-xl font-bold">Effluent.io</span>
+            <span className="text-xl font-bold bg-gradient-to-r from-primary to-indigo-400 bg-clip-text text-transparent">
+              Effluent.io
+            </span>
           </Link>
         </div>
 
@@ -53,13 +55,19 @@ export function Sidebar({ onLogout }: SidebarProps) {
                       <Link
                         href={item.href}
                         className={cn(
-                          'group flex gap-x-3 rounded-md p-2 text-sm font-medium leading-6 transition-colors',
+                          'group flex gap-x-3 rounded-lg p-2.5 text-sm font-medium leading-6 transition-all duration-200',
                           isActive
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+                            ? 'bg-gradient-primary text-primary-foreground shadow-primary'
+                            : 'text-muted-foreground hover:bg-sidebar-accent hover:text-foreground'
                         )}
                       >
-                        <item.icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                        <item.icon
+                          className={cn(
+                            "h-5 w-5 shrink-0 transition-transform duration-200",
+                            !isActive && "group-hover:scale-110"
+                          )}
+                          aria-hidden="true"
+                        />
                         {item.name}
                       </Link>
                     </li>
@@ -72,7 +80,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
             <li className="mt-auto">
               <Button
                 variant="ghost"
-                className="w-full justify-start gap-x-3 text-muted-foreground hover:text-foreground"
+                className="w-full justify-start gap-x-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                 onClick={onLogout}
               >
                 <LogOut className="h-5 w-5 shrink-0" aria-hidden="true" />
