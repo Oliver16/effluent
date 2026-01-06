@@ -42,6 +42,9 @@ class AccountType(models.TextChoices):
     JEWELRY = 'jewelry', 'Jewelry/Collectibles'
     OTHER_ASSET = 'other_asset', 'Other Asset'
 
+    # Business Ownership
+    BUSINESS_EQUITY = 'business_equity', 'Business Ownership/Equity'
+
     # Receivables
     ACCOUNTS_RECEIVABLE = 'accounts_receivable', 'Accounts Receivable'
     LOANS_RECEIVABLE = 'loans_receivable', 'Loans to Others'
@@ -99,11 +102,15 @@ PERSONAL_PROPERTY_TYPES = {
     AccountType.VEHICLE, AccountType.BOAT, AccountType.JEWELRY, AccountType.OTHER_ASSET
 }
 
+BUSINESS_EQUITY_TYPES = {
+    AccountType.BUSINESS_EQUITY
+}
+
 RECEIVABLE_TYPES = {
     AccountType.ACCOUNTS_RECEIVABLE, AccountType.LOANS_RECEIVABLE, AccountType.TAX_REFUND
 }
 
-ASSET_TYPES = CASH_TYPES | INVESTMENT_TYPES | RETIREMENT_TYPES | PROPERTY_TYPES | PERSONAL_PROPERTY_TYPES | RECEIVABLE_TYPES
+ASSET_TYPES = CASH_TYPES | INVESTMENT_TYPES | RETIREMENT_TYPES | PROPERTY_TYPES | PERSONAL_PROPERTY_TYPES | BUSINESS_EQUITY_TYPES | RECEIVABLE_TYPES
 
 REVOLVING_DEBT_TYPES = {
     AccountType.CREDIT_CARD, AccountType.STORE_CARD,

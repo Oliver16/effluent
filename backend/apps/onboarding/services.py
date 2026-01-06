@@ -259,6 +259,20 @@ class OnboardingService:
                     errors[f'vehicles.{i}.name'] = 'Required'
                 if veh.get('value') is None:
                     errors[f'vehicles.{i}.value'] = 'Required'
+        elif step == OnboardingStep.PERSONAL_PROPERTY:
+            for i, item in enumerate(data.get('personal_property', [])):
+                if not item.get('name'):
+                    errors[f'personal_property.{i}.name'] = 'Required'
+                if item.get('value') is None:
+                    errors[f'personal_property.{i}.value'] = 'Required'
+        elif step == OnboardingStep.BUSINESS_OWNERSHIP:
+            for i, biz in enumerate(data.get('business_ownership', [])):
+                if not biz.get('name'):
+                    errors[f'business_ownership.{i}.name'] = 'Required'
+                if biz.get('valuation') is None:
+                    errors[f'business_ownership.{i}.valuation'] = 'Required'
+                if biz.get('ownership_percentage') is None:
+                    errors[f'business_ownership.{i}.ownership_percentage'] = 'Required'
         elif step == OnboardingStep.MORTGAGES:
             for i, mort in enumerate(data.get('mortgages', [])):
                 if not mort.get('name'):
@@ -501,11 +515,14 @@ class OnboardingService:
                     account_type=prop.get('type', 'primary_residence'),
                     institution='',
                 )
+                market_value = Decimal(str(prop['value']))
+                cost_basis = Decimal(str(prop['cost_basis'])) if prop.get('cost_basis') else market_value
                 BalanceSnapshot.objects.create(
                     account=account,
                     as_of_date=date.today(),
-                    balance=Decimal(str(prop['value'])),
-                    market_value=Decimal(str(prop['value'])),
+                    balance=market_value,
+                    market_value=market_value,
+                    cost_basis=cost_basis,
                 )
 
         elif step == OnboardingStep.VEHICLES:
@@ -521,11 +538,69 @@ class OnboardingService:
                     account_type='vehicle',
                     institution='',
                 )
+                market_value = Decimal(str(veh['value']))
+                cost_basis = Decimal(str(veh['cost_basis'])) if veh.get('cost_basis') else market_value
                 BalanceSnapshot.objects.create(
                     account=account,
                     as_of_date=date.today(),
-                    balance=Decimal(str(veh['value'])),
-                    market_value=Decimal(str(veh['value'])),
+                    balance=market_value,
+                    market_value=market_value,
+                    cost_basis=cost_basis,
+                )
+
+        elif step == OnboardingStep.PERSONAL_PROPERTY:
+            # Map frontend types to backend account types
+            type_mapping = {
+                'jewelry': 'jewelry',
+                'precious_metals': 'jewelry',  # Treated as jewelry/collectibles
+                'collectibles': 'jewelry',
+                'art': 'jewelry',
+                'firearms': 'other_asset',
+                'electronics': 'other_asset',
+                'musical_instruments': 'other_asset',
+                'sports_equipment': 'other_asset',
+                'boat': 'boat',
+                'rv': 'boat',  # RVs use boat type
+                'motorcycle': 'vehicle',
+                'other': 'other_asset',
+            }
+            for item in data.get('personal_property', []):
+                account_type = type_mapping.get(item.get('type', 'other'), 'other_asset')
+                account = Account.objects.create(
+                    household=self.household,
+                    name=item['name'],
+                    account_type=account_type,
+                    institution='',
+                    notes=item.get('description', ''),
+                )
+                market_value = Decimal(str(item['value']))
+                cost_basis = Decimal(str(item['cost_basis'])) if item.get('cost_basis') else market_value
+                BalanceSnapshot.objects.create(
+                    account=account,
+                    as_of_date=date.today(),
+                    balance=market_value,
+                    market_value=market_value,
+                    cost_basis=cost_basis,
+                )
+
+        elif step == OnboardingStep.BUSINESS_OWNERSHIP:
+            for biz in data.get('business_ownership', []):
+                # Create account for business ownership stake
+                account = Account.objects.create(
+                    household=self.household,
+                    name=biz['name'],
+                    account_type='business_equity',
+                    institution=biz.get('business_type', 'llc'),  # Store business type in institution field
+                    notes=f"Ownership: {biz.get('ownership_percentage', 100)}%",
+                )
+                valuation = Decimal(str(biz['valuation']))
+                cost_basis = Decimal(str(biz['cost_basis'])) if biz.get('cost_basis') else valuation
+                BalanceSnapshot.objects.create(
+                    account=account,
+                    as_of_date=date.today(),
+                    balance=valuation,
+                    market_value=valuation,
+                    cost_basis=cost_basis,
                 )
 
         elif step == OnboardingStep.MORTGAGES:
