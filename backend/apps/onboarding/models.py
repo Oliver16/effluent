@@ -18,6 +18,8 @@ class OnboardingStep(models.TextChoices):
     RETIREMENT = 'retirement', 'Retirement Accounts'
     REAL_ESTATE = 'real_estate', 'Real Estate'
     VEHICLES = 'vehicles', 'Vehicles'
+    PERSONAL_PROPERTY = 'personal_property', 'Personal Property'
+    BUSINESS_OWNERSHIP = 'business_ownership', 'Business Ownership'
     MORTGAGES = 'mortgages', 'Mortgages'
     CREDIT_CARDS = 'credit_cards', 'Credit Cards'
     STUDENT_LOANS = 'student_loans', 'Student Loans'
@@ -46,6 +48,8 @@ ONBOARDING_FLOW = [
     OnboardingStep.RETIREMENT,
     OnboardingStep.REAL_ESTATE,
     OnboardingStep.VEHICLES,
+    OnboardingStep.PERSONAL_PROPERTY,
+    OnboardingStep.BUSINESS_OWNERSHIP,
     OnboardingStep.MORTGAGES,
     OnboardingStep.CREDIT_CARDS,
     OnboardingStep.STUDENT_LOANS,
@@ -66,6 +70,7 @@ SKIPPABLE_STEPS = {
     OnboardingStep.WITHHOLDING,
     OnboardingStep.PRETAX_DEDUCTIONS,
     OnboardingStep.REAL_ESTATE, OnboardingStep.VEHICLES,
+    OnboardingStep.PERSONAL_PROPERTY, OnboardingStep.BUSINESS_OWNERSHIP,
     OnboardingStep.MORTGAGES, OnboardingStep.CREDIT_CARDS,
     OnboardingStep.STUDENT_LOANS, OnboardingStep.OTHER_DEBTS,
 }

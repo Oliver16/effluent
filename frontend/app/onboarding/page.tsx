@@ -23,6 +23,8 @@ const STEP_LABELS: Record<string, string> = {
   retirement: 'Retirement Accounts',
   real_estate: 'Real Estate',
   vehicles: 'Vehicles',
+  personal_property: 'Personal Property',
+  business_ownership: 'Business Ownership',
   mortgages: 'Mortgages',
   credit_cards: 'Credit Cards',
   student_loans: 'Student Loans',
@@ -51,6 +53,8 @@ const STEP_DESCRIPTIONS: Record<string, string> = {
   retirement: 'Add your retirement accounts',
   real_estate: 'Add any real estate you own',
   vehicles: 'Add your vehicles',
+  personal_property: 'Add valuables like jewelry, collectibles, firearms, and other personal property',
+  business_ownership: 'Add ownership stakes in businesses, partnerships, or LLCs',
   mortgages: 'Add your mortgage details',
   credit_cards: 'Add your credit card balances',
   student_loans: 'Add your student loan details',
@@ -180,6 +184,34 @@ const PROPERTY_TYPES = [
   { value: 'rental_property', label: 'Rental Property' },
   { value: 'vacation_property', label: 'Vacation Property' },
   { value: 'land', label: 'Land' },
+  { value: 'commercial_property', label: 'Commercial Property' },
+]
+
+const PERSONAL_PROPERTY_TYPES = [
+  { value: 'jewelry', label: 'Jewelry & Watches' },
+  { value: 'precious_metals', label: 'Precious Metals (Gold, Silver, etc.)' },
+  { value: 'collectibles', label: 'Collectibles & Antiques' },
+  { value: 'art', label: 'Art & Fine Art' },
+  { value: 'firearms', label: 'Firearms' },
+  { value: 'electronics', label: 'Electronics & Equipment' },
+  { value: 'musical_instruments', label: 'Musical Instruments' },
+  { value: 'sports_equipment', label: 'Sports & Recreation Equipment' },
+  { value: 'boat', label: 'Boats & Watercraft' },
+  { value: 'rv', label: 'RVs & Campers' },
+  { value: 'motorcycle', label: 'Motorcycles & ATVs' },
+  { value: 'other', label: 'Other Valuables' },
+]
+
+const BUSINESS_TYPES = [
+  { value: 'sole_proprietorship', label: 'Sole Proprietorship' },
+  { value: 'llc', label: 'LLC' },
+  { value: 'llc_partnership', label: 'LLC Partnership' },
+  { value: 's_corp', label: 'S Corporation' },
+  { value: 'c_corp', label: 'C Corporation' },
+  { value: 'partnership', label: 'General Partnership' },
+  { value: 'limited_partnership', label: 'Limited Partnership' },
+  { value: 'professional_corp', label: 'Professional Corporation' },
+  { value: 'other', label: 'Other' },
 ]
 
 const UTILITY_CATEGORIES = [
@@ -312,11 +344,29 @@ interface Property {
   name: string
   type: string
   value: number
+  cost_basis?: number
 }
 
 interface Vehicle {
   name: string
   value: number
+  cost_basis?: number
+}
+
+interface PersonalProperty {
+  name: string
+  type: string
+  value: number
+  cost_basis?: number
+  description?: string
+}
+
+interface BusinessOwnership {
+  name: string
+  business_type: string
+  ownership_percentage: number
+  valuation: number
+  cost_basis?: number
 }
 
 interface Mortgage {
@@ -1311,6 +1361,9 @@ export default function OnboardingPage() {
         const investments = (formData.accounts as InvestmentAccount[]) || []
         return (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Track both current market value and what you originally paid (cost basis) to understand your unrealized gains.
+            </p>
             {investments.map((account, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
@@ -1349,13 +1402,25 @@ export default function OnboardingPage() {
                     />
                   </div>
                   <div>
-                    <Label>Current Balance</Label>
+                    <Label>Current Market Value</Label>
                     <Input
                       type="number"
                       value={account.balance ?? ''}
                       onChange={(e) => updateArrayItem<InvestmentAccount>('accounts', index, { balance: parseFloat(e.target.value) || 0 })}
                       placeholder="0.00"
                     />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Cost Basis (Total Amount Invested)</Label>
+                    <Input
+                      type="number"
+                      value={account.cost_basis ?? ''}
+                      onChange={(e) => updateArrayItem<InvestmentAccount>('accounts', index, { cost_basis: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      The total amount you invested. Unrealized gain = Market Value - Cost Basis
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1440,6 +1505,9 @@ export default function OnboardingPage() {
         const properties = (formData.properties as Property[]) || []
         return (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Track both current market value and purchase price to understand your equity and unrealized gains.
+            </p>
             {properties.map((property, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
@@ -1469,14 +1537,26 @@ export default function OnboardingPage() {
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-2">
-                    <Label>Estimated Value</Label>
+                  <div>
+                    <Label>Current Market Value</Label>
                     <Input
                       type="number"
                       value={property.value ?? ''}
                       onChange={(e) => updateArrayItem<Property>('properties', index, { value: parseFloat(e.target.value) || 0 })}
                       placeholder="0.00"
                     />
+                  </div>
+                  <div>
+                    <Label>Purchase Price (Cost Basis)</Label>
+                    <Input
+                      type="number"
+                      value={property.cost_basis ?? ''}
+                      onChange={(e) => updateArrayItem<Property>('properties', index, { cost_basis: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      What you paid for the property
+                    </p>
                   </div>
                 </div>
               </div>
@@ -1499,6 +1579,9 @@ export default function OnboardingPage() {
         const vehicles = (formData.vehicles as Vehicle[]) || []
         return (
           <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Track current value and what you paid to see depreciation or appreciation over time.
+            </p>
             {vehicles.map((vehicle, index) => (
               <div key={index} className="border rounded-lg p-4 space-y-3">
                 <div className="flex justify-between items-center">
@@ -1508,7 +1591,7 @@ export default function OnboardingPage() {
                   </Button>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
+                  <div className="col-span-2">
                     <Label>Vehicle Description</Label>
                     <Input
                       value={vehicle.name || ''}
@@ -1517,11 +1600,20 @@ export default function OnboardingPage() {
                     />
                   </div>
                   <div>
-                    <Label>Estimated Value</Label>
+                    <Label>Current Market Value</Label>
                     <Input
                       type="number"
                       value={vehicle.value ?? ''}
                       onChange={(e) => updateArrayItem<Vehicle>('vehicles', index, { value: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label>Purchase Price (Cost Basis)</Label>
+                    <Input
+                      type="number"
+                      value={vehicle.cost_basis ?? ''}
+                      onChange={(e) => updateArrayItem<Vehicle>('vehicles', index, { cost_basis: parseFloat(e.target.value) || undefined })}
                       placeholder="0.00"
                     />
                   </div>
@@ -1537,6 +1629,172 @@ export default function OnboardingPage() {
             {vehicles.length === 0 && (
               <p className="text-sm text-muted-foreground text-center">
                 No vehicles? You can skip this step.
+              </p>
+            )}
+          </div>
+        )
+
+      case 'personal_property':
+        const personalItems = (formData.personal_property as PersonalProperty[]) || []
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Track valuable personal property like jewelry, precious metals, collectibles, firearms, and other assets.
+              Include both current market value and what you paid to understand unrealized gains.
+            </p>
+            {personalItems.map((item, index) => (
+              <div key={index} className="border rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Item {index + 1}</span>
+                  <Button variant="ghost" size="sm" onClick={() => removeArrayItem('personal_property', index)}>
+                    Remove
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Item Name</Label>
+                    <Input
+                      value={item.name || ''}
+                      onChange={(e) => updateArrayItem<PersonalProperty>('personal_property', index, { name: e.target.value })}
+                      placeholder="e.g., Gold coins, Rolex watch"
+                    />
+                  </div>
+                  <div>
+                    <Label>Category</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={item.type || 'jewelry'}
+                      onChange={(e) => updateArrayItem<PersonalProperty>('personal_property', index, { type: e.target.value })}
+                    >
+                      {PERSONAL_PROPERTY_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Current Market Value</Label>
+                    <Input
+                      type="number"
+                      value={item.value ?? ''}
+                      onChange={(e) => updateArrayItem<PersonalProperty>('personal_property', index, { value: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div>
+                    <Label>Purchase Price (Cost Basis)</Label>
+                    <Input
+                      type="number"
+                      value={item.cost_basis ?? ''}
+                      onChange={(e) => updateArrayItem<PersonalProperty>('personal_property', index, { cost_basis: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Description (optional)</Label>
+                    <Input
+                      value={item.description || ''}
+                      onChange={(e) => updateArrayItem<PersonalProperty>('personal_property', index, { description: e.target.value })}
+                      placeholder="e.g., 5oz gold eagles, serial numbers, condition notes"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => addArrayItem<PersonalProperty>('personal_property', { name: '', type: 'jewelry', value: 0 })}
+            >
+              + Add Personal Property
+            </Button>
+            {personalItems.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center">
+                No valuables to track? You can skip this step.
+              </p>
+            )}
+          </div>
+        )
+
+      case 'business_ownership':
+        const businesses = (formData.business_ownership as BusinessOwnership[]) || []
+        return (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Track ownership stakes in businesses, partnerships, or LLCs. This is a key component of your net worth.
+            </p>
+            {businesses.map((business, index) => (
+              <div key={index} className="border rounded-lg p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="font-medium">Business {index + 1}</span>
+                  <Button variant="ghost" size="sm" onClick={() => removeArrayItem('business_ownership', index)}>
+                    Remove
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Business Name</Label>
+                    <Input
+                      value={business.name || ''}
+                      onChange={(e) => updateArrayItem<BusinessOwnership>('business_ownership', index, { name: e.target.value })}
+                      placeholder="e.g., ABC Consulting LLC"
+                    />
+                  </div>
+                  <div>
+                    <Label>Business Type</Label>
+                    <select
+                      className="w-full h-10 rounded-md border border-input bg-background px-3"
+                      value={business.business_type || 'llc'}
+                      onChange={(e) => updateArrayItem<BusinessOwnership>('business_ownership', index, { business_type: e.target.value })}
+                    >
+                      {BUSINESS_TYPES.map(t => (
+                        <option key={t.value} value={t.value}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Ownership Percentage (%)</Label>
+                    <Input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="100"
+                      value={business.ownership_percentage ?? ''}
+                      onChange={(e) => updateArrayItem<BusinessOwnership>('business_ownership', index, { ownership_percentage: parseFloat(e.target.value) || 0 })}
+                      placeholder="100"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Your share of ownership</p>
+                  </div>
+                  <div>
+                    <Label>Your Equity Value (Market)</Label>
+                    <Input
+                      type="number"
+                      value={business.valuation ?? ''}
+                      onChange={(e) => updateArrayItem<BusinessOwnership>('business_ownership', index, { valuation: parseFloat(e.target.value) || 0 })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Current value of your stake</p>
+                  </div>
+                  <div className="col-span-2">
+                    <Label>Capital Invested (Cost Basis)</Label>
+                    <Input
+                      type="number"
+                      value={business.cost_basis ?? ''}
+                      onChange={(e) => updateArrayItem<BusinessOwnership>('business_ownership', index, { cost_basis: parseFloat(e.target.value) || undefined })}
+                      placeholder="0.00"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Total capital you&apos;ve contributed to the business</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+            <Button
+              variant="outline"
+              onClick={() => addArrayItem<BusinessOwnership>('business_ownership', { name: '', business_type: 'llc', ownership_percentage: 100, valuation: 0 })}
+            >
+              + Add Business Ownership
+            </Button>
+            {businesses.length === 0 && (
+              <p className="text-sm text-muted-foreground text-center">
+                No business ownership? You can skip this step.
               </p>
             )}
           </div>
