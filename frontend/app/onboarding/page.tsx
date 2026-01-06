@@ -900,7 +900,10 @@ export default function OnboardingPage() {
                           type="number"
                           step="0.01"
                           value={source.hourly_rate ?? ''}
-                          onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { hourly_rate: parseFloat(e.target.value) || undefined })}
+                          onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                          updateArrayItem<IncomeSource>('sources', index, { hourly_rate: isNaN(val as number) ? undefined : val })
+                        }}
                           placeholder="25.00"
                         />
                       </div>
@@ -925,7 +928,10 @@ export default function OnboardingPage() {
                       <Input
                         type="number"
                         value={source.salary ?? ''}
-                        onChange={(e) => updateArrayItem<IncomeSource>('sources', index, { salary: parseFloat(e.target.value) || undefined })}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? undefined : parseFloat(e.target.value)
+                          updateArrayItem<IncomeSource>('sources', index, { salary: isNaN(val as number) ? undefined : val })
+                        }}
                         placeholder="75000"
                       />
                       {(source.income_type === 'self_employed' || source.income_type === 'rental') && (

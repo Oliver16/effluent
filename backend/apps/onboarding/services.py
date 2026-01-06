@@ -206,11 +206,12 @@ class OnboardingService:
                     errors[f'sources.{i}.name'] = 'Required'
                 income_type = src.get('income_type', 'w2')
                 # Validate salary/income based on income type
-                if income_type == 'w2' and not src.get('salary'):
+                # Use 'is None' check to allow 0 as a valid value
+                if income_type == 'w2' and src.get('salary') is None:
                     errors[f'sources.{i}.salary'] = 'Salary required for W-2 income'
-                if income_type == 'w2_hourly' and not src.get('hourly_rate'):
+                if income_type == 'w2_hourly' and src.get('hourly_rate') is None:
                     errors[f'sources.{i}.hourly_rate'] = 'Hourly rate required for hourly income'
-                if income_type in ['self_employed', 'rental', 'investment', 'retirement', 'other'] and not src.get('salary'):
+                if income_type in ['self_employed', 'rental', 'investment', 'retirement', 'other'] and src.get('salary') is None:
                     errors[f'sources.{i}.salary'] = 'Annual income amount is required'
         elif step == OnboardingStep.BUSINESS_EXPENSES:
             # Business expenses are required if user has business/rental income
@@ -362,13 +363,14 @@ class OnboardingService:
                 ).first()
                 income_type = src.get('income_type', 'w2')
                 # Create income source with all details in one step
+                # Use 'is not None' to allow 0 as a valid value
                 income_source = IncomeSource.objects.create(
                     household=self.household,
                     household_member=member,
                     name=src['name'],
                     income_type=income_type,
-                    gross_annual_salary=Decimal(str(src['salary'])) if src.get('salary') else None,
-                    hourly_rate=Decimal(str(src['hourly_rate'])) if src.get('hourly_rate') else None,
+                    gross_annual_salary=Decimal(str(src['salary'])) if src.get('salary') is not None else None,
+                    hourly_rate=Decimal(str(src['hourly_rate'])) if src.get('hourly_rate') is not None else None,
                     expected_annual_hours=int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
                     pay_frequency=src.get('frequency', 'biweekly'),
                 )
