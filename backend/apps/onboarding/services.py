@@ -4,10 +4,24 @@ from datetime import date
 from decimal import Decimal
 
 from apps.core.models import Household, HouseholdMember
-from apps.accounts.models import Account, BalanceSnapshot, LiabilityDetails
+from apps.accounts.models import Account, BalanceSnapshot, LiabilityDetails, AccountType
 from apps.flows.models import RecurringFlow, FlowType, ExpenseCategory, Frequency
+from apps.flows.services import generate_system_flows_for_household
 from apps.taxes.models import IncomeSource, W2Withholding, PreTaxDeduction
 from .models import OnboardingProgress, OnboardingStepData, OnboardingStep
+
+
+# Steps that should trigger system flow regeneration
+FLOW_GENERATION_STEPS = {
+    OnboardingStep.INCOME_SOURCES,
+    OnboardingStep.WITHHOLDING,
+    OnboardingStep.PRETAX_DEDUCTIONS,
+    OnboardingStep.MORTGAGES,
+    OnboardingStep.CREDIT_CARDS,
+    OnboardingStep.STUDENT_LOANS,
+    OnboardingStep.OTHER_DEBTS,
+    OnboardingStep.COMPLETE,
+}
 
 
 class OnboardingService:
@@ -50,7 +64,8 @@ class OnboardingService:
 
     def complete_step(self, data: dict) -> dict:
         """Validate, save data, create records, advance to next step."""
-        is_valid, errors = self._validate(self.progress.current_step, data)
+        current_step = self.progress.current_step
+        is_valid, errors = self._validate(current_step, data)
         if not is_valid:
             return {'success': False, 'errors': errors}
 
@@ -58,14 +73,19 @@ class OnboardingService:
             with transaction.atomic():
                 # Save draft data so it's available when navigating back
                 step_data, _ = OnboardingStepData.objects.get_or_create(
-                    progress=self.progress, step=self.progress.current_step
+                    progress=self.progress, step=current_step
                 )
                 step_data.data = data
                 step_data.is_valid = True
                 step_data.validation_errors = {}
                 step_data.save()
 
-                self._process_step(self.progress.current_step, data)
+                self._process_step(current_step, data)
+
+                # Regenerate system flows if this step affects them
+                if current_step in FLOW_GENERATION_STEPS:
+                    generate_system_flows_for_household(self.household.id)
+
                 next_step = self.progress.advance()
                 # Auto-skip steps that don't apply
                 next_step = self._auto_skip_inapplicable_steps(next_step)
@@ -355,25 +375,46 @@ class OnboardingService:
             self.household.save()
 
         elif step == OnboardingStep.INCOME_SOURCES:
-            # Delete existing income sources to prevent duplication when going back
-            IncomeSource.objects.filter(household=self.household).delete()
+            # Use upsert pattern to preserve income source IDs for downstream references
+            # Track which sources are still valid to delete orphans
+            valid_source_ids = set()
+
             for src in data.get('sources', []):
                 member = HouseholdMember.objects.filter(
                     household=self.household, id=src.get('member_id')
                 ).first()
+
+                # Validate that member exists
+                if not member:
+                    raise ValueError(f"Invalid household member for income source '{src.get('name', 'Unknown')}'")
+
                 income_type = src.get('income_type', 'w2')
-                # Create income source with all details in one step
-                # Use 'is not None' to allow 0 as a valid value
-                income_source = IncomeSource.objects.create(
+
+                # Upsert income source - use (household, member, name, income_type) as unique key
+                income_source, created = IncomeSource.objects.update_or_create(
                     household=self.household,
                     household_member=member,
                     name=src['name'],
                     income_type=income_type,
-                    gross_annual_salary=Decimal(str(src['salary'])) if src.get('salary') is not None else None,
-                    hourly_rate=Decimal(str(src['hourly_rate'])) if src.get('hourly_rate') is not None else None,
-                    expected_annual_hours=int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
-                    pay_frequency=src.get('frequency', 'biweekly'),
+                    defaults={
+                        'gross_annual_salary': Decimal(str(src['salary'])) if src.get('salary') is not None else None,
+                        'hourly_rate': Decimal(str(src['hourly_rate'])) if src.get('hourly_rate') is not None else None,
+                        'expected_annual_hours': int(src.get('expected_annual_hours', 2080)) if income_type == 'w2_hourly' else None,
+                        'pay_frequency': src.get('frequency', 'biweekly'),
+                        'is_active': True,
+                    }
                 )
+                valid_source_ids.add(income_source.id)
+
+            # Mark orphaned income sources as inactive (those not in current submission)
+            IncomeSource.objects.filter(
+                household=self.household
+            ).exclude(
+                id__in=valid_source_ids
+            ).update(is_active=False)
+
+            # Note: RecurringFlow generation is handled by generate_system_flows_for_household()
+            # which is called after _process_step in complete_step()
 
         elif step == OnboardingStep.BUSINESS_EXPENSES:
             # Delete any existing business expenses to prevent duplication
@@ -611,6 +652,7 @@ class OnboardingService:
                 household=self.household,
                 account_type='primary_mortgage'
             ).delete()
+
             for mort in data.get('mortgages', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -629,6 +671,7 @@ class OnboardingService:
                     minimum_payment=mort.get('payment'),
                     term_months=mort.get('term', 360),
                 )
+            # Note: RecurringFlow generation is handled by generate_system_flows_for_household()
 
         elif step == OnboardingStep.CREDIT_CARDS:
             # Delete existing credit cards to prevent duplication when going back
@@ -636,6 +679,7 @@ class OnboardingService:
                 household=self.household,
                 account_type='credit_card'
             ).delete()
+
             for card in data.get('cards', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -654,6 +698,7 @@ class OnboardingService:
                     minimum_payment=card.get('min_payment'),
                     credit_limit=card.get('limit'),
                 )
+            # Note: RecurringFlow generation is handled by generate_system_flows_for_household()
 
         elif step == OnboardingStep.STUDENT_LOANS:
             # Delete existing student loans to prevent duplication when going back
@@ -661,6 +706,7 @@ class OnboardingService:
                 household=self.household,
                 account_type__in=['student_loan_federal', 'student_loan_private']
             ).delete()
+
             for loan in data.get('loans', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -680,6 +726,7 @@ class OnboardingService:
                     term_months=loan.get('term'),
                     servicer=loan.get('servicer', ''),
                 )
+            # Note: RecurringFlow generation is handled by generate_system_flows_for_household()
 
         elif step == OnboardingStep.OTHER_DEBTS:
             # Delete existing other debts to prevent duplication when going back
@@ -687,6 +734,7 @@ class OnboardingService:
                 household=self.household,
                 account_type='other_liability'
             ).delete()
+
             for debt in data.get('debts', []):
                 account = Account.objects.create(
                     household=self.household,
@@ -705,6 +753,7 @@ class OnboardingService:
                     minimum_payment=debt.get('payment'),
                     term_months=debt.get('term'),
                 )
+            # Note: RecurringFlow generation is handled by generate_system_flows_for_household()
 
         elif step == OnboardingStep.HOUSING_EXPENSES:
             # Delete existing housing expenses to prevent duplication when going back

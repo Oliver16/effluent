@@ -310,6 +310,23 @@ class RecurringFlow(HouseholdOwnedModel):
     is_baseline = models.BooleanField(default=True)
     notes = models.TextField(blank=True)
 
+    # Transfer-specific fields (from/to accounts)
+    from_account = models.ForeignKey(
+        'accounts.Account', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='outgoing_flows'
+    )
+    to_account = models.ForeignKey(
+        'accounts.Account', on_delete=models.SET_NULL,
+        null=True, blank=True, related_name='incoming_flows'
+    )
+
+    # System-generated flow tracking fields
+    is_system_generated = models.BooleanField(default=False)
+    system_source_model = models.CharField(max_length=100, blank=True)
+    system_source_id = models.UUIDField(null=True, blank=True)
+    system_flow_kind = models.CharField(max_length=50, blank=True)
+    calculation_version = models.PositiveIntegerField(default=1)
+
     class Meta:
         db_table = 'recurring_flows'
         ordering = ['flow_type', '-amount']
