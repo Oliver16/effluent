@@ -3,7 +3,16 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from apps.core.views import HouseholdViewSet, HouseholdMemberViewSet
+from apps.core.views import (
+    HouseholdViewSet,
+    HouseholdMemberViewSet,
+    UserProfileView,
+    ChangePasswordView,
+    NotificationSettingsView,
+    TwoFactorSettingsView,
+    SessionsView,
+    DataExportView,
+)
 from apps.accounts.views import AccountViewSet, AssetGroupViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import IncomeSourceViewSet
@@ -37,6 +46,12 @@ urlpatterns = [
 
     # API v1
     path('api/v1/', include(router.urls)),
+    path('api/v1/profile/', UserProfileView.as_view(), name='user-profile'),
+    path('api/v1/profile/change-password/', ChangePasswordView.as_view(), name='change-password'),
+    path('api/v1/settings/notifications/', NotificationSettingsView.as_view(), name='notification-settings'),
+    path('api/v1/settings/two-factor/', TwoFactorSettingsView.as_view(), name='two-factor-settings'),
+    path('api/v1/settings/sessions/', SessionsView.as_view(), name='sessions'),
+    path('api/v1/settings/export/', DataExportView.as_view(), name='data-export'),
 
     # Metrics endpoints
     path('api/v1/metrics/current/', CurrentMetricsView.as_view(), name='metrics-current'),

@@ -1,6 +1,9 @@
 import type {
   Household,
   HouseholdMember,
+  UserProfile,
+  UserSettings,
+  UserSession,
   Account,
   RecurringFlow,
   MetricSnapshot,
@@ -214,6 +217,40 @@ export const households = {
   list: () => api.get<Household[]>('/api/v1/households/').then(data => toCamelCase<Household[]>(data)),
   get: (id: string) => api.get<Household>(`/api/v1/households/${id}/`).then(data => toCamelCase<Household>(data)),
   create: (data: Partial<Household>) => api.post<Household>('/api/v1/households/', data).then(data => toCamelCase<Household>(data)),
+  update: (id: string, data: Record<string, unknown>) =>
+    api.patch<Household>(`/api/v1/households/${id}/`, data).then(data => toCamelCase<Household>(data)),
+}
+
+export const profile = {
+  get: () => api.get<UserProfile>('/api/v1/profile/').then(data => toCamelCase<UserProfile>(data)),
+  update: (data: Partial<UserProfile>) =>
+    api.patch<UserProfile>('/api/v1/profile/', {
+      username: data.username,
+      date_of_birth: data.dateOfBirth,
+    }).then(data => toCamelCase<UserProfile>(data)),
+  delete: () => api.delete<void>('/api/v1/profile/'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    api.post('/api/v1/profile/change-password/', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+}
+
+export const settings = {
+  getNotifications: () =>
+    api.get<UserSettings>('/api/v1/settings/notifications/').then(data => toCamelCase<UserSettings>(data)),
+  updateNotifications: (data: Partial<UserSettings>) =>
+    api.patch<UserSettings>('/api/v1/settings/notifications/', {
+      weekly_summary: data.weeklySummary,
+      insight_alerts: data.insightAlerts,
+      balance_reminders: data.balanceReminders,
+      critical_alerts: data.criticalAlerts,
+      two_factor_enabled: data.twoFactorEnabled,
+    }).then(data => toCamelCase<UserSettings>(data)),
+  updateTwoFactor: (enabled: boolean) =>
+    api.post<UserSettings>('/api/v1/settings/two-factor/', { enabled }).then(data => toCamelCase<UserSettings>(data)),
+  sessions: () => api.get<UserSession[]>('/api/v1/settings/sessions/').then(data => toCamelCase<UserSession[]>(data)),
+  exportData: () => api.get<Record<string, unknown>>('/api/v1/settings/export/'),
 }
 
 // Household member endpoints

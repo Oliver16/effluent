@@ -1,15 +1,26 @@
 from rest_framework import viewsets, status
+from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django.utils.text import slugify
+from django.utils import timezone
 import uuid
 
 from .models import Household, HouseholdMember, HouseholdMembership
 from .serializers import (
     HouseholdSerializer, HouseholdDetailSerializer,
-    HouseholdMemberSerializer, HouseholdMembershipSerializer
+    HouseholdMemberSerializer,
+    UserProfileSerializer, UserSettingsSerializer, ChangePasswordSerializer
 )
+from apps.accounts.models import Account
+from apps.accounts.serializers import AccountDetailSerializer
+from apps.flows.models import RecurringFlow
+from apps.flows.serializers import RecurringFlowSerializer
+from apps.taxes.models import IncomeSource
+from apps.taxes.serializers import IncomeSourceSerializer
+from apps.scenarios.models import Scenario, ScenarioChange
+from apps.scenarios.serializers import ScenarioSerializer, ScenarioChangeSerializer
 
 
 class HouseholdViewSet(viewsets.ModelViewSet):
@@ -51,3 +62,110 @@ class HouseholdMemberViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(household=self.request.household)
+
+
+class UserProfileView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserProfileSerializer(request.user)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        serializer = UserProfileSerializer(
+            request.user,
+            data=request.data,
+            partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request):
+        request.user.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class ChangePasswordView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        request.user.set_password(serializer.validated_data['new_password'])
+        request.user.save(update_fields=['password'])
+        return Response({'status': 'password_updated'})
+
+
+class NotificationSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        settings = request.user.get_settings()
+        serializer = UserSettingsSerializer(settings)
+        return Response(serializer.data)
+
+    def patch(self, request):
+        settings = request.user.get_settings()
+        serializer = UserSettingsSerializer(settings, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+
+class TwoFactorSettingsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        settings = request.user.get_settings()
+        enabled = bool(request.data.get('enabled'))
+        settings.two_factor_enabled = enabled
+        settings.save(update_fields=['two_factor_enabled', 'updated_at'])
+        serializer = UserSettingsSerializer(settings)
+        return Response(serializer.data)
+
+
+class SessionsView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        session = {
+            'id': 'current',
+            'ip_address': request.META.get('REMOTE_ADDR'),
+            'user_agent': request.META.get('HTTP_USER_AGENT'),
+            'last_login': request.user.last_login,
+            'last_active': timezone.now(),
+            'is_current': True,
+        }
+        return Response([session])
+
+
+class DataExportView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        household = request.household or request.user.get_default_household()
+        if not household:
+            return Response({'detail': 'No household available.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        data = {
+            'exported_at': timezone.now(),
+            'user': UserProfileSerializer(request.user).data,
+            'household': HouseholdDetailSerializer(household).data,
+            'accounts': AccountDetailSerializer(
+                Account.objects.filter(household=household), many=True
+            ).data,
+            'flows': RecurringFlowSerializer(
+                RecurringFlow.objects.filter(household=household), many=True
+            ).data,
+            'income_sources': IncomeSourceSerializer(
+                IncomeSource.objects.filter(household=household), many=True
+            ).data,
+            'scenarios': ScenarioSerializer(
+                Scenario.objects.filter(household=household), many=True
+            ).data,
+            'scenario_changes': ScenarioChangeSerializer(
+                ScenarioChange.objects.filter(household=household), many=True
+            ).data,
+        }
+        return Response(data)
