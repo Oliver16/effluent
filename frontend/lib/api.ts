@@ -297,9 +297,11 @@ export const members = {
 
 // Account endpoints
 export const accounts = {
-  list: () => api.get<{ results: Account[] }>('/api/v1/accounts/').then(data => ({
-    results: toCamelCase<Account[]>(data.results || [])
-  })),
+  list: () => api.get<Account[] | { results: Account[] }>('/api/v1/accounts/').then(data => {
+    // Handle both flat array and paginated responses
+    const items = Array.isArray(data) ? data : (data.results || [])
+    return { results: toCamelCase<Account[]>(items) }
+  }),
   get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`).then(data => toCamelCase<Account>(data)),
   create: (data: Partial<Account>) => {
     // Convert camelCase to snake_case and map currentBalance to initial_balance
@@ -327,7 +329,11 @@ export const accounts = {
 
 // Flow endpoints
 export const flows = {
-  list: () => api.get<RecurringFlow[]>('/api/v1/flows/').then(data => toCamelCase<RecurringFlow[]>(data)),
+  list: () => api.get<RecurringFlow[] | { results: RecurringFlow[] }>('/api/v1/flows/').then(data => {
+    // Handle both flat array and paginated responses
+    const items = Array.isArray(data) ? data : (data.results || [])
+    return toCamelCase<RecurringFlow[]>(items)
+  }),
   create: (data: Partial<RecurringFlow>) => {
     // Convert camelCase to snake_case for backend
     const payload = toSnakeCase(data)

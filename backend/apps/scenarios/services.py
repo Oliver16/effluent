@@ -219,19 +219,18 @@ class ScenarioEngine:
 
         # Initialize contribution rates from pre-tax deductions
         contribution_rates = {'401k': Decimal('0'), 'hsa': Decimal('0')}
-        try:
-            for deduction in PreTaxDeduction.objects.filter(
-                income_source__household=self.household,
-                is_active=True
-            ):
-                if deduction.deduction_type == 'traditional_401k' or deduction.deduction_type == 'roth_401k':
-                    if deduction.amount_type == 'percentage':
-                        contribution_rates['401k'] = deduction.amount
-                elif deduction.deduction_type == 'hsa':
-                    if deduction.amount_type == 'percentage':
-                        contribution_rates['hsa'] = deduction.amount
-        except Exception:
-            pass  # If no income sources or deductions, use defaults
+        # Safely query deductions - query may fail if no income sources exist
+        deductions = PreTaxDeduction.objects.filter(
+            income_source__household=self.household,
+            is_active=True
+        )
+        for deduction in deductions:
+            if deduction.deduction_type in ('traditional_401k', 'roth_401k'):
+                if deduction.amount_type == 'percentage':
+                    contribution_rates['401k'] = deduction.amount
+            elif deduction.deduction_type == 'hsa':
+                if deduction.amount_type == 'percentage':
+                    contribution_rates['hsa'] = deduction.amount
 
         return MonthlyState(
             date=self.scenario.start_date,
@@ -488,15 +487,89 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.MODIFY_401K:
             # Change 401(k) contribution rate
             new_percentage = Decimal(str(params.get('percentage', 0)))
-            state.contribution_rates['401k'] = new_percentage / 100  # Convert to decimal
+            new_rate = new_percentage / 100  # Convert to decimal
+            state.contribution_rates['401k'] = new_rate
 
-            # Adjust pre-tax deductions in income flows
-            # This would require recalculating net income
+            # Calculate contribution amount from gross salary income
+            for inc in state.incomes:
+                if inc['category'] in ('salary', 'hourly_wages'):
+                    gross_monthly = inc['monthly']
+                    new_contribution = gross_monthly * new_rate
+
+                    # Add 401(k) contribution as expense (reduces take-home pay)
+                    # But also add to retirement assets
+                    existing_expense = next(
+                        (e for e in state.expenses if '401k_contribution' in e.get('id', '')),
+                        None
+                    )
+                    if existing_expense:
+                        existing_expense['monthly'] = new_contribution
+                        existing_expense['amount'] = new_contribution
+                    elif new_contribution > 0:
+                        state.expenses.append({
+                            'id': f'401k_contribution_{change.id}',
+                            'name': f'{change.name} - 401(k) Contribution',
+                            'category': 'retirement_contribution',
+                            'amount': new_contribution,
+                            'frequency': 'monthly',
+                            'monthly': new_contribution,
+                        })
+
+                    # Add transfer to retirement account
+                    retirement_acct = next(
+                        (k for k, a in state.assets.items() if a.is_retirement),
+                        None
+                    )
+                    if retirement_acct and new_contribution > 0:
+                        existing_transfer = next(
+                            (t for t in state.transfers if '401k_transfer' in t.get('id', '')),
+                            None
+                        )
+                        if existing_transfer:
+                            existing_transfer['monthly'] = new_contribution
+                            existing_transfer['amount'] = new_contribution
+                        else:
+                            state.transfers.append({
+                                'id': f'401k_transfer_{change.id}',
+                                'name': '401(k) Contribution',
+                                'category': 'retirement_transfer',
+                                'amount': new_contribution,
+                                'frequency': 'monthly',
+                                'monthly': new_contribution,
+                                'linked_account': retirement_acct,
+                            })
+                    break
 
         elif change.change_type == ChangeType.MODIFY_HSA:
             # Change HSA contribution rate
             new_percentage = Decimal(str(params.get('percentage', 0)))
-            state.contribution_rates['hsa'] = new_percentage / 100  # Convert to decimal
+            new_rate = new_percentage / 100  # Convert to decimal
+            state.contribution_rates['hsa'] = new_rate
+
+            # Calculate HSA contribution amount from gross salary income
+            for inc in state.incomes:
+                if inc['category'] in ('salary', 'hourly_wages'):
+                    gross_monthly = inc['monthly']
+                    new_contribution = gross_monthly * new_rate
+
+                    # Add HSA contribution as expense (reduces take-home pay)
+                    existing_expense = next(
+                        (e for e in state.expenses if 'hsa_contribution' in e.get('id', '')),
+                        None
+                    )
+                    if existing_expense:
+                        existing_expense['monthly'] = new_contribution
+                        existing_expense['amount'] = new_contribution
+                    elif new_contribution > 0:
+                        state.expenses.append({
+                            'id': f'hsa_contribution_{change.id}',
+                            'name': f'{change.name} - HSA Contribution',
+                            'category': 'health_savings',
+                            'amount': new_contribution,
+                            'frequency': 'monthly',
+                            'monthly': new_contribution,
+                        })
+                    break
 
         return state
 
