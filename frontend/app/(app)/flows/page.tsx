@@ -25,7 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, ArrowUpCircle, ArrowDownCircle, Pencil } from 'lucide-react'
+import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil } from 'lucide-react'
 
 const INCOME_CATEGORIES: Record<string, string> = {
   // Employment
@@ -386,13 +386,14 @@ export default function FlowsPage() {
   const [selectedFlow, setSelectedFlow] = useState<RecurringFlow | null>(null)
   const [newFlow, setNewFlow] = useState({
     name: '',
-    flowType: 'income' as 'income' | 'expense',
+    flowType: 'income' as 'income' | 'expense' | 'transfer',
     incomeCategory: 'salary',
-    expenseCategory: 'housing',
+    expenseCategory: 'miscellaneous',
     amount: '',
     frequency: 'monthly',
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
+    isBaseline: true,
   })
 
   const queryClient = useQueryClient()
@@ -426,6 +427,7 @@ export default function FlowsPage() {
   const flows = flowsData || []
   const incomeFlows = flows.filter(f => f.flowType === 'income')
   const expenseFlows = flows.filter(f => f.flowType === 'expense')
+  const transferFlows = flows.filter(f => f.flowType === 'transfer')
 
   const totalMonthlyIncome = incomeFlows
     .filter(f => f.isActive)
@@ -440,15 +442,16 @@ export default function FlowsPage() {
       name: '',
       flowType: 'income',
       incomeCategory: 'salary',
-      expenseCategory: 'housing',
+      expenseCategory: 'miscellaneous',
       amount: '',
       frequency: 'monthly',
       startDate: new Date().toISOString().split('T')[0],
       endDate: '',
+      isBaseline: true,
     })
   }
 
-  const openAddModal = (type: 'income' | 'expense') => {
+  const openAddModal = (type: 'income' | 'expense' | 'transfer') => {
     setNewFlow({ ...newFlow, flowType: type })
     setAddModalOpen(true)
   }
@@ -469,6 +472,7 @@ export default function FlowsPage() {
       startDate: newFlow.startDate,
       endDate: newFlow.endDate || undefined,
       isActive: true,
+      isBaseline: newFlow.isBaseline,
     })
   }
 
@@ -481,6 +485,7 @@ export default function FlowsPage() {
         amount: selectedFlow.amount,
         frequency: selectedFlow.frequency,
         isActive: selectedFlow.isActive,
+        isBaseline: selectedFlow.isBaseline,
         endDate: selectedFlow.endDate || undefined,
       },
     })
@@ -547,6 +552,7 @@ export default function FlowsPage() {
         <TabsList>
           <TabsTrigger value="income">Income ({incomeFlows.length})</TabsTrigger>
           <TabsTrigger value="expenses">Expenses ({expenseFlows.length})</TabsTrigger>
+          <TabsTrigger value="transfers">Transfers ({transferFlows.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="income" className="space-y-4">
@@ -658,6 +664,61 @@ export default function FlowsPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="transfers" className="space-y-4">
+          <div className="flex justify-end">
+            <Button onClick={() => openAddModal('transfer')}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Transfer
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              {transferFlows.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  No transfer flows added yet. Transfers move money between accounts (e.g., savings contributions, debt payments).
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Frequency</TableHead>
+                      <TableHead className="text-right">Monthly</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="w-16"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {transferFlows.map((flow) => (
+                      <TableRow key={flow.id} className={!flow.isActive ? 'opacity-50' : ''}>
+                        <TableCell className="font-medium">{flow.name}</TableCell>
+                        <TableCell>{formatCurrency(flow.amount)}</TableCell>
+                        <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
+                        <TableCell className="text-right font-semibold text-blue-600">
+                          {formatCurrency(flow.monthlyAmount)}
+                        </TableCell>
+                        <TableCell>
+                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                            flow.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                          }`}>
+                            {flow.isActive ? 'Active' : 'Inactive'}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="sm" onClick={() => openEditModal(flow)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
 
       {/* Add Flow Modal */}
@@ -665,10 +726,10 @@ export default function FlowsPage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              Add {newFlow.flowType === 'income' ? 'Income' : 'Expense'}
+              Add {newFlow.flowType === 'income' ? 'Income' : newFlow.flowType === 'expense' ? 'Expense' : 'Transfer'}
             </DialogTitle>
             <DialogDescription>
-              Add a new recurring {newFlow.flowType === 'income' ? 'income source' : 'expense'}
+              Add a new recurring {newFlow.flowType === 'income' ? 'income source' : newFlow.flowType === 'expense' ? 'expense' : 'transfer between accounts'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
@@ -681,31 +742,33 @@ export default function FlowsPage() {
                 placeholder={newFlow.flowType === 'income' ? 'e.g., Main Job Salary' : 'e.g., Rent'}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="category">Category</Label>
-              <select
-                id="category"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                value={newFlow.flowType === 'income' ? newFlow.incomeCategory : newFlow.expenseCategory}
-                onChange={(e) =>
-                  newFlow.flowType === 'income'
-                    ? setNewFlow({ ...newFlow, incomeCategory: e.target.value })
-                    : setNewFlow({ ...newFlow, expenseCategory: e.target.value })
-                }
-              >
-                {(newFlow.flowType === 'income' ? INCOME_CATEGORY_GROUPS : EXPENSE_CATEGORY_GROUPS).map(
-                  (group) => (
-                    <optgroup key={group.label} label={group.label}>
-                      {group.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  )
-                )}
-              </select>
-            </div>
+            {newFlow.flowType !== 'transfer' && (
+              <div className="space-y-2">
+                <Label htmlFor="category">Category</Label>
+                <select
+                  id="category"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={newFlow.flowType === 'income' ? newFlow.incomeCategory : newFlow.expenseCategory}
+                  onChange={(e) =>
+                    newFlow.flowType === 'income'
+                      ? setNewFlow({ ...newFlow, incomeCategory: e.target.value })
+                      : setNewFlow({ ...newFlow, expenseCategory: e.target.value })
+                  }
+                >
+                  {(newFlow.flowType === 'income' ? INCOME_CATEGORY_GROUPS : EXPENSE_CATEGORY_GROUPS).map(
+                    (group) => (
+                      <optgroup key={group.label} label={group.label}>
+                        {group.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  )}
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Amount</Label>
@@ -754,6 +817,16 @@ export default function FlowsPage() {
                 />
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="isBaseline"
+                checked={newFlow.isBaseline}
+                onChange={(e) => setNewFlow({ ...newFlow, isBaseline: e.target.checked })}
+                className="h-4 w-4 rounded border-input"
+              />
+              <Label htmlFor="isBaseline">Include in baseline projections</Label>
+            </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setAddModalOpen(false)}>
                 Cancel
@@ -773,7 +846,9 @@ export default function FlowsPage() {
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edit {selectedFlow?.flowType === 'income' ? 'Income' : 'Expense'}</DialogTitle>
+            <DialogTitle>
+              Edit {selectedFlow?.flowType === 'income' ? 'Income' : selectedFlow?.flowType === 'expense' ? 'Expense' : 'Transfer'}
+            </DialogTitle>
           </DialogHeader>
           {selectedFlow && (
             <div className="space-y-4 py-4">
@@ -830,6 +905,16 @@ export default function FlowsPage() {
                   className="h-4 w-4 rounded border-input"
                 />
                 <Label htmlFor="editActive">Active</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="editBaseline"
+                  checked={selectedFlow.isBaseline}
+                  onChange={(e) => setSelectedFlow({ ...selectedFlow, isBaseline: e.target.checked })}
+                  className="h-4 w-4 rounded border-input"
+                />
+                <Label htmlFor="editBaseline">Include in baseline projections</Label>
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setEditModalOpen(false)}>

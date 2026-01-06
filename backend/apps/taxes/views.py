@@ -3,8 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
-from .models import IncomeSource, PreTaxDeduction
-from .serializers import IncomeSourceSerializer, IncomeSourceDetailSerializer, PreTaxDeductionSerializer
+from .models import IncomeSource, PreTaxDeduction, PostTaxDeduction, SelfEmploymentTax
+from .serializers import (
+    IncomeSourceSerializer, IncomeSourceDetailSerializer,
+    PreTaxDeductionSerializer, PostTaxDeductionSerializer, SelfEmploymentTaxSerializer
+)
 from .services import PaycheckCalculator
 
 
@@ -42,3 +45,33 @@ class IncomeSourceViewSet(viewsets.ModelViewSet):
             'employer_match': str(breakdown.employer_match),
             'effective_tax_rate': str(breakdown.effective_tax_rate),
         })
+
+
+class PreTaxDeductionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PreTaxDeductionSerializer
+
+    def get_queryset(self):
+        return PreTaxDeduction.objects.filter(
+            income_source__household=self.request.household
+        )
+
+
+class PostTaxDeductionViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = PostTaxDeductionSerializer
+
+    def get_queryset(self):
+        return PostTaxDeduction.objects.filter(
+            income_source__household=self.request.household
+        )
+
+
+class SelfEmploymentTaxViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = SelfEmploymentTaxSerializer
+
+    def get_queryset(self):
+        return SelfEmploymentTax.objects.filter(
+            household=self.request.household
+        )

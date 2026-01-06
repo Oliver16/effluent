@@ -48,15 +48,68 @@ export interface HouseholdMember {
   employmentStatus: string
 }
 
+export interface AssetDetails {
+  acquisitionDate?: string
+  acquisitionCost?: string
+  propertyType?: string
+  addressLine1?: string
+  addressLine2?: string
+  city?: string
+  state?: string
+  zipCode?: string
+  squareFootage?: number
+  lotSizeAcres?: string
+  yearBuilt?: number
+  annualPropertyTax?: string
+  annualInsurance?: string
+  annualHoa?: string
+  monthlyRentIncome?: string
+  vin?: string
+  make?: string
+  model?: string
+  year?: number
+  mileage?: number
+}
+
+export interface LiabilityDetails {
+  interestRate: string
+  rateType: 'fixed' | 'variable'
+  originalBalance?: string
+  originationDate?: string
+  maturityDate?: string
+  termMonths?: number
+  minimumPayment?: string
+  paymentDayOfMonth?: number
+  isInterestOnly: boolean
+  includesEscrow: boolean
+  escrowAmount?: string
+  creditLimit?: string
+  rateIndex?: string
+  rateMargin?: string
+  rateFloor?: string
+  rateCeiling?: string
+  servicer?: string
+  isIncomeDriven: boolean
+}
+
 export interface Account {
   id: string
   name: string
   accountType: string
   institution: string
+  accountNumberLast4?: string
   isActive: boolean
+  displayOrder?: number
+  assetGroup?: string
+  owner?: string
+  employerName?: string
+  notes?: string
   currentBalance: string
   currentMarketValue?: string
   currentCostBasis?: string
+  assetDetails?: AssetDetails
+  liabilityDetails?: LiabilityDetails
+  createdAt?: string
 }
 
 export interface BalanceSnapshot {
@@ -71,14 +124,20 @@ export interface BalanceSnapshot {
 export interface RecurringFlow {
   id: string
   name: string
-  flowType: 'income' | 'expense'
+  description?: string
+  flowType: 'income' | 'expense' | 'transfer'
   incomeCategory?: string
   expenseCategory?: string
   amount: string
   frequency: string
   startDate: string
   endDate?: string
+  linkedAccount?: string
+  householdMember?: string
+  incomeSource?: string
   isActive: boolean
+  isBaseline: boolean
+  notes?: string
   monthlyAmount: string
 }
 
@@ -197,6 +256,7 @@ export interface W2Withholding {
 
 export interface PreTaxDeduction {
   id: string
+  incomeSource?: string
   deductionType: string
   name: string
   amountType: string
@@ -206,6 +266,27 @@ export interface PreTaxDeduction {
   employerMatchLimitAnnual?: string
   targetAccount?: string
   isActive: boolean
+}
+
+export interface PostTaxDeduction {
+  id: string
+  incomeSource?: string
+  deductionType: string
+  name: string
+  amountType: string
+  amount: string
+  isActive: boolean
+}
+
+export interface SelfEmploymentTax {
+  id: string
+  incomeSource?: string
+  q1EstimatedPayment: string
+  q2EstimatedPayment: string
+  q3EstimatedPayment: string
+  q4EstimatedPayment: string
+  estimatedAnnualExpenses: string
+  retirementContributionPercentage: string
 }
 
 export interface IncomeSourceDetail {
@@ -220,7 +301,9 @@ export interface IncomeSourceDetail {
   grossAnnual: string
   grossPerPeriod: string
   pretaxDeductions: PreTaxDeduction[]
+  posttaxDeductions: PostTaxDeduction[]
   w2Withholding?: W2Withholding
+  seTaxConfig?: SelfEmploymentTax
   isActive: boolean
   startDate?: string
   endDate?: string

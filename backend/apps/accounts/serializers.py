@@ -40,14 +40,29 @@ class AccountSerializer(serializers.ModelSerializer):
     current_balance = serializers.DecimalField(
         max_digits=14, decimal_places=2, read_only=True
     )
+    current_market_value = serializers.SerializerMethodField()
+    current_cost_basis = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
         fields = [
             'id', 'name', 'account_type', 'institution', 'account_number_last4',
             'is_active', 'display_order', 'asset_group', 'owner', 'employer_name',
-            'notes', 'current_balance', 'created_at'
+            'notes', 'current_balance', 'current_market_value', 'current_cost_basis',
+            'created_at'
         ]
+
+    def get_current_market_value(self, obj):
+        snapshot = obj.latest_snapshot
+        if snapshot and snapshot.market_value:
+            return str(snapshot.market_value)
+        return None
+
+    def get_current_cost_basis(self, obj):
+        snapshot = obj.latest_snapshot
+        if snapshot and snapshot.cost_basis:
+            return str(snapshot.cost_basis)
+        return None
 
 
 class AccountDetailSerializer(serializers.ModelSerializer):

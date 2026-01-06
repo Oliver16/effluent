@@ -14,6 +14,9 @@ import type {
   ScenarioChange,
   ScenarioProjection,
   IncomeSourceDetail,
+  PreTaxDeduction,
+  PostTaxDeduction,
+  SelfEmploymentTax,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -386,6 +389,63 @@ export const incomeSources = {
   get: (id: string) =>
     api.get<IncomeSourceDetail>(`/api/v1/income-sources/${id}/`)
       .then(data => toCamelCase<IncomeSourceDetail>(data)),
+  paycheck: (id: string) =>
+    api.get<Record<string, string>>(`/api/v1/income-sources/${id}/paycheck/`)
+      .then(data => toCamelCase<Record<string, string>>(data)),
+}
+
+// Pre-tax deduction endpoints
+export const pretaxDeductions = {
+  list: () =>
+    api.get<PreTaxDeduction[] | { results: PreTaxDeduction[] }>('/api/v1/pretax-deductions/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<PreTaxDeduction[]>(data)),
+  get: (id: string) =>
+    api.get<PreTaxDeduction>(`/api/v1/pretax-deductions/${id}/`)
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  create: (data: Partial<PreTaxDeduction>) =>
+    api.post<PreTaxDeduction>('/api/v1/pretax-deductions/', toSnakeCase(data))
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  update: (id: string, data: Partial<PreTaxDeduction>) =>
+    api.patch<PreTaxDeduction>(`/api/v1/pretax-deductions/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/pretax-deductions/${id}/`),
+}
+
+// Post-tax deduction endpoints
+export const posttaxDeductions = {
+  list: () =>
+    api.get<PostTaxDeduction[] | { results: PostTaxDeduction[] }>('/api/v1/posttax-deductions/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<PostTaxDeduction[]>(data)),
+  get: (id: string) =>
+    api.get<PostTaxDeduction>(`/api/v1/posttax-deductions/${id}/`)
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  create: (data: Partial<PostTaxDeduction>) =>
+    api.post<PostTaxDeduction>('/api/v1/posttax-deductions/', toSnakeCase(data))
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  update: (id: string, data: Partial<PostTaxDeduction>) =>
+    api.patch<PostTaxDeduction>(`/api/v1/posttax-deductions/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/posttax-deductions/${id}/`),
+}
+
+// Self-employment tax endpoints
+export const selfEmploymentTax = {
+  list: () =>
+    api.get<SelfEmploymentTax[] | { results: SelfEmploymentTax[] }>('/api/v1/self-employment-tax/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<SelfEmploymentTax[]>(data)),
+  get: (id: string) =>
+    api.get<SelfEmploymentTax>(`/api/v1/self-employment-tax/${id}/`)
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  create: (data: Partial<SelfEmploymentTax>) =>
+    api.post<SelfEmploymentTax>('/api/v1/self-employment-tax/', toSnakeCase(data))
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  update: (id: string, data: Partial<SelfEmploymentTax>) =>
+    api.patch<SelfEmploymentTax>(`/api/v1/self-employment-tax/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/self-employment-tax/${id}/`),
 }
 
 // Scenario endpoints
