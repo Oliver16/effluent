@@ -14,6 +14,9 @@ import type {
   ScenarioChange,
   ScenarioProjection,
   IncomeSourceDetail,
+  PreTaxDeduction,
+  PostTaxDeduction,
+  SelfEmploymentTax,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -108,6 +111,38 @@ export function normalizeListResponse<T>(data: T[] | { results: T[] } | { data: 
  */
 function snakeToCamel(str: string): string {
   return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
+}
+
+/**
+ * Convert a camelCase string to snake_case.
+ */
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+}
+
+/**
+ * Recursively transform all camelCase keys in an object to snake_case.
+ * Handles nested objects and arrays.
+ */
+export function toSnakeCase<T>(obj: unknown): T {
+  if (obj === null || obj === undefined) {
+    return obj as T
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(item => toSnakeCase(item)) as T
+  }
+
+  if (typeof obj === 'object') {
+    const result: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(obj as Record<string, unknown>)) {
+      const snakeKey = camelToSnake(key)
+      result[snakeKey] = toSnakeCase(value)
+    }
+    return result as T
+  }
+
+  return obj as T
 }
 
 /**
@@ -266,18 +301,42 @@ export const accounts = {
     results: toCamelCase<Account[]>(data.results || [])
   })),
   get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`).then(data => toCamelCase<Account>(data)),
-  create: (data: Partial<Account>) => api.post<Account>('/api/v1/accounts/', data).then(data => toCamelCase<Account>(data)),
-  update: (id: string, data: Partial<Account>) => api.patch<Account>(`/api/v1/accounts/${id}/`, data).then(data => toCamelCase<Account>(data)),
+  create: (data: Partial<Account>) => {
+    // Convert camelCase to snake_case and map currentBalance to initial_balance
+    const payload: Record<string, unknown> = {
+      name: data.name,
+      account_type: data.accountType,
+      institution: data.institution,
+      is_active: data.isActive,
+    }
+    // Backend expects initial_balance for creating the first snapshot
+    if (data.currentBalance) {
+      payload.initial_balance = data.currentBalance
+    }
+    return api.post<Account>('/api/v1/accounts/', payload).then(data => toCamelCase<Account>(data))
+  },
+  update: (id: string, data: Partial<Account>) => {
+    const payload = toSnakeCase(data)
+    return api.patch<Account>(`/api/v1/accounts/${id}/`, payload).then(data => toCamelCase<Account>(data))
+  },
   updateBalance: (id: string, balance: string, asOfDate: string) =>
     api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, { balance, as_of_date: asOfDate }).then(data => toCamelCase<BalanceSnapshot>(data)),
+  getHistory: (id: string) =>
+    api.get<BalanceSnapshot[]>(`/api/v1/accounts/${id}/history/`).then(data => toCamelCase<BalanceSnapshot[]>(data)),
 }
 
 // Flow endpoints
 export const flows = {
   list: () => api.get<RecurringFlow[]>('/api/v1/flows/').then(data => toCamelCase<RecurringFlow[]>(data)),
-  create: (data: Partial<RecurringFlow>) => api.post<RecurringFlow>('/api/v1/flows/', data).then(data => toCamelCase<RecurringFlow>(data)),
-  update: (id: string, data: Partial<RecurringFlow>) =>
-    api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, data).then(data => toCamelCase<RecurringFlow>(data)),
+  create: (data: Partial<RecurringFlow>) => {
+    // Convert camelCase to snake_case for backend
+    const payload = toSnakeCase(data)
+    return api.post<RecurringFlow>('/api/v1/flows/', payload).then(data => toCamelCase<RecurringFlow>(data))
+  },
+  update: (id: string, data: Partial<RecurringFlow>) => {
+    const payload = toSnakeCase(data)
+    return api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, payload).then(data => toCamelCase<RecurringFlow>(data))
+  },
 }
 
 // Metrics endpoints
@@ -330,6 +389,63 @@ export const incomeSources = {
   get: (id: string) =>
     api.get<IncomeSourceDetail>(`/api/v1/income-sources/${id}/`)
       .then(data => toCamelCase<IncomeSourceDetail>(data)),
+  paycheck: (id: string) =>
+    api.get<Record<string, string>>(`/api/v1/income-sources/${id}/paycheck/`)
+      .then(data => toCamelCase<Record<string, string>>(data)),
+}
+
+// Pre-tax deduction endpoints
+export const pretaxDeductions = {
+  list: () =>
+    api.get<PreTaxDeduction[] | { results: PreTaxDeduction[] }>('/api/v1/pretax-deductions/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<PreTaxDeduction[]>(data)),
+  get: (id: string) =>
+    api.get<PreTaxDeduction>(`/api/v1/pretax-deductions/${id}/`)
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  create: (data: Partial<PreTaxDeduction>) =>
+    api.post<PreTaxDeduction>('/api/v1/pretax-deductions/', toSnakeCase(data))
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  update: (id: string, data: Partial<PreTaxDeduction>) =>
+    api.patch<PreTaxDeduction>(`/api/v1/pretax-deductions/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<PreTaxDeduction>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/pretax-deductions/${id}/`),
+}
+
+// Post-tax deduction endpoints
+export const posttaxDeductions = {
+  list: () =>
+    api.get<PostTaxDeduction[] | { results: PostTaxDeduction[] }>('/api/v1/posttax-deductions/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<PostTaxDeduction[]>(data)),
+  get: (id: string) =>
+    api.get<PostTaxDeduction>(`/api/v1/posttax-deductions/${id}/`)
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  create: (data: Partial<PostTaxDeduction>) =>
+    api.post<PostTaxDeduction>('/api/v1/posttax-deductions/', toSnakeCase(data))
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  update: (id: string, data: Partial<PostTaxDeduction>) =>
+    api.patch<PostTaxDeduction>(`/api/v1/posttax-deductions/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<PostTaxDeduction>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/posttax-deductions/${id}/`),
+}
+
+// Self-employment tax endpoints
+export const selfEmploymentTax = {
+  list: () =>
+    api.get<SelfEmploymentTax[] | { results: SelfEmploymentTax[] }>('/api/v1/self-employment-tax/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<SelfEmploymentTax[]>(data)),
+  get: (id: string) =>
+    api.get<SelfEmploymentTax>(`/api/v1/self-employment-tax/${id}/`)
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  create: (data: Partial<SelfEmploymentTax>) =>
+    api.post<SelfEmploymentTax>('/api/v1/self-employment-tax/', toSnakeCase(data))
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  update: (id: string, data: Partial<SelfEmploymentTax>) =>
+    api.patch<SelfEmploymentTax>(`/api/v1/self-employment-tax/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<SelfEmploymentTax>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/self-employment-tax/${id}/`),
 }
 
 // Scenario endpoints

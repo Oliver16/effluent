@@ -1,13 +1,18 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useQueries, useQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { AreaChart } from '@tremor/react';
 import { scenarios } from '@/lib/api';
-import { ScenarioProjection } from '@/lib/types';
+import { Scenario, ScenarioProjection } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+
+interface ComparisonResult {
+  scenario: Scenario;
+  projections: ScenarioProjection[];
+}
 
 export default function ScenarioComparePage() {
   const [selected, setSelected] = useState<string[]>([]);
@@ -17,21 +22,17 @@ export default function ScenarioComparePage() {
     queryFn: scenarios.list,
   });
 
-  const projectionQueries = useQueries({
-    queries: selected.map((scenarioId) => ({
-      queryKey: ['scenarios', scenarioId, 'projections'],
-      queryFn: () => scenarios.getProjections(scenarioId),
-      enabled: selected.length > 0,
-    })),
+  // Use the backend compare endpoint for efficient batch comparison
+  const { data: compareData, isLoading: isComparing } = useQuery({
+    queryKey: ['scenarios', 'compare', selected],
+    queryFn: () => scenarios.compare(selected),
+    enabled: selected.length > 0,
   });
 
   const comparisons = useMemo(() => {
-    return selected.map((scenarioId, index) => {
-      const scenario = scenarioList.find((item) => item.id === scenarioId);
-      const projections = (projectionQueries[index]?.data || []) as ScenarioProjection[];
-      return { scenario, projections };
-    });
-  }, [selected, projectionQueries, scenarioList]);
+    if (!compareData?.results) return [];
+    return compareData.results as ComparisonResult[];
+  }, [compareData]);
 
   const chartData = useMemo(() => {
     const maxLength = Math.max(0, ...comparisons.map((item) => item.projections.length));
@@ -92,6 +93,10 @@ export default function ScenarioComparePage() {
       {selected.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           Select at least one scenario to compare.
+        </div>
+      ) : isComparing ? (
+        <div className="text-center py-12 text-muted-foreground">
+          Loading comparison data...
         </div>
       ) : (
         <div className="space-y-6">

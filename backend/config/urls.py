@@ -15,7 +15,10 @@ from apps.core.views import (
 )
 from apps.accounts.views import AccountViewSet, AssetGroupViewSet
 from apps.flows.views import RecurringFlowViewSet
-from apps.taxes.views import IncomeSourceViewSet
+from apps.taxes.views import (
+    IncomeSourceViewSet, PreTaxDeductionViewSet,
+    PostTaxDeductionViewSet, SelfEmploymentTaxViewSet
+)
 from apps.metrics.views import (
     MetricSnapshotViewSet, CurrentMetricsView, MetricsHistoryView,
     InsightViewSet, MetricThresholdViewSet
@@ -30,6 +33,9 @@ router.register('accounts', AccountViewSet, basename='account')
 router.register('asset-groups', AssetGroupViewSet, basename='asset-group')
 router.register('flows', RecurringFlowViewSet, basename='flow')
 router.register('income-sources', IncomeSourceViewSet, basename='income-source')
+router.register('pretax-deductions', PreTaxDeductionViewSet, basename='pretax-deduction')
+router.register('posttax-deductions', PostTaxDeductionViewSet, basename='posttax-deduction')
+router.register('self-employment-tax', SelfEmploymentTaxViewSet, basename='self-employment-tax')
 router.register('metric-snapshots', MetricSnapshotViewSet, basename='metric-snapshot')
 router.register('insights', InsightViewSet, basename='insight')
 router.register('thresholds', MetricThresholdViewSet, basename='threshold')

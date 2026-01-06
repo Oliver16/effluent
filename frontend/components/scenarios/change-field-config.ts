@@ -5,9 +5,10 @@
 export interface FieldConfig {
   label: string;
   placeholder?: string;
-  type: 'text' | 'number' | 'select';
+  type: 'text' | 'number' | 'select' | 'account_select' | 'flow_select';
   options?: Array<{ value: string; label: string }>;
   isPercentage?: boolean;
+  flowType?: 'income' | 'expense'; // For flow_select, filter by type
 }
 
 export const FIELD_CONFIGS: Record<string, FieldConfig> = {
@@ -19,8 +20,10 @@ export const FIELD_CONFIGS: Record<string, FieldConfig> = {
   rate: { label: 'Interest Rate (%)', placeholder: '6.5', type: 'number', isPercentage: true },
   closing_costs: { label: 'Closing Costs ($)', placeholder: '4000', type: 'number' },
   percentage: { label: 'Contribution (%)', placeholder: '5', type: 'number', isPercentage: true },
-  source_account_id: { label: 'Source Account ID', placeholder: 'Account UUID', type: 'text' },
-  source_flow_id: { label: 'Source Flow ID', placeholder: 'Flow UUID', type: 'text' },
+  source_account_id: { label: 'Account', type: 'account_select' },
+  source_flow_id: { label: 'Flow', type: 'flow_select' },
+  source_income_flow_id: { label: 'Income Source', type: 'flow_select', flowType: 'income' },
+  source_expense_flow_id: { label: 'Expense Source', type: 'flow_select', flowType: 'expense' },
   category: { label: 'Category', placeholder: 'e.g., salary, rent', type: 'text' },
   frequency: {
     label: 'Frequency',
@@ -38,11 +41,11 @@ export const FIELD_CONFIGS: Record<string, FieldConfig> = {
 
 export const CHANGE_TYPES = [
   { value: 'add_income', label: 'Add Income', fields: ['amount', 'frequency', 'category'] },
-  { value: 'modify_income', label: 'Modify Income', fields: ['source_flow_id', 'amount', 'frequency', 'category'] },
-  { value: 'remove_income', label: 'Remove Income', fields: ['source_flow_id'] },
+  { value: 'modify_income', label: 'Modify Income', fields: ['source_income_flow_id', 'amount', 'frequency', 'category'] },
+  { value: 'remove_income', label: 'Remove Income', fields: ['source_income_flow_id'] },
   { value: 'add_expense', label: 'Add Expense', fields: ['amount', 'frequency', 'category'] },
-  { value: 'modify_expense', label: 'Modify Expense', fields: ['source_flow_id', 'amount', 'frequency', 'category'] },
-  { value: 'remove_expense', label: 'Remove Expense', fields: ['source_flow_id'] },
+  { value: 'modify_expense', label: 'Modify Expense', fields: ['source_expense_flow_id', 'amount', 'frequency', 'category'] },
+  { value: 'remove_expense', label: 'Remove Expense', fields: ['source_expense_flow_id'] },
   { value: 'add_debt', label: 'Add Debt', fields: ['principal', 'rate', 'term_months', 'payment'] },
   { value: 'modify_debt', label: 'Modify Debt', fields: ['source_account_id', 'principal', 'rate', 'term_months', 'payment'] },
   { value: 'payoff_debt', label: 'Accelerate Payoff', fields: ['source_account_id', 'extra_monthly'] },
