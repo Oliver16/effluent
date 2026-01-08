@@ -192,7 +192,8 @@ export default function AccountsPage() {
   const liabilities = accounts.filter(a => LIABILITY_TYPES.has(a.accountType))
 
   const totalAssets = assets.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0)
-  const totalLiabilities = liabilities.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0)
+  // Use Math.abs() since liabilities may be stored as negative values
+  const totalLiabilities = liabilities.reduce((sum, a) => sum + Math.abs(parseFloat(a.currentBalance || '0')), 0)
   const netWorth = totalAssets - totalLiabilities
 
   const openUpdateModal = (account: Account) => {
@@ -256,7 +257,7 @@ export default function AccountsPage() {
             <CardTitle className="text-sm font-medium text-muted-foreground">Total Liabilities</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalLiabilities)}</p>
+            <p className="text-2xl font-bold text-red-600">-{formatCurrency(totalLiabilities)}</p>
           </CardContent>
         </Card>
         <Card>
