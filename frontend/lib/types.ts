@@ -203,17 +203,17 @@ export interface Scenario {
   id: string
   name: string
   description?: string
-  is_baseline?: boolean
-  parent_scenario?: string | null
-  projection_months?: number
-  start_date?: string
-  inflation_rate?: string
-  investment_return_rate?: string
-  salary_growth_rate?: string
-  is_active?: boolean
-  is_archived?: boolean
-  created_at?: string
-  updated_at?: string
+  isBaseline?: boolean
+  parentScenario?: string | null
+  projectionMonths?: number
+  startDate?: string
+  inflationRate?: string
+  investmentReturnRate?: string
+  salaryGrowthRate?: string
+  isActive?: boolean
+  isArchived?: boolean
+  createdAt?: string
+  updatedAt?: string
   changes?: ScenarioChange[]
   projections?: ScenarioProjection[]
 }
@@ -221,38 +221,38 @@ export interface Scenario {
 export interface ScenarioChange {
   id: string
   scenario?: string
-  change_type: string
+  changeType: string
   name: string
   description?: string
-  effective_date: string
-  end_date?: string | null
-  source_account_id?: string | null
-  source_flow_id?: string | null
+  effectiveDate: string
+  endDate?: string | null
+  sourceAccountId?: string | null
+  sourceFlowId?: string | null
   parameters: Record<string, unknown>
-  display_order?: number
-  is_enabled: boolean
+  displayOrder?: number
+  isEnabled: boolean
 }
 
 export interface ScenarioProjection {
   id: string
-  projection_date: string
-  month_number: number
-  total_assets: string
-  total_liabilities: string
-  net_worth: string
-  liquid_assets: string
-  retirement_assets: string
-  total_income: string
-  total_expenses: string
-  net_cash_flow: string
+  projectionDate: string
+  monthNumber: number
+  totalAssets: string
+  totalLiabilities: string
+  netWorth: string
+  liquidAssets: string
+  retirementAssets: string
+  totalIncome: string
+  totalExpenses: string
+  netCashFlow: string
   dscr: string
-  savings_rate: string
-  liquidity_months: string
-  income_breakdown: Record<string, string>
-  expense_breakdown: Record<string, string>
-  asset_breakdown: Record<string, string>
-  liability_breakdown: Record<string, string>
-  computed_at?: string
+  savingsRate: string
+  liquidityMonths: string
+  incomeBreakdown: Record<string, string>
+  expenseBreakdown: Record<string, string>
+  assetBreakdown: Record<string, string>
+  liabilityBreakdown: Record<string, string>
+  computedAt?: string
 }
 
 export interface W2Withholding {

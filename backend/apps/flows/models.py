@@ -334,11 +334,38 @@ class RecurringFlow(HouseholdOwnedModel):
     def __str__(self):
         return f"{self.household.name} - {self.name}"
 
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        errors = {}
+
+        # Validate category is set for the correct flow type
+        if self.flow_type == FlowType.INCOME:
+            if not self.income_category:
+                errors['income_category'] = 'Income category is required for income flows.'
+            if self.expense_category:
+                errors['expense_category'] = 'Expense category should not be set for income flows.'
+        elif self.flow_type == FlowType.EXPENSE:
+            if not self.expense_category:
+                errors['expense_category'] = 'Expense category is required for expense flows.'
+            if self.income_category:
+                errors['income_category'] = 'Income category should not be set for expense flows.'
+        elif self.flow_type == FlowType.TRANSFER:
+            if self.income_category or self.expense_category:
+                errors['income_category'] = 'Categories should not be set for transfer flows.'
+            if not self.from_account and not self.to_account:
+                errors['from_account'] = 'Transfer flows require at least one account.'
+
+        if errors:
+            raise ValidationError(errors)
+
     @property
     def category(self) -> str:
         if self.flow_type == FlowType.INCOME:
             return self.income_category
-        return self.expense_category
+        elif self.flow_type == FlowType.EXPENSE:
+            return self.expense_category
+        # TRANSFER type has no category
+        return ''
 
     @property
     def monthly_amount(self) -> Decimal:

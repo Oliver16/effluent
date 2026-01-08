@@ -10,7 +10,8 @@ import { formatDate } from '@/lib/utils';
 import { Scenario } from '@/lib/types';
 
 function isBaseline(scenario: Scenario) {
-  return scenario.is_baseline === true || (scenario as Scenario & { isBaseline?: boolean }).isBaseline === true;
+  // Handle both camelCase (from type) and snake_case (from API before conversion)
+  return scenario.isBaseline === true;
 }
 
 function todayString() {
@@ -34,9 +35,9 @@ export default function ScenariosPage() {
     createMutation.mutate({
       name: 'Current Trajectory',
       description: 'Baseline projection from current state',
-      is_baseline: true,
-      projection_months: 60,
-      start_date: todayString(),
+      isBaseline: true,
+      projectionMonths: 60,
+      startDate: todayString(),
     });
   };
 
@@ -90,15 +91,15 @@ export default function ScenariosPage() {
             <div className="mt-4 grid gap-4 sm:grid-cols-3">
               <div>
                 <span className="text-muted-foreground">Projection:</span>
-                <span className="ml-2 font-medium">{baseline.projection_months || 60} months</span>
+                <span className="ml-2 font-medium">{baseline.projectionMonths || 60} months</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Start Date:</span>
-                <span className="ml-2 font-medium">{formatDate(baseline.start_date)}</span>
+                <span className="ml-2 font-medium">{formatDate(baseline.startDate)}</span>
               </div>
               <div>
                 <span className="text-muted-foreground">Created:</span>
-                <span className="ml-2 font-medium">{formatDate(baseline.created_at)}</span>
+                <span className="ml-2 font-medium">{formatDate(baseline.createdAt)}</span>
               </div>
             </div>
           </CardContent>
@@ -126,11 +127,11 @@ function ScenarioCard({ scenario }: { scenario: Scenario }) {
         </p>
         <div>
           <span className="text-muted-foreground">Projection:</span>
-          <span className="ml-2 font-medium">{scenario.projection_months || 60} months</span>
+          <span className="ml-2 font-medium">{scenario.projectionMonths || 60} months</span>
         </div>
         <div>
           <span className="text-muted-foreground">Start Date:</span>
-          <span className="ml-2 font-medium">{formatDate(scenario.start_date)}</span>
+          <span className="ml-2 font-medium">{formatDate(scenario.startDate)}</span>
         </div>
         <div className="flex justify-end">
           <Button size="sm" asChild>

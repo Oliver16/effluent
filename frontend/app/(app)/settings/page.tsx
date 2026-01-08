@@ -114,6 +114,9 @@ export default function SettingsPage() {
       setIsSaved(true)
       setTimeout(() => setIsSaved(false), 3000)
     },
+    onError: (error) => {
+      console.error('Failed to update household:', error)
+    },
   })
 
   const handleSave = () => {
@@ -126,6 +129,9 @@ export default function SettingsPage() {
       setNotificationSettings(data)
       queryClient.invalidateQueries({ queryKey: ['notification-settings'] })
     },
+    onError: (error) => {
+      console.error('Failed to update notifications:', error)
+    },
   })
 
   const changePasswordMutation = useMutation({
@@ -134,6 +140,9 @@ export default function SettingsPage() {
       setPasswordForm({ current: '', next: '' })
       setIsPasswordUpdated(true)
       setTimeout(() => setIsPasswordUpdated(false), 3000)
+    },
+    onError: (error) => {
+      console.error('Failed to change password:', error)
     },
   })
 
@@ -147,12 +156,18 @@ export default function SettingsPage() {
       setIsProfileSaved(true)
       setTimeout(() => setIsProfileSaved(false), 3000)
     },
+    onError: (error) => {
+      console.error('Failed to update profile:', error)
+    },
   })
 
   const twoFactorMutation = useMutation({
     mutationFn: (enabled: boolean) => settingsApi.updateTwoFactor(enabled),
     onSuccess: (data) => {
       setNotificationSettings(data)
+    },
+    onError: (error) => {
+      console.error('Failed to update two-factor settings:', error)
     },
   })
 
@@ -165,6 +180,9 @@ export default function SettingsPage() {
         localStorage.removeItem('householdId')
         window.location.href = '/'
       }
+    },
+    onError: (error) => {
+      console.error('Failed to delete account:', error)
     },
   })
 

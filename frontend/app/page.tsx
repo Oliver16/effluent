@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { LoginForm } from '@/components/auth/login-form'
 import { households, ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { isOnboardingComplete } from '@/lib/utils'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated' | 'network_error'
 
@@ -38,11 +39,7 @@ export default function Home() {
       const household = householdList[0]
       localStorage.setItem('householdId', household.id)
 
-      // Check if onboarding is complete (handle both camelCase and snake_case from API)
-      const onboardingComplete = household.onboardingCompleted ??
-        (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
-
-      if (onboardingComplete) {
+      if (isOnboardingComplete(household)) {
         router.push('/dashboard')
       } else {
         router.push('/onboarding')

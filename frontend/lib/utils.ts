@@ -94,3 +94,12 @@ export const metricStatusColors = {
   warning: 'text-amber-600 bg-amber-50',
   critical: 'text-red-600 bg-red-50',
 }
+
+/**
+ * Helper to check if onboarding is completed, handling both camelCase and snake_case
+ * from API responses that may not have been fully converted.
+ */
+export function isOnboardingComplete(household: { onboardingCompleted?: boolean; onboarding_completed?: boolean } | null | undefined): boolean {
+  if (!household) return false
+  return household.onboardingCompleted === true || (household as { onboarding_completed?: boolean }).onboarding_completed === true
+}

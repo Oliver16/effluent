@@ -12,9 +12,15 @@ import { formatCurrency } from '@/lib/utils';
 import { RefreshCw } from 'lucide-react';
 import { Account } from '@/lib/types';
 
+// Complete list of liability types - must match backend LIABILITY_TYPES
 const LIABILITY_TYPES = new Set([
-  'credit_card', 'heloc', 'primary_mortgage', 'auto_loan',
-  'student_loan_federal', 'student_loan_private', 'personal_loan'
+  // Revolving debt
+  'credit_card', 'store_card', 'heloc', 'personal_loc', 'business_loc',
+  // Mortgages
+  'primary_mortgage', 'rental_mortgage', 'second_mortgage',
+  // Installment loans
+  'auto_loan', 'personal_loan', 'student_loan_federal', 'student_loan_private',
+  'boat_loan', 'medical_debt', 'tax_debt', 'family_loan', 'other_liability'
 ]);
 
 interface AccountsListProps {
@@ -34,6 +40,9 @@ export function AccountsList({ accounts }: AccountsListProps) {
       qc.invalidateQueries({ queryKey: ['accounts'] });
       qc.invalidateQueries({ queryKey: ['metrics'] });
       setOpen(false);
+    },
+    onError: (error) => {
+      console.error('Failed to update balance:', error);
     },
   });
 

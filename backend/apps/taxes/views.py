@@ -56,6 +56,19 @@ class PreTaxDeductionViewSet(viewsets.ModelViewSet):
             income_source__household=self.request.household
         )
 
+    def perform_create(self, serializer):
+        # Validate that income_source belongs to the user's household
+        income_source_id = self.request.data.get('income_source')
+        if income_source_id:
+            income_source = IncomeSource.objects.filter(
+                id=income_source_id,
+                household=self.request.household
+            ).first()
+            if not income_source:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'income_source': 'Invalid income source for this household.'})
+        serializer.save()
+
 
 class PostTaxDeductionViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -66,6 +79,19 @@ class PostTaxDeductionViewSet(viewsets.ModelViewSet):
             income_source__household=self.request.household
         )
 
+    def perform_create(self, serializer):
+        # Validate that income_source belongs to the user's household
+        income_source_id = self.request.data.get('income_source')
+        if income_source_id:
+            income_source = IncomeSource.objects.filter(
+                id=income_source_id,
+                household=self.request.household
+            ).first()
+            if not income_source:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'income_source': 'Invalid income source for this household.'})
+        serializer.save()
+
 
 class SelfEmploymentTaxViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
@@ -73,5 +99,18 @@ class SelfEmploymentTaxViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return SelfEmploymentTax.objects.filter(
-            household=self.request.household
+            income_source__household=self.request.household
         )
+
+    def perform_create(self, serializer):
+        # Validate that income_source belongs to the user's household
+        income_source_id = self.request.data.get('income_source')
+        if income_source_id:
+            income_source = IncomeSource.objects.filter(
+                id=income_source_id,
+                household=self.request.household
+            ).first()
+            if not income_source:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'income_source': 'Invalid income source for this household.'})
+        serializer.save()

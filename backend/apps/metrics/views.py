@@ -47,7 +47,12 @@ class MetricsHistoryView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
-        days = int(request.query_params.get('days', 90))
+        try:
+            days = int(request.query_params.get('days', 90))
+            # Validate range: 1-3650 days (up to 10 years)
+            days = max(1, min(days, 3650))
+        except (ValueError, TypeError):
+            days = 90
         since = date.today() - timedelta(days=days)
         snapshots = MetricSnapshot.objects.filter(
             household=request.household,
