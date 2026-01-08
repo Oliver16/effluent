@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 from datetime import date
 from decimal import Decimal
 
@@ -29,6 +30,7 @@ class AccountViewSet(viewsets.ModelViewSet):
             return AccountDetailSerializer
         return AccountSerializer
 
+    @transaction.atomic
     def perform_create(self, serializer):
         account = serializer.save(household=self.request.household)
         # Create initial balance snapshot if provided

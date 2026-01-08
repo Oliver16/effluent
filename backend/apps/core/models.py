@@ -25,18 +25,17 @@ class User(AbstractUser):
         return membership.household if membership else None
 
     def get_settings(self):
+        from django.db import DatabaseError, IntegrityError
         try:
             settings, _ = UserSettings.objects.get_or_create(user=self)
             return settings
-        except Exception:
-            # If get_or_create fails (e.g., due to database issues),
-            # try to get existing settings or return a default object
-            try:
-                return UserSettings.objects.get(user=self)
-            except Exception:
-                # Return a new unsaved UserSettings with defaults
-                # This handles both DoesNotExist and database errors (e.g., missing table)
-                return UserSettings(user=self)
+        except IntegrityError:
+            # Race condition - another request created the settings, fetch it
+            return UserSettings.objects.get(user=self)
+        except (DatabaseError, UserSettings.DoesNotExist):
+            # Database issues (missing table during migrations) or settings don't exist
+            # Return a new unsaved UserSettings with defaults
+            return UserSettings(user=self)
 
 
 class TimestampedModel(models.Model):

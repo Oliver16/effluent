@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppShell } from '@/components/layout/app-shell'
 import { households } from '@/lib/api'
+import { isOnboardingComplete } from '@/lib/utils'
 
 export default function AppLayout({
   children,
@@ -38,11 +39,7 @@ export default function AppLayout({
       const household = householdList[0]
       localStorage.setItem('householdId', household.id)
 
-      // Check if onboarding is complete
-      const onboardingComplete = household.onboardingCompleted ??
-        (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
-
-      if (!onboardingComplete) {
+      if (!isOnboardingComplete(household)) {
         router.push('/onboarding')
         return
       }

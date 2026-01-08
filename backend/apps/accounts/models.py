@@ -285,8 +285,8 @@ class LiabilityDetails(models.Model):
 
     interest_rate = models.DecimalField(
         max_digits=7, decimal_places=5,
-        validators=[MinValueValidator(Decimal('0'))],
-        help_text="As decimal: 0.065 = 6.5%"
+        validators=[MinValueValidator(Decimal('0')), MaxValueValidator(Decimal('1.0'))],
+        help_text="As decimal: 0.065 = 6.5%. Maximum 100% (1.0)"
     )
     rate_type = models.CharField(max_length=20, choices=[('fixed', 'Fixed'), ('variable', 'Variable')], default='fixed')
 

@@ -18,7 +18,9 @@ def get_current_step(request):
 def save_draft(request):
     service = OnboardingService(request.household)
     result = service.save_draft(request.data)
-    return Response(result)
+    if result.get('success', True):
+        return Response(result)
+    return Response(result, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(['POST'])

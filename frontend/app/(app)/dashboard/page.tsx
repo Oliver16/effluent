@@ -7,33 +7,54 @@ import { NetWorthChart } from '@/components/dashboard/net-worth-chart';
 import { AccountsList } from '@/components/dashboard/accounts-list';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
 import { CashFlowSummary } from '@/components/dashboard/cash-flow-summary';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertCircle } from 'lucide-react';
 
 export default function DashboardPage() {
-  const { data: metricsData, isLoading } = useQuery({
+  const { data: metricsData, isLoading, isError: metricsError } = useQuery({
     queryKey: ['metrics', 'current'],
-    queryFn: () => metrics.current().then(r => r),
+    queryFn: () => metrics.current(),
   });
 
-  const { data: history } = useQuery({
+  const { data: history, isError: historyError } = useQuery({
     queryKey: ['metrics', 'history'],
-    queryFn: () => metrics.history(90).then(r => r),
+    queryFn: () => metrics.history(90),
   });
 
-  const { data: accountsData } = useQuery({
+  const { data: accountsData, isError: accountsError } = useQuery({
     queryKey: ['accounts'],
-    queryFn: () => accounts.list().then(r => r),
+    queryFn: () => accounts.list(),
   });
 
-  const { data: insightsData } = useQuery({
+  const { data: insightsData, isError: insightsError } = useQuery({
     queryKey: ['insights'],
-    queryFn: () => insightsApi.insights().then(r => r),
+    queryFn: () => insightsApi.insights(),
   });
 
-  if (isLoading) return <div>Loading...</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-muted-foreground">Loading dashboard...</div>
+      </div>
+    );
+  }
+
+  const hasError = metricsError || historyError || accountsError || insightsError;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
+
+      {hasError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Error loading data</AlertTitle>
+          <AlertDescription>
+            Some dashboard data failed to load. Please try refreshing the page.
+          </AlertDescription>
+        </Alert>
+      )}
+
       <MetricCards metrics={metricsData} />
       <InsightsPanel insights={insightsData?.results || []} />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

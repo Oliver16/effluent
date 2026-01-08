@@ -90,9 +90,11 @@ class OnboardingProgress(models.Model):
 
     @property
     def progress_percentage(self) -> int:
+        # Total steps excluding COMPLETE (which is the final destination, not a step to complete)
         total = len(ONBOARDING_FLOW) - 1
         done = len(self.completed_steps)
-        return int((done / total) * 100) if total > 0 else 0
+        # Cap at 100% to prevent exceeding 100
+        return min(int((done / total) * 100), 100) if total > 0 else 0
 
     def get_next_step(self):
         try:
