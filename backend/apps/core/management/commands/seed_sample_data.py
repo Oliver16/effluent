@@ -16,7 +16,8 @@ Creates:
 from decimal import Decimal
 from datetime import date, timedelta
 from django.core.management.base import BaseCommand
-from django.db import transaction
+from django.db import connection, transaction
+from django.db.utils import ProgrammingError, OperationalError
 from django.utils import timezone
 
 from apps.core.models import User, Household, HouseholdMember, HouseholdMembership, UserSettings
@@ -36,9 +37,39 @@ class Command(BaseCommand):
             help='Delete existing sample data and recreate',
         )
 
+    def _tables_exist(self):
+        """Check if required tables exist."""
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'users')"
+                )
+                return cursor.fetchone()[0]
+        except (ProgrammingError, OperationalError):
+            return False
+
     def handle(self, *args, **options):
+        # Check if migrations have been run
+        if not self._tables_exist():
+            self.stdout.write(
+                self.style.ERROR(
+                    'Database tables do not exist. Please run migrations first:\n'
+                    '  python manage.py makemigrations\n'
+                    '  python manage.py migrate'
+                )
+            )
+            return
+
         # Check if sample user already exists
-        if User.objects.filter(email='test@example.com').exists():
+        try:
+            user_exists = User.objects.filter(email='test@example.com').exists()
+        except (ProgrammingError, OperationalError) as e:
+            self.stdout.write(
+                self.style.ERROR(f'Database error: {e}\nPlease run migrations first.')
+            )
+            return
+
+        if user_exists:
             if options['force']:
                 self.stdout.write('Removing existing sample data...')
                 self.remove_sample_data()
