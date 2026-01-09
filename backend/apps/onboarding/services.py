@@ -477,12 +477,18 @@ class OnboardingService:
                         household=self.household, id=ded['income_source_id']
                     ).first()
                     if income_source:
+                        amount_type = ded.get('amount_type', 'fixed')
+                        amount_val = Decimal(str(ded['amount']))
+                        # Convert percentage from user input (6 for 6%) to decimal (0.06)
+                        # to match calculate_per_period which does: gross * amount
+                        if amount_type == 'percentage':
+                            amount_val = amount_val / 100
                         PreTaxDeduction.objects.create(
                             income_source=income_source,
                             deduction_type=ded['type'],
                             name=ded.get('name', ''),
-                            amount_type=ded.get('amount_type', 'fixed'),
-                            amount=Decimal(str(ded['amount'])),
+                            amount_type=amount_type,
+                            amount=amount_val,
                             employer_match_percentage=Decimal(str(ded.get('employer_match', 0))) / 100,
                         )
 
