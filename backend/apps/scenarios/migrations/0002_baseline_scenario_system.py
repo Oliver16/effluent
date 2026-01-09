@@ -10,7 +10,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('scenarios', '0001_initial'),
-        ('households', '0001_initial'),
+        ('core', '0001_initial'),
         ('metrics', '0001_initial'),
     ]
 
@@ -40,7 +40,7 @@ class Migration(migrations.Migration):
                 ('salary_growth_rate', models.DecimalField(decimal_places=4, default=Decimal('0.03'), max_digits=5)),
                 ('is_active', models.BooleanField(default=True)),
                 ('is_archived', models.BooleanField(default=False)),
-                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='households.household')),
+                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='core.household')),
                 ('parent_scenario', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='children', to='scenarios.scenario')),
                 ('baseline_metric_snapshot', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='baseline_scenarios', to='metrics.metricsnapshot')),
             ],
@@ -147,7 +147,7 @@ class Migration(migrations.Migration):
                 ('updated_at', models.DateTimeField(auto_now=True)),
                 ('id', models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
                 ('name', models.CharField(max_length=200)),
-                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='households.household')),
+                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='core.household')),
                 ('scenarios', models.ManyToManyField(related_name='comparisons', to='scenarios.scenario')),
             ],
             options={
@@ -183,7 +183,7 @@ class Migration(migrations.Migration):
                     max_length=20
                 )),
                 ('error', models.TextField(blank=True)),
-                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='households.household')),
+                ('household', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, related_name='%(class)ss', to='core.household')),
             ],
             options={
                 'db_table': 'reality_change_events',
