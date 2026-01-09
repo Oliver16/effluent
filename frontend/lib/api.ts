@@ -331,6 +331,16 @@ export const members = {
     api.get<HouseholdMember[] | { results: HouseholdMember[] }>('/api/v1/members/')
       .then(normalizeListResponse)
       .then(data => toCamelCase<HouseholdMember[]>(data)),
+  get: (id: string) =>
+    api.get<HouseholdMember>(`/api/v1/members/${id}/`)
+      .then(data => toCamelCase<HouseholdMember>(data)),
+  create: (data: Partial<HouseholdMember>) =>
+    api.post<HouseholdMember>('/api/v1/members/', toSnakeCase(data))
+      .then(data => toCamelCase<HouseholdMember>(data)),
+  update: (id: string, data: Partial<HouseholdMember>) =>
+    api.patch<HouseholdMember>(`/api/v1/members/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<HouseholdMember>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/members/${id}/`),
 }
 
 // Account endpoints
@@ -359,6 +369,7 @@ export const accounts = {
     const payload = toSnakeCase(data)
     return api.patch<Account>(`/api/v1/accounts/${id}/`, payload).then(data => toCamelCase<Account>(data))
   },
+  delete: (id: string) => api.delete<void>(`/api/v1/accounts/${id}/`),
   updateBalance: (id: string, balance: string, asOfDate: string) =>
     api.post<BalanceSnapshot>(`/api/v1/accounts/${id}/balance/`, { balance, as_of_date: asOfDate }).then(data => toCamelCase<BalanceSnapshot>(data)),
   getHistory: (id: string) =>
@@ -381,6 +392,7 @@ export const flows = {
     const payload = toSnakeCase(data)
     return api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, payload).then(data => toCamelCase<RecurringFlow>(data))
   },
+  delete: (id: string) => api.delete<void>(`/api/v1/flows/${id}/`),
   regenerateSystemFlows: () =>
     api.post<{ status: string; message: string }>('/api/v1/flows/regenerate_system_flows/'),
 }
