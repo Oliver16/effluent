@@ -46,10 +46,10 @@ export function ScenarioChanges({ scenarioId, initialChanges }: ScenarioChangesP
   return (
     <div className="space-y-4">
       {changes.map((change) => (
-        <Card key={change.id}>
+        <Card key={change.id} className={!change.isEnabled ? 'opacity-60' : ''}>
           <CardHeader className="flex flex-row items-start justify-between gap-4">
             <div>
-              <CardTitle className="text-base">{change.name}</CardTitle>
+              <CardTitle className={`text-base ${!change.isEnabled ? 'line-through text-muted-foreground' : ''}`}>{change.name}</CardTitle>
               <p className="text-sm text-muted-foreground">
                 {change.changeType.replace(/_/g, ' ')} • Effective {formatDate(change.effectiveDate)}
               </p>
@@ -64,18 +64,22 @@ export function ScenarioChanges({ scenarioId, initialChanges }: ScenarioChangesP
                     data: { isEnabled: !change.isEnabled },
                   })
                 }
+                disabled={updateMutation.isPending}
+                className={change.isEnabled ? 'text-emerald-600 hover:text-emerald-700' : 'text-muted-foreground hover:text-foreground'}
                 aria-label={change.isEnabled ? 'Disable change' : 'Enable change'}
               >
                 {change.isEnabled ? (
-                  <ToggleRight className="h-4 w-4" />
+                  <ToggleRight className="h-5 w-5" />
                 ) : (
-                  <ToggleLeft className="h-4 w-4" />
+                  <ToggleLeft className="h-5 w-5" />
                 )}
               </Button>
               <Button
                 size="icon"
                 variant="ghost"
                 onClick={() => deleteMutation.mutate(change.id)}
+                disabled={deleteMutation.isPending}
+                className="text-muted-foreground hover:text-destructive"
                 aria-label="Delete change"
               >
                 <Trash2 className="h-4 w-4" />
