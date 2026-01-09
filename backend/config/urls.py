@@ -24,7 +24,7 @@ from apps.metrics.views import (
     InsightViewSet, MetricThresholdViewSet
 )
 from apps.onboarding import views as onboarding_views
-from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet
+from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet
 
 router = DefaultRouter()
 router.register('households', HouseholdViewSet, basename='household')
@@ -42,6 +42,7 @@ router.register('thresholds', MetricThresholdViewSet, basename='threshold')
 router.register('scenarios', ScenarioViewSet, basename='scenario')
 router.register('scenario-changes', ScenarioChangeViewSet, basename='scenario-change')
 router.register('scenario-comparisons', ScenarioComparisonViewSet, basename='scenario-comparison')
+router.register('life-event-templates', LifeEventTemplateViewSet, basename='life-event-template')
 
 urlpatterns = [
     path('admin/', admin.site.urls),

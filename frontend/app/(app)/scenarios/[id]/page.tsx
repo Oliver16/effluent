@@ -6,12 +6,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { scenarios } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { Play, Plus } from 'lucide-react';
+import { Play, Plus, Sparkles } from 'lucide-react';
 import { ScenarioChanges } from '@/components/scenarios/scenario-changes';
 import { ProjectionChart } from '@/components/scenarios/projection-chart';
 import { ProjectionTable } from '@/components/scenarios/projection-table';
 import { AddChangeDialog } from '@/components/scenarios/add-change-dialog';
 import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
+import { MilestoneComparison } from '@/components/scenarios/milestone-comparison';
+import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
 import { Scenario, ScenarioProjection } from '@/lib/types';
 
 function isBaseline(scenario: Scenario) {
@@ -22,6 +24,7 @@ export default function ScenarioDetailPage() {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [showAddChange, setShowAddChange] = useState(false);
+  const [showLifeEvents, setShowLifeEvents] = useState(false);
 
   const scenarioId = id as string;
 
@@ -72,6 +75,10 @@ export default function ScenarioDetailPage() {
           <p className="text-muted-foreground">{scenario.description}</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button onClick={() => setShowLifeEvents(true)} variant="outline">
+            <Sparkles className="h-4 w-4 mr-2" />
+            Life Event
+          </Button>
           <Button onClick={() => setShowAddChange(true)} variant="outline">
             <Plus className="h-4 w-4 mr-2" />
             Add Change
@@ -86,6 +93,7 @@ export default function ScenarioDetailPage() {
       <Tabs defaultValue="projection">
         <TabsList>
           <TabsTrigger value="projection">Projection</TabsTrigger>
+          <TabsTrigger value="compare">Compare</TabsTrigger>
           <TabsTrigger value="changes">Changes ({scenario.changes?.length || 0})</TabsTrigger>
           <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
         </TabsList>
@@ -97,12 +105,34 @@ export default function ScenarioDetailPage() {
                 projections={projections}
                 compareProjections={baselineProjections as ScenarioProjection[]}
                 compareLabel={baselineScenario?.name || 'Baseline'}
+                scenarioLabel={scenario.name}
               />
               <ProjectionTable projections={projections} />
             </>
           ) : (
             <div className="text-center py-12 text-muted-foreground">
               No projections yet. Add changes and click "Run Projection" to compute.
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="compare" className="space-y-6">
+          {hasProjections && baselineProjections && baselineProjections.length > 0 ? (
+            <MilestoneComparison
+              scenarioProjections={projections}
+              baselineProjections={baselineProjections as ScenarioProjection[]}
+              scenarioName={scenario.name}
+              baselineName={baselineScenario?.name || 'Baseline'}
+            />
+          ) : (
+            <div className="text-center py-12 text-muted-foreground">
+              {!hasProjections ? (
+                <>Run projections for this scenario to see milestone comparisons.</>
+              ) : !baselineProjections || baselineProjections.length === 0 ? (
+                <>Run projections for both this scenario and your baseline scenario to see comparisons.</>
+              ) : (
+                <>No baseline scenario to compare against.</>
+              )}
             </div>
           )}
         </TabsContent>
@@ -119,6 +149,12 @@ export default function ScenarioDetailPage() {
       <AddChangeDialog
         open={showAddChange}
         onOpenChange={setShowAddChange}
+        scenarioId={scenarioId}
+      />
+
+      <LifeEventTemplatesDialog
+        open={showLifeEvents}
+        onOpenChange={setShowLifeEvents}
         scenarioId={scenarioId}
       />
     </div>

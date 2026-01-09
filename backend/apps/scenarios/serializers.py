@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison
+from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory
 
 
 class ScenarioChangeSerializer(serializers.ModelSerializer):
@@ -56,3 +56,14 @@ class ScenarioComparisonSerializer(serializers.ModelSerializer):
     class Meta:
         model = ScenarioComparison
         fields = ['id', 'name', 'scenarios', 'created_at']
+
+
+class LifeEventTemplateSerializer(serializers.ModelSerializer):
+    category_display = serializers.CharField(source='get_category_display', read_only=True)
+
+    class Meta:
+        model = LifeEventTemplate
+        fields = [
+            'id', 'name', 'description', 'category', 'category_display',
+            'icon', 'suggested_changes', 'display_order', 'is_active'
+        ]

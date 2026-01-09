@@ -17,6 +17,8 @@ import type {
   PreTaxDeduction,
   PostTaxDeduction,
   SelfEmploymentTax,
+  LifeEventTemplate,
+  LifeEventCategoryGroup,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -478,4 +480,25 @@ export const scenarios = {
       '/api/v1/scenarios/compare/',
       { scenario_ids: scenarioIds }
     ),
+}
+
+// Life Event Template endpoints
+export const lifeEventTemplates = {
+  list: () =>
+    api.get<{ results: LifeEventCategoryGroup[]; count: number }>('/api/v1/life-event-templates/'),
+  get: (id: string) =>
+    api.get<LifeEventTemplate>(`/api/v1/life-event-templates/${id}/`),
+  categories: () =>
+    api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/life-event-templates/categories/'),
+  apply: (templateId: string, data: {
+    scenario_id: string;
+    effective_date: string;
+    change_values?: Record<string, Record<string, unknown>>;
+  }) =>
+    api.post<{
+      status: string;
+      template_name: string;
+      changes_created: number;
+      changes: ScenarioChange[];
+    }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
 }
