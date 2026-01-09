@@ -6,7 +6,12 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.utils import timezone
 
-from apps.core.mixins import HouseholdScopedViewMixin
+from apps.core.mixins import (
+    HouseholdScopedModelViewSet,
+    HouseholdScopedReadOnlyViewSet,
+    HouseholdScopedViewMixin
+)
+from apps.core.permissions import HouseholdRequired
 from apps.goals.models import Goal, GoalSolution
 from apps.goals.serializers import (
     GoalSerializer, GoalStatusSerializer,
@@ -15,18 +20,24 @@ from apps.goals.serializers import (
 from apps.goals.services import GoalEvaluator, GoalSeekSolver
 
 
-class GoalViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
+class GoalViewSet(HouseholdScopedModelViewSet):
     """
     ViewSet for managing household goals.
 
     Provides CRUD operations for goals and goal status evaluation.
+
+    Uses HouseholdScopedModelViewSet for automatic:
+    - Queryset filtering by household
+    - Household context requirement
+    - Household assignment on create
+    - Object-level permission checking
     """
+    queryset = Goal.objects.all()
     serializer_class = GoalSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         """Return active goals for the current household."""
-        qs = Goal.objects.filter(household=self.get_household())
+        qs = super().get_queryset()
         if self.request.query_params.get('active_only', 'true').lower() == 'true':
             qs = qs.filter(is_active=True)
         return qs.order_by('-is_primary', '-created_at')
@@ -36,8 +47,7 @@ class GoalViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
         household = self.get_household()
         # If setting as primary, unset any existing primary goal
         if serializer.validated_data.get('is_primary', False):
-            Goal.objects.filter(
-                household=household,
+            Goal.objects.for_household(household).filter(
                 is_primary=True,
                 is_active=True
             ).update(is_primary=False)
@@ -47,8 +57,7 @@ class GoalViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
     def perform_update(self, serializer):
         """Handle primary goal updates."""
         if serializer.validated_data.get('is_primary', False):
-            Goal.objects.filter(
-                household=self.get_household(),
+            Goal.objects.for_household(self.get_household()).filter(
                 is_primary=True,
                 is_active=True
             ).exclude(id=self.get_object().id).update(is_primary=False)
@@ -163,7 +172,7 @@ class GoalStatusView(HouseholdScopedViewMixin, APIView):
 
     Returns current status of all active goals with recommendations.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HouseholdRequired]
 
     def get(self, request):
         """Get goal status for all active goals."""
@@ -199,14 +208,23 @@ class GoalStatusView(HouseholdScopedViewMixin, APIView):
         return Response({'results': results, 'count': len(results)})
 
 
-class GoalSolutionViewSet(HouseholdScopedViewMixin, viewsets.ReadOnlyModelViewSet):
+class GoalSolutionViewSet(HouseholdScopedReadOnlyViewSet):
     """
     ViewSet for viewing goal solutions.
+
+    Uses HouseholdScopedReadOnlyViewSet for automatic:
+    - Queryset filtering by household (via goal relationship)
+    - Household context requirement
+    - Object-level permission checking
     """
+    queryset = GoalSolution.objects.all()
     serializer_class = GoalSolutionSerializer
-    permission_classes = [IsAuthenticated]
+
+    # Disable automatic household filtering since we filter via goal__household
+    auto_filter_by_household = False
 
     def get_queryset(self):
+        """Filter solutions by household via goal relationship."""
         goal_id = self.request.query_params.get('goal')
         qs = GoalSolution.objects.filter(goal__household=self.get_household())
         if goal_id:

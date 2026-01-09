@@ -2,6 +2,8 @@ import uuid
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 
+from apps.core.managers import HouseholdScopedManager
+
 
 class User(AbstractUser):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -143,11 +145,36 @@ class HouseholdMembership(TimestampedModel):
 
 
 class HouseholdOwnedModel(TimestampedModel):
-    """Abstract base for all models belonging to a household."""
+    """
+    Abstract base for all models belonging to a household.
+
+    This base class provides:
+    1. A household ForeignKey for tenant association
+    2. A HouseholdScopedManager that provides for_household() and for_request() methods
+    3. A method to validate household ownership
+
+    Usage:
+        class Account(HouseholdOwnedModel):
+            name = models.CharField(max_length=200)
+
+        # In views, always use the manager methods:
+        Account.objects.for_household(request.household)
+        Account.objects.for_request(request)
+    """
+
     household = models.ForeignKey('core.Household', on_delete=models.CASCADE, related_name='%(class)ss')
+
+    objects = HouseholdScopedManager()
 
     class Meta:
         abstract = True
+
+    def belongs_to_household(self, household):
+        """Check if this object belongs to the given household."""
+        if household is None:
+            return False
+        household_id = getattr(household, 'id', household)
+        return self.household_id == household_id
 
 
 class UserSettings(TimestampedModel):

@@ -83,13 +83,22 @@ AUTH_USER_MODEL = 'core.User'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        # Cookie-based JWT for web clients (more secure against XSS)
+        'apps.core.authentication.CookieJWTAuthentication',
+        # Header-based JWT for API clients
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
+    'EXCEPTION_HANDLER': 'apps.core.exception_handlers.custom_exception_handler',
     'COERCE_DECIMAL_TO_STRING': True,
 }
+
+# JWT Cookie settings
+JWT_COOKIE_SECURE = os.environ.get('JWT_COOKIE_SECURE', 'false').lower() == 'true'
+JWT_COOKIE_HTTPONLY = True  # Always HttpOnly for security
+JWT_COOKIE_SAMESITE = 'Lax'  # Prevents CSRF from other domains
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),

@@ -2,10 +2,16 @@ from datetime import date
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated, AllowAny
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
+from apps.core.mixins import (
+    HouseholdScopedModelViewSet,
+    HouseholdScopedViewMixin,
+    HouseholdScopedReadOnlyViewSet
+)
+from apps.core.permissions import HouseholdRequired
 from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory, ChangeType
 from .serializers import (
     ScenarioSerializer, ScenarioDetailSerializer, ScenarioChangeSerializer,
@@ -17,11 +23,20 @@ from .baseline import BaselineScenarioService
 from .comparison import ScenarioComparisonService
 
 
-class ScenarioViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+class ScenarioViewSet(HouseholdScopedModelViewSet):
+    """
+    ViewSet for managing scenarios.
+
+    Uses HouseholdScopedModelViewSet for automatic:
+    - Queryset filtering by household
+    - Household context requirement
+    - Household assignment on create
+    - Object-level permission checking
+    """
+    queryset = Scenario.objects.all()
 
     def get_queryset(self):
-        qs = Scenario.objects.filter(household=self.request.household)
+        qs = super().get_queryset()
         if self.request.query_params.get('active_only', 'true').lower() == 'true':
             qs = qs.filter(is_active=True, is_archived=False)
         return qs
@@ -30,9 +45,6 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
             return ScenarioDetailSerializer
         return ScenarioSerializer
-
-    def perform_create(self, serializer):
-        serializer.save(household=self.request.household)
 
     @action(detail=True, methods=['post'])
     def compute(self, request, pk=None):
@@ -71,6 +83,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         scenario_ids = request.data.get('scenario_ids', [])
         horizon_months = request.data.get('horizon_months')
         include_drivers = request.data.get('include_drivers', True)
+        household = self.get_household()
 
         # Validate constraints (TASK-15: max 4 scenarios, max 360 months)
         if len(scenario_ids) > ScenarioComparisonService.MAX_SCENARIOS:
@@ -86,8 +99,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
             )
 
         # Fetch scenarios with ownership validation
-        scenarios = list(Scenario.objects.filter(
-            household=request.household,
+        scenarios = list(Scenario.objects.for_household(household).filter(
             id__in=scenario_ids
         ))
 
@@ -112,7 +124,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
         # Add driver decomposition if requested and we have multiple scenarios
         if include_drivers and len(scenarios) >= 2:
-            service = ScenarioComparisonService(request.household)
+            service = ScenarioComparisonService(household)
             try:
                 driver_analysis = service.compare_multiple(
                     scenarios,
@@ -162,6 +174,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         from apps.flows.models import RecurringFlow, FlowType
 
         scenario = self.get_object()
+        household = self.get_household()
 
         if scenario.is_baseline:
             return Response(
@@ -178,7 +191,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
             # Handle changes that can be converted to persistent data
             if change.change_type == ChangeType.ADD_EXPENSE:
                 flow = RecurringFlow.objects.create(
-                    household=request.household,
+                    household=household,
                     name=change.name,
                     description=change.description,
                     flow_type=FlowType.EXPENSE,
@@ -198,7 +211,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
             elif change.change_type == ChangeType.ADD_INCOME:
                 flow = RecurringFlow.objects.create(
-                    household=request.household,
+                    household=household,
                     name=change.name,
                     description=change.description,
                     flow_type=FlowType.INCOME,
@@ -218,7 +231,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
             elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
                 flow = RecurringFlow.objects.create(
-                    household=request.household,
+                    household=household,
                     name=change.name or 'Savings Transfer',
                     description='Automatic savings transfer',
                     flow_type=FlowType.TRANSFER,
@@ -250,7 +263,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
         # Trigger baseline refresh
         from .reality_events import emit_flows_changed
-        emit_flows_changed(request.household)
+        emit_flows_changed(household)
 
         return Response({
             'status': 'adopted',
@@ -260,39 +273,46 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         })
 
 
-class ScenarioChangeViewSet(viewsets.ModelViewSet):
+class ScenarioChangeViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
+    """
+    ViewSet for managing scenario changes.
+
+    Scenario changes belong to scenarios, which belong to households.
+    Uses indirect household filtering via scenario relationship.
+    """
     serializer_class = ScenarioChangeSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HouseholdRequired]
+
+    # Disable automatic household filtering since we filter via scenario__household
+    auto_filter_by_household = False
 
     def get_queryset(self):
+        household = self.get_household()
         scenario_id = self.request.query_params.get('scenario')
         if scenario_id:
             return ScenarioChange.objects.filter(
                 scenario_id=scenario_id,
-                scenario__household=self.request.household
+                scenario__household=household
             )
-        return ScenarioChange.objects.filter(scenario__household=self.request.household)
+        return ScenarioChange.objects.filter(scenario__household=household)
 
     def perform_create(self, serializer):
         # Ensure the scenario belongs to the user's household
         scenario = serializer.validated_data['scenario']
-        if scenario.household != self.request.household:
+        if scenario.household != self.get_household():
             raise PermissionDenied("Cannot add changes to scenarios in other households")
         serializer.save()
 
 
-class ScenarioComparisonViewSet(viewsets.ModelViewSet):
+class ScenarioComparisonViewSet(HouseholdScopedModelViewSet):
+    """
+    ViewSet for managing saved scenario comparisons.
+    """
+    queryset = ScenarioComparison.objects.all()
     serializer_class = ScenarioComparisonSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return ScenarioComparison.objects.filter(household=self.request.household)
-
-    def perform_create(self, serializer):
-        serializer.save(household=self.request.household)
 
 
-class BaselineView(APIView):
+class BaselineView(HouseholdScopedViewMixin, APIView):
     """
     API endpoints for managing the baseline scenario.
 
@@ -301,12 +321,13 @@ class BaselineView(APIView):
     POST /api/scenarios/baseline/pin/ - Pin baseline to a date
     POST /api/scenarios/baseline/unpin/ - Unpin baseline
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, HouseholdRequired]
 
     def get(self, request):
         """Get the baseline scenario with health summary."""
-        baseline = BaselineScenarioService.get_or_create_baseline(request.household)
-        health = BaselineScenarioService.get_baseline_health(request.household)
+        household = self.get_household()
+        baseline = BaselineScenarioService.get_or_create_baseline(household)
+        health = BaselineScenarioService.get_baseline_health(household)
 
         return Response({
             'baseline': BaselineScenarioSerializer(baseline).data,
@@ -316,10 +337,11 @@ class BaselineView(APIView):
     def post(self, request):
         """Handle baseline actions via action parameter."""
         action_type = request.data.get('action')
+        household = self.get_household()
 
         if action_type == 'refresh':
             baseline = BaselineScenarioService.refresh_baseline(
-                request.household,
+                household,
                 force=request.data.get('force', False)
             )
             return Response({
@@ -344,7 +366,7 @@ class BaselineView(APIView):
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            baseline = BaselineScenarioService.pin_baseline(request.household, as_of_date)
+            baseline = BaselineScenarioService.pin_baseline(household, as_of_date)
             return Response({
                 'status': 'pinned',
                 'baseline': BaselineScenarioSerializer(baseline).data,
@@ -353,7 +375,7 @@ class BaselineView(APIView):
             })
 
         elif action_type == 'unpin':
-            baseline = BaselineScenarioService.unpin_baseline(request.household)
+            baseline = BaselineScenarioService.unpin_baseline(household)
             return Response({
                 'status': 'unpinned',
                 'baseline': BaselineScenarioSerializer(baseline).data,
@@ -367,7 +389,11 @@ class BaselineView(APIView):
 
 
 class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
-    """ViewSet for life event templates (read-only)."""
+    """
+    ViewSet for life event templates (read-only).
+
+    Life event templates are not household-scoped - they are shared templates.
+    """
     serializer_class = LifeEventTemplateSerializer
     permission_classes = [IsAuthenticated]
 
@@ -436,6 +462,14 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=True, methods=['post'])
     def apply(self, request, pk=None):
         """Apply a template to a scenario, creating changes."""
+        # Require household context for applying templates
+        household = getattr(request, 'household', None)
+        if household is None:
+            return Response(
+                {'error': 'Household context required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         template_data = None
 
         # Try to get from DB first
@@ -466,7 +500,7 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         try:
             scenario = Scenario.objects.get(
                 id=scenario_id,
-                household=request.household
+                household=household
             )
         except Scenario.DoesNotExist:
             return Response(

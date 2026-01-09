@@ -9,6 +9,10 @@ from apps.core.views import (
     UserProfileView, ChangePasswordView,
     HouseholdViewSet, HouseholdMemberViewSet
 )
+from apps.core.auth_views import (
+    CookieTokenObtainView, CookieTokenRefreshView,
+    CookieLogoutView, CurrentUserView
+)
 from apps.accounts.views import AccountViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
@@ -64,9 +68,15 @@ urlpatterns = [
     # Admin
     path('admin/', admin.site.urls),
 
-    # Auth
+    # Auth - Header-based JWT (for API clients)
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    # Auth - Cookie-based JWT (for web clients, more secure against XSS)
+    path('api/auth/cookie/login/', CookieTokenObtainView.as_view(), name='cookie_login'),
+    path('api/auth/cookie/refresh/', CookieTokenRefreshView.as_view(), name='cookie_refresh'),
+    path('api/auth/cookie/logout/', CookieLogoutView.as_view(), name='cookie_logout'),
+    path('api/auth/me/', CurrentUserView.as_view(), name='current_user'),
 
     # API v1
     path('api/v1/', include(router.urls)),

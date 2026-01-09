@@ -1,12 +1,12 @@
-from rest_framework import viewsets, status
+from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
 from django.db import transaction
 from datetime import date
 from decimal import Decimal
 
-from .models import Account, BalanceSnapshot, AssetGroup, LiabilityDetails, AssetDetails
+from apps.core.mixins import HouseholdScopedModelViewSet
+from .models import Account, BalanceSnapshot, AssetGroup
 from .serializers import (
     AccountSerializer, AccountDetailSerializer,
     BalanceSnapshotSerializer, AssetGroupSerializer
@@ -14,11 +14,20 @@ from .serializers import (
 from apps.scenarios.reality_events import emit_accounts_changed
 
 
-class AccountViewSet(viewsets.ModelViewSet):
-    permission_classes = [IsAuthenticated]
+class AccountViewSet(HouseholdScopedModelViewSet):
+    """
+    ViewSet for managing household accounts.
+
+    Uses HouseholdScopedModelViewSet for automatic:
+    - Queryset filtering by household
+    - Household context requirement
+    - Household assignment on create
+    - Object-level permission checking
+    """
+    queryset = Account.objects.all()
 
     def get_queryset(self):
-        qs = Account.objects.filter(household=self.request.household)
+        qs = super().get_queryset()
         if self.request.query_params.get('active_only', 'true').lower() == 'true':
             qs = qs.filter(is_active=True)
         account_type = self.request.query_params.get('type')
@@ -33,7 +42,7 @@ class AccountViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        account = serializer.save(household=self.request.household)
+        account = serializer.save(household=self.get_household())
         # Create initial balance snapshot if provided
         balance = self.request.data.get('initial_balance')
         if balance:
@@ -43,12 +52,12 @@ class AccountViewSet(viewsets.ModelViewSet):
                 balance=Decimal(str(balance))
             )
         # Emit reality change event
-        emit_accounts_changed(self.request.household, str(account.id))
+        emit_accounts_changed(self.get_household(), str(account.id))
 
     def perform_update(self, serializer):
         account = serializer.save()
         # Emit reality change event
-        emit_accounts_changed(self.request.household, str(account.id))
+        emit_accounts_changed(self.get_household(), str(account.id))
 
     def perform_destroy(self, instance):
         household = instance.household
@@ -83,12 +92,12 @@ class AccountViewSet(viewsets.ModelViewSet):
         return Response(serializer.data)
 
 
-class AssetGroupViewSet(viewsets.ModelViewSet):
+class AssetGroupViewSet(HouseholdScopedModelViewSet):
+    """
+    ViewSet for managing asset groups.
+
+    Asset groups are used to organize accounts into categories
+    for better financial overview and reporting.
+    """
+    queryset = AssetGroup.objects.all()
     serializer_class = AssetGroupSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return AssetGroup.objects.filter(household=self.request.household)
-
-    def perform_create(self, serializer):
-        serializer.save(household=self.request.household)
