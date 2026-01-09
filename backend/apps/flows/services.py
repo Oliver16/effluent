@@ -23,7 +23,8 @@ from .models import RecurringFlow, FlowType, Frequency, ExpenseCategory, IncomeC
 
 
 # Current version of flow calculation logic - increment when logic changes
-CALCULATION_VERSION = 1
+# v2: Added tax withholding as visible expense flow
+CALCULATION_VERSION = 2
 
 # Pay frequency to flow frequency mapping
 PAY_FREQ_TO_FLOW_FREQ = {
@@ -159,6 +160,29 @@ class SystemFlowGenerator:
 
         # Estimate taxes withheld (simplified - could be enhanced with full tax calc)
         taxes_withheld = self._estimate_taxes_withheld(income_source, gross_per_period)
+
+        # Create tax expense flow so taxes are visible in the expense breakdown
+        # This ensures the dashboard shows accurate surplus (income - expenses including taxes)
+        if taxes_withheld > 0:
+            RecurringFlow.objects.create(
+                household=self.household,
+                name=f"{income_source.name} - Taxes Withheld",
+                flow_type=FlowType.EXPENSE,
+                expense_category=ExpenseCategory.ESTIMATED_TAX,
+                amount=taxes_withheld,
+                frequency=flow_frequency,
+                start_date=income_source.start_date or date.today(),
+                end_date=income_source.end_date,
+                household_member=income_source.household_member,
+                income_source=income_source,
+                is_active=True,
+                is_baseline=True,
+                is_system_generated=True,
+                system_source_model='IncomeSource',
+                system_source_id=income_source.id,
+                system_flow_kind='tax_withholding',
+                calculation_version=CALCULATION_VERSION,
+            )
 
         # Calculate net pay
         net_pay = gross_per_period - total_pretax_deductions - taxes_withheld
