@@ -8,6 +8,7 @@ import { Scenario, ScenarioProjection } from '@/lib/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency } from '@/lib/utils';
+import { formatCurrencyCompact } from '@/lib/format';
 
 interface ComparisonResult {
   scenario: Scenario;
@@ -112,7 +113,9 @@ export default function ScenarioComparePage() {
                   index="month"
                   categories={categories}
                   colors={['blue', 'emerald', 'amber', 'violet']}
-                  valueFormatter={(value) => formatCurrency(value)}
+                  valueFormatter={(value) => formatCurrencyCompact(value)}
+                  showLegend
+                  showGridLines={false}
                 />
               ) : (
                 <div className="text-sm text-muted-foreground">
@@ -124,6 +127,7 @@ export default function ScenarioComparePage() {
 
           <div className="grid gap-4 md:grid-cols-2">
             {comparisons.map(({ scenario, projections }, index) => {
+              const firstProjection = projections[0];
               const lastProjection = projections[projections.length - 1];
               return (
                 <Card key={scenario?.id || index}>
@@ -139,8 +143,8 @@ export default function ScenarioComparePage() {
                           </span>
                         </div>
                         <div>
-                          Monthly Cash Flow: <span className="font-medium text-foreground">
-                            {formatCurrency(lastProjection.netCashFlow)}
+                          Monthly Cash Flow: <span className={`font-medium ${parseFloat(firstProjection?.netCashFlow || '0') >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                            {formatCurrency(firstProjection?.netCashFlow || '0')}
                           </span>
                         </div>
                       </div>
