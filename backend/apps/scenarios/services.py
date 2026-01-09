@@ -246,8 +246,8 @@ class ScenarioEngine:
             if as_of_date:
                 # For pinned baselines, get snapshot closest to as_of_date
                 snap = acct.snapshots.filter(
-                    snapshot_date__lte=as_of_date
-                ).order_by('-snapshot_date').first()
+                    as_of_date__lte=as_of_date
+                ).order_by('-as_of_date').first()
             else:
                 snap = acct.latest_snapshot
 
