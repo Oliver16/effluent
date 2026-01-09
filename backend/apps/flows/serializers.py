@@ -18,5 +18,7 @@ class RecurringFlowSerializer(serializers.ModelSerializer):
             'expense_category', 'amount', 'frequency', 'monthly_amount',
             'annual_amount', 'category', 'start_date', 'end_date',
             'linked_account', 'household_member', 'income_source',
-            'is_active', 'is_baseline', 'notes', 'created_at'
+            'is_active', 'is_baseline', 'notes', 'created_at',
+            'is_system_generated', 'system_flow_kind',
         ]
+        read_only_fields = ['is_system_generated', 'system_flow_kind']

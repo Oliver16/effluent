@@ -381,6 +381,8 @@ export const flows = {
     const payload = toSnakeCase(data)
     return api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, payload).then(data => toCamelCase<RecurringFlow>(data))
   },
+  regenerateSystemFlows: () =>
+    api.post<{ status: string; message: string }>('/api/v1/flows/regenerate_system_flows/'),
 }
 
 // Metrics endpoints
