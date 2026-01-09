@@ -9,6 +9,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
+        ('scenarios', '0001_initial'),
         ('core', '0001_initial'),
         ('metrics', '0001_initial'),
         ('scenarios', '0001_initial'),

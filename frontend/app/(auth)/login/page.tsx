@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
 import { auth, households } from '@/lib/api'
+import { setAuthCookies } from '@/lib/auth'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -28,9 +29,14 @@ export default function LoginPage() {
 
       // Fetch and store household ID
       const householdList = await households.list()
+      let householdId: string | undefined
       if (householdList.length > 0) {
         const household = householdList[0]
-        localStorage.setItem('householdId', household.id)
+        householdId = household.id
+        localStorage.setItem('householdId', householdId)
+
+        // Set cookies for SSR authentication
+        await setAuthCookies(response.access, householdId)
 
         // Check if onboarding is complete
         const onboardingComplete = household.onboardingCompleted ??
@@ -42,6 +48,8 @@ export default function LoginPage() {
           router.push('/onboarding')
         }
       } else {
+        // Set cookies for SSR authentication (without household yet)
+        await setAuthCookies(response.access)
         router.push('/onboarding')
       }
     } catch {

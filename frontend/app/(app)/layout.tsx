@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppShell } from '@/components/layout/app-shell'
 import { households } from '@/lib/api'
+import { updateHouseholdCookie } from '@/lib/auth'
 import { isOnboardingComplete } from '@/lib/utils'
 
 export default function AppLayout({
@@ -38,6 +39,8 @@ export default function AppLayout({
 
       const household = householdList[0]
       localStorage.setItem('householdId', household.id)
+      // Sync householdId to cookie for SSR
+      await updateHouseholdCookie(household.id)
 
       if (!isOnboardingComplete(household)) {
         router.push('/onboarding')

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { auth, households } from '@/lib/api'
+import { setAuthCookies } from '@/lib/auth'
 
 interface LoginFormProps {
   onSuccess: () => void
@@ -29,9 +30,14 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
 
       // Fetch and store household ID
       const householdList = await households.list()
+      let householdId: string | undefined
       if (householdList.length > 0) {
-        localStorage.setItem('householdId', householdList[0].id)
+        householdId = householdList[0].id
+        localStorage.setItem('householdId', householdId)
       }
+
+      // Set cookies for SSR authentication
+      await setAuthCookies(response.access, householdId)
 
       onSuccess()
     } catch (err) {
