@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
+import { auth } from '@/lib/api'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -19,14 +20,12 @@ export default function ForgotPasswordPage() {
     setIsLoading(true)
 
     try {
-      // TODO: Implement password reset API call
-      // await api.post('/api/auth/password-reset/', { email })
-
-      // For now, just simulate success
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      await auth.requestPasswordReset(email)
       setIsSubmitted(true)
     } catch {
-      setError('Failed to send reset email. Please try again.')
+      // Always show success message to prevent email enumeration
+      // The backend should also return success regardless of whether the email exists
+      setIsSubmitted(true)
     } finally {
       setIsLoading(false)
     }

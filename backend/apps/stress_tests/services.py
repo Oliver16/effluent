@@ -189,18 +189,36 @@ class StressTestService:
         change_type = template['change_type']
 
         if change_type in [ChangeType.ADJUST_TOTAL_INCOME, ChangeType.ADJUST_TOTAL_EXPENSES]:
-            return {
-                'monthly_adjustment': inputs.get('monthly_adjustment', inputs.get('amount', '0')),
-                'description': template['description'],
-            }
+            # Support both legacy (monthly_adjustment) and new (amount/mode) schemas
+            # The engine handles both, but we prefer the new schema when mode is provided
+            if 'mode' in inputs:
+                return {
+                    'amount': inputs.get('amount', '0'),
+                    'mode': inputs.get('mode', 'absolute'),
+                    'description': template['description'],
+                }
+            else:
+                return {
+                    'monthly_adjustment': inputs.get('monthly_adjustment', inputs.get('amount', '0')),
+                    'description': template['description'],
+                }
         elif change_type == ChangeType.ADJUST_INTEREST_RATES:
             return {
                 'adjustment_percent': inputs.get('adjustment_percent', '0'),
                 'applies_to': inputs.get('applies_to', 'all'),
             }
         elif change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
+            # percent_change should be in percentage points (e.g., -20 for -20%)
+            # Convert from ratio if provided as ratio (between -1 and 1)
+            percent_change = inputs.get('percent_change', '0')
+            try:
+                pct = float(percent_change)
+                if -1 <= pct <= 1 and pct != 0:
+                    percent_change = str(pct * 100)
+            except (ValueError, TypeError):
+                pass
             return {
-                'percent_change': inputs.get('percent_change', '0'),
+                'percent_change': percent_change,
                 'recovery_months': inputs.get('recovery_months', 36),
                 'applies_to': inputs.get('applies_to', 'all'),
             }

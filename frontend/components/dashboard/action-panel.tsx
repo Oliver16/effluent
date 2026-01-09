@@ -60,7 +60,7 @@ export function ActionPanel({ metrics, goalStatus, isLoading }: ActionPanelProps
         title: 'Model expense reduction',
         description: 'Find ways to increase your emergency fund',
         icon: <TrendingDown className="h-4 w-4" />,
-        href: '/decisions?template=add_expense',
+        href: '/decisions?template=adjust_total_expenses',
         priority: 'high',
       })
     }

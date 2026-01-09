@@ -41,7 +41,8 @@ function formatValue(value: string, type: 'currency' | 'months' | 'ratio' | 'per
     case 'ratio':
       return `${num.toFixed(2)}x`
     case 'percent':
-      return `${num.toFixed(1)}%`
+      // Backend returns savings_rate as a ratio (0.10 for 10%), so multiply by 100
+      return `${(num * 100).toFixed(1)}%`
   }
 }
 
