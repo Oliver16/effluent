@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
-from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory
+from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory, ChangeType
 from .serializers import (
     ScenarioSerializer, ScenarioDetailSerializer, ScenarioChangeSerializer,
     ScenarioProjectionSerializer, ScenarioComparisonSerializer, LifeEventTemplateSerializer,
@@ -70,6 +70,116 @@ class ScenarioViewSet(viewsets.ModelViewSet):
             })
 
         return Response({'results': comparisons})
+
+    @action(detail=True, methods=['post'])
+    def adopt(self, request, pk=None):
+        """
+        Adopt a scenario: persist its overlay changes as real data.
+
+        POST /api/v1/scenarios/{id}/adopt/
+
+        This converts scenario changes into actual RecurringFlows and updates,
+        making the scenario's projections the new baseline reality.
+        """
+        from apps.flows.models import RecurringFlow, FlowType
+
+        scenario = self.get_object()
+
+        if scenario.is_baseline:
+            return Response(
+                {'error': 'Cannot adopt the baseline scenario'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        adopted_changes = []
+        skipped_changes = []
+
+        for change in scenario.changes.filter(is_enabled=True):
+            params = change.parameters
+
+            # Handle changes that can be converted to persistent data
+            if change.change_type == ChangeType.ADD_EXPENSE:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name,
+                    description=change.description,
+                    flow_type=FlowType.EXPENSE,
+                    amount=params.get('amount', 0),
+                    frequency=params.get('frequency', 'monthly'),
+                    expense_category=params.get('category', 'miscellaneous'),
+                    start_date=change.effective_date,
+                    end_date=change.end_date,
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'ADD_EXPENSE',
+                    'flow_id': str(flow.id),
+                })
+
+            elif change.change_type == ChangeType.ADD_INCOME:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name,
+                    description=change.description,
+                    flow_type=FlowType.INCOME,
+                    amount=params.get('amount', 0),
+                    frequency=params.get('frequency', 'monthly'),
+                    income_category=params.get('category', 'other_income'),
+                    start_date=change.effective_date,
+                    end_date=change.end_date,
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'ADD_INCOME',
+                    'flow_id': str(flow.id),
+                })
+
+            elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name or 'Savings Transfer',
+                    description='Automatic savings transfer',
+                    flow_type=FlowType.TRANSFER,
+                    amount=params.get('amount', 0),
+                    frequency='monthly',
+                    start_date=change.effective_date,
+                    linked_account_id=params.get('target_account_id'),
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'SET_SAVINGS_TRANSFER',
+                    'flow_id': str(flow.id),
+                })
+
+            else:
+                # Overlay adjustments and other synthetic changes can't be adopted
+                skipped_changes.append({
+                    'change_id': str(change.id),
+                    'type': change.change_type,
+                    'reason': 'Overlay/synthetic changes cannot be adopted',
+                })
+
+        # Archive the scenario after adoption
+        scenario.is_archived = True
+        scenario.description = f"{scenario.description}\n\nAdopted on {date.today()}"
+        scenario.save()
+
+        # Trigger baseline refresh
+        from .reality_events import emit_flows_changed
+        emit_flows_changed(request.household)
+
+        return Response({
+            'status': 'adopted',
+            'adopted_changes': adopted_changes,
+            'skipped_changes': skipped_changes,
+            'scenario_archived': True,
+        })
 
 
 class ScenarioChangeViewSet(viewsets.ModelViewSet):

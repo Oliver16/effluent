@@ -403,3 +403,224 @@ export interface BaselineActionResponse {
   baseline_pinned_at?: string | null
   baseline_pinned_as_of_date?: string | null
 }
+
+// TASK-14: Goals types
+export type GoalType =
+  | 'emergency_fund_months'
+  | 'min_dscr'
+  | 'min_savings_rate'
+  | 'net_worth_target'
+  | 'retirement_age'
+  | 'debt_free_date'
+  | 'custom'
+
+export type GoalStatus = 'on_track' | 'warning' | 'critical' | 'achieved'
+
+export interface Goal {
+  id: string
+  name: string
+  displayName: string
+  goalType: GoalType
+  goalTypeDisplay?: string
+  targetValue: string
+  targetUnit: string
+  targetDate?: string | null
+  targetMeta?: Record<string, unknown>
+  isPrimary: boolean
+  isActive: boolean
+  currentStatus: GoalStatus
+  currentStatusDisplay?: string
+  currentValue?: string | null
+  lastEvaluatedAt?: string | null
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface GoalStatusResult {
+  goalId: string
+  goalType: GoalType
+  goalName: string
+  targetValue: string
+  targetUnit: string
+  currentValue: string
+  status: GoalStatus
+  deltaToTarget: string
+  percentageComplete?: string | null
+  recommendation: string
+}
+
+export interface GoalStatusResponse {
+  results: GoalStatusResult[]
+  count: number
+}
+
+export interface GoalSolveOptions {
+  allowedInterventions?: string[]
+  bounds?: Record<string, string>
+  startDate?: string
+  projectionMonths?: number
+}
+
+export interface GoalPlanStep {
+  changeType: string
+  name?: string
+  parameters: Record<string, unknown>
+}
+
+export interface GoalSolution {
+  id: string
+  goal: string
+  goalName: string
+  options: GoalSolveOptions
+  plan: GoalPlanStep[]
+  result: {
+    baselineValue?: string
+    finalValue?: string
+    worstMonthValue?: string
+    message?: string
+    error?: string
+  }
+  success: boolean
+  errorMessage: string
+  computedAt: string
+  appliedScenario?: string | null
+  appliedAt?: string | null
+}
+
+export interface ApplySolutionResponse {
+  scenario: {
+    id: string
+    name: string
+    createdAt: string
+  }
+  changes: Array<{ id: string; name: string; changeType: string }>
+  summary: Record<string, unknown>
+  redirectUrl: string
+}
+
+// TASK-14: Actions types
+export interface ActionCandidate {
+  id: string
+  name: string
+  description: string
+  changeType: string
+  defaultParameters: Record<string, string>
+  impactEstimate: string
+}
+
+export interface ActionSuggestion {
+  templateId: string
+  name: string
+  description: string
+  severity: 'critical' | 'warning' | 'info'
+  recommendedCandidateId: string
+  candidates: ActionCandidate[]
+  context: Record<string, string>
+}
+
+export interface NextActionsResponse {
+  actions: ActionSuggestion[]
+  count: number
+}
+
+export interface ApplyActionResponse {
+  scenario: {
+    id: string
+    name: string
+    createdAt: string
+  }
+  changes: Array<{ id: string; name: string; changeType: string }>
+  summary: Record<string, unknown>
+  redirectUrl: string
+}
+
+export interface ActionTemplate {
+  id: string
+  name: string
+  description: string
+  appliesWhen: string
+  candidates: ActionCandidate[]
+}
+
+export interface ActionTemplatesResponse {
+  templates: ActionTemplate[]
+  count: number
+}
+
+// TASK-14: Tax summary types
+export interface TaxIncomeSummary {
+  sourceId: string
+  sourceName: string
+  incomeType: string
+  grossAnnual: string
+  federalWithholdingAnnual: string
+  stateWithholdingAnnual: string
+  ficaAnnual: string
+  pretaxDeductionsAnnual: string
+  netAnnual: string
+  effectiveRate: string
+}
+
+export interface TaxStrategy {
+  id: string
+  title: string
+  description: string
+  potentialSavings: string
+  actionTemplate: string
+}
+
+export interface TaxSummaryResponse {
+  filingStatus: string
+  stateOfResidence: string
+  summary: {
+    totalGrossAnnual: string
+    totalFederalWithholding: string
+    totalStateWithholding: string
+    totalFica: string
+    totalPretaxDeductions: string
+    totalTaxes: string
+    totalNetAnnual: string
+    effectiveTaxRate: string
+    quarterlyEstimates: string
+  }
+  incomeSources: TaxIncomeSummary[]
+  taxStrategies: TaxStrategy[]
+}
+
+// TASK-14: Data quality types
+export interface DataQualityIssue {
+  field: string
+  message: string
+  severity: 'critical' | 'warning' | 'info'
+  accountId?: string
+  sourceId?: string
+}
+
+export interface DataQualityResponse {
+  confidenceScore: number
+  confidenceTier: 'high' | 'medium' | 'low'
+  tierDescription: string
+  issues: DataQualityIssue[]
+  warnings: DataQualityIssue[]
+  summary: {
+    assetAccounts: number
+    liabilityAccounts: number
+    incomeSources: number
+    expenseFlows: number
+  }
+}
+
+// TASK-14: Adopt scenario types
+export interface AdoptedChange {
+  changeId: string
+  type: string
+  flowId?: string
+  reason?: string
+}
+
+export interface AdoptScenarioResponse {
+  status: string
+  adoptedChanges: AdoptedChange[]
+  skippedChanges: AdoptedChange[]
+  scenarioArchived: boolean
+}

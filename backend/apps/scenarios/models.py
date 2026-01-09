@@ -96,6 +96,20 @@ class ChangeType(models.TextChoices):
     MODIFY_401K = 'modify_401k', 'Change 401(k) Contribution'
     MODIFY_HSA = 'modify_hsa', 'Change HSA Contribution'
 
+    # TASK-14: Overlay adjustments (do not persist as recurring flows)
+    ADJUST_TOTAL_EXPENSES = 'adjust_total_expenses', 'Adjust Total Expenses'
+    ADJUST_TOTAL_INCOME = 'adjust_total_income', 'Adjust Total Income'
+    SET_SAVINGS_TRANSFER = 'set_savings_transfer', 'Set Savings Transfer'
+
+    # TASK-14: Tax strategy changes
+    MODIFY_WITHHOLDING = 'modify_withholding', 'Modify Tax Withholding'
+    MODIFY_DEDUCTIONS = 'modify_deductions', 'Modify Tax Deductions'
+    SWITCH_EMPLOYMENT_TYPE = 'switch_employment_type', 'Switch Employment Type'
+    SET_QUARTERLY_ESTIMATES = 'set_quarterly_estimates', 'Set Quarterly Tax Estimates'
+
+    # TASK-14: Assumption overrides
+    OVERRIDE_ASSUMPTIONS = 'override_assumptions', 'Override Scenario Assumptions'
+
 
 class ScenarioChange(TimestampedModel):
     """A single change within a scenario."""

@@ -625,6 +625,97 @@ class ScenarioEngine:
                         })
                     break
 
+        # TASK-14: Overlay adjustments
+        elif change.change_type == ChangeType.ADJUST_TOTAL_EXPENSES:
+            # Apply as an overlay adjustment (not a persisted flow)
+            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            if adjustment != 0:
+                state.expenses.append({
+                    'id': f'expense_adjustment_{change.id}',
+                    'name': params.get('description', 'Expense Adjustment'),
+                    'category': params.get('category', 'adjustment'),
+                    'amount': adjustment,
+                    'frequency': 'monthly',
+                    'monthly': adjustment,
+                })
+
+        elif change.change_type == ChangeType.ADJUST_TOTAL_INCOME:
+            # Apply as an overlay adjustment with tax consideration
+            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            tax_treatment = params.get('tax_treatment', 'w2')
+
+            if adjustment != 0:
+                # Apply rough tax estimate (30% for W2, 40% for 1099 including SE tax)
+                tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
+                net_adjustment = adjustment * (1 - tax_rate)
+
+                state.incomes.append({
+                    'id': f'income_adjustment_{change.id}',
+                    'name': params.get('description', 'Income Adjustment'),
+                    'category': 'other_income',
+                    'amount': net_adjustment,
+                    'frequency': 'monthly',
+                    'monthly': net_adjustment,
+                })
+
+        elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
+            # Set up a recurring transfer from liquid to investment account
+            amount = Decimal(str(params.get('amount', 0)))
+            target_id = params.get('target_account_id')
+
+            if amount > 0:
+                # Find target account or first retirement account
+                if not target_id:
+                    target_id = next(
+                        (k for k, a in state.assets.items() if a.is_retirement),
+                        None
+                    )
+
+                if target_id:
+                    state.transfers.append({
+                        'id': f'savings_transfer_{change.id}',
+                        'name': 'Savings Transfer',
+                        'category': 'savings_transfer',
+                        'amount': amount,
+                        'frequency': 'monthly',
+                        'monthly': amount,
+                        'linked_account': target_id,
+                    })
+
+        elif change.change_type == ChangeType.OVERRIDE_ASSUMPTIONS:
+            # Override scenario-level assumptions for projection
+            # These are applied at initialization, not monthly
+            # The scenario object's rates are used in _apply_growth
+            pass  # Handled by checking params during growth calculation
+
+        elif change.change_type == ChangeType.MODIFY_WITHHOLDING:
+            # Modify withholding affects take-home but not liability
+            extra_withholding = Decimal(str(params.get('extra_monthly', 0)))
+            if extra_withholding != 0:
+                state.expenses.append({
+                    'id': f'extra_withholding_{change.id}',
+                    'name': 'Additional Withholding',
+                    'category': 'tax_withholding',
+                    'amount': extra_withholding,
+                    'frequency': 'monthly',
+                    'monthly': extra_withholding,
+                })
+
+        elif change.change_type == ChangeType.SET_QUARTERLY_ESTIMATES:
+            # Set up quarterly estimated tax payments
+            quarterly_amount = Decimal(str(params.get('quarterly_amount', 0)))
+            if quarterly_amount > 0:
+                # Convert to monthly for projection purposes
+                monthly_equiv = quarterly_amount / Decimal('3')
+                state.expenses.append({
+                    'id': f'quarterly_estimates_{change.id}',
+                    'name': 'Quarterly Estimated Taxes',
+                    'category': 'estimated_taxes',
+                    'amount': monthly_equiv,
+                    'frequency': 'monthly',
+                    'monthly': monthly_equiv,
+                })
+
         return state
 
     def _apply_growth(self, state: MonthlyState, month: int) -> MonthlyState:

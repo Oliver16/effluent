@@ -17,14 +17,16 @@ from apps.accounts.views import AccountViewSet, AssetGroupViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
     IncomeSourceViewSet, PreTaxDeductionViewSet,
-    PostTaxDeductionViewSet, SelfEmploymentTaxViewSet
+    PostTaxDeductionViewSet, SelfEmploymentTaxViewSet, TaxSummaryView
 )
 from apps.metrics.views import (
     MetricSnapshotViewSet, CurrentMetricsView, MetricsHistoryView,
-    InsightViewSet, MetricThresholdViewSet
+    InsightViewSet, MetricThresholdViewSet, DataQualityView
 )
 from apps.onboarding import views as onboarding_views
 from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet, BaselineView
+from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
+from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
 
 router = DefaultRouter()
 router.register('households', HouseholdViewSet, basename='household')
@@ -43,6 +45,8 @@ router.register('scenarios', ScenarioViewSet, basename='scenario')
 router.register('scenario-changes', ScenarioChangeViewSet, basename='scenario-change')
 router.register('scenario-comparisons', ScenarioComparisonViewSet, basename='scenario-comparison')
 router.register('life-event-templates', LifeEventTemplateViewSet, basename='life-event-template')
+router.register('goals', GoalViewSet, basename='goal')
+router.register('goal-solutions', GoalSolutionViewSet, basename='goal-solution')
 
 urlpatterns = [
     path('admin/', admin.site.urls),
@@ -73,4 +77,18 @@ urlpatterns = [
 
     # Baseline scenario endpoint
     path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline-scenario'),
+
+    # Goals endpoints
+    path('api/v1/goals/status/', GoalStatusView.as_view(), name='goals-status'),
+
+    # Data quality endpoint
+    path('api/v1/metrics/data-quality/', DataQualityView.as_view(), name='data-quality'),
+
+    # Actions endpoints (TASK-14)
+    path('api/v1/actions/next/', NextActionsView.as_view(), name='actions-next'),
+    path('api/v1/actions/apply/', ApplyActionView.as_view(), name='actions-apply'),
+    path('api/v1/actions/templates/', ActionTemplatesView.as_view(), name='actions-templates'),
+
+    # Tax summary endpoint (TASK-14)
+    path('api/v1/taxes/summary/', TaxSummaryView.as_view(), name='taxes-summary'),
 ]

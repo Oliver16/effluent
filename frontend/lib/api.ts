@@ -21,6 +21,19 @@ import type {
   LifeEventCategoryGroup,
   BaselineResponse,
   BaselineActionResponse,
+  // TASK-14 types
+  Goal,
+  GoalStatusResponse,
+  GoalSolveOptions,
+  GoalSolution,
+  GoalPlanStep,
+  ApplySolutionResponse,
+  NextActionsResponse,
+  ApplyActionResponse,
+  ActionTemplatesResponse,
+  TaxSummaryResponse,
+  DataQualityResponse,
+  AdoptScenarioResponse,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -503,6 +516,112 @@ export const lifeEventTemplates = {
       changes_created: number;
       changes: ScenarioChange[];
     }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
+}
+
+// Goals endpoints (TASK-14)
+export const goals = {
+  list: () =>
+    api.get<{ results: Goal[] } | Goal[]>('/api/v1/goals/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<Goal[]>(data)),
+
+  get: (id: string) =>
+    api.get<Goal>(`/api/v1/goals/${id}/`)
+      .then(data => toCamelCase<Goal>(data)),
+
+  create: (data: Partial<Goal>) =>
+    api.post<Goal>('/api/v1/goals/', toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+
+  update: (id: string, data: Partial<Goal>) =>
+    api.patch<Goal>(`/api/v1/goals/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+
+  delete: (id: string) => api.delete<void>(`/api/v1/goals/${id}/`),
+
+  /**
+   * Get goal status evaluation for all active goals.
+   * @param scenarioId Optional scenario ID to evaluate against
+   */
+  status: (scenarioId?: string) => {
+    const params = scenarioId ? `?scenario_id=${scenarioId}` : ''
+    return api.get<GoalStatusResponse>(`/api/v1/goals/status/${params}`)
+      .then(data => toCamelCase<GoalStatusResponse>(data))
+  },
+
+  /**
+   * Solve for required changes to achieve a goal.
+   */
+  solve: (goalId: string, options: GoalSolveOptions) =>
+    api.post<GoalSolution>(`/api/v1/goals/${goalId}/solve/`, toSnakeCase(options))
+      .then(data => toCamelCase<GoalSolution>(data)),
+
+  /**
+   * Apply a solution as a new scenario.
+   */
+  applySolution: (goalId: string, plan: GoalPlanStep[], scenarioName?: string) =>
+    api.post<ApplySolutionResponse>(`/api/v1/goals/${goalId}/apply-solution/`, {
+      plan,
+      scenario_name: scenarioName,
+    }).then(data => toCamelCase<ApplySolutionResponse>(data)),
+}
+
+// Actions endpoints (TASK-14)
+export const actions = {
+  /**
+   * Get next best actions based on current financial state.
+   */
+  next: () =>
+    api.get<NextActionsResponse>('/api/v1/actions/next/')
+      .then(data => toCamelCase<NextActionsResponse>(data)),
+
+  /**
+   * Apply an action as a new scenario.
+   */
+  apply: (templateId: string, candidateId: string, parameters?: Record<string, unknown>, scenarioName?: string) =>
+    api.post<ApplyActionResponse>('/api/v1/actions/apply/', {
+      template_id: templateId,
+      candidate_id: candidateId,
+      parameters,
+      scenario_name: scenarioName,
+    }).then(data => toCamelCase<ApplyActionResponse>(data)),
+
+  /**
+   * Get all available action templates.
+   */
+  templates: () =>
+    api.get<ActionTemplatesResponse>('/api/v1/actions/templates/')
+      .then(data => toCamelCase<ActionTemplatesResponse>(data)),
+}
+
+// Tax summary endpoint (TASK-14)
+export const taxes = {
+  /**
+   * Get comprehensive tax summary for all income sources.
+   */
+  summary: () =>
+    api.get<TaxSummaryResponse>('/api/v1/taxes/summary/')
+      .then(data => toCamelCase<TaxSummaryResponse>(data)),
+}
+
+// Data quality endpoint (TASK-14)
+export const dataQuality = {
+  /**
+   * Get data quality report for the household.
+   */
+  report: () =>
+    api.get<DataQualityResponse>('/api/v1/metrics/data-quality/')
+      .then(data => toCamelCase<DataQualityResponse>(data)),
+}
+
+// Scenario adopt endpoint (TASK-14)
+export const scenarioActions = {
+  /**
+   * Adopt a scenario - persist overlay changes as real data.
+   */
+  adopt: (scenarioId: string) =>
+    api.post<AdoptScenarioResponse>(`/api/v1/scenarios/${scenarioId}/adopt/`)
+      .then(data => toCamelCase<AdoptScenarioResponse>(data)),
 }
 
 // Baseline scenario endpoints
