@@ -95,13 +95,17 @@ export async function middleware(request: NextRequest) {
     const newTokens = await refreshToken(refreshTokenValue);
 
     if (newTokens) {
+      // Check if request is over HTTPS (directly or via proxy)
+      const isSecure = request.headers.get('x-forwarded-proto') === 'https' ||
+        request.url.startsWith('https://');
+
       // Create response and set updated cookies
       const response = NextResponse.next();
 
       // Set new access token cookie
       response.cookies.set('token', newTokens.access, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecure,
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 2, // 2 hours
@@ -111,7 +115,7 @@ export async function middleware(request: NextRequest) {
       if (newTokens.refresh) {
         response.cookies.set('refreshToken', newTokens.refresh, {
           httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
+          secure: isSecure,
           sameSite: 'lax',
           path: '/',
           maxAge: 60 * 60 * 24 * 7, // 7 days
