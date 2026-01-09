@@ -171,14 +171,14 @@ export function DecisionResults({ result, onStartAnother }: DecisionResultsProps
               <tbody>
                 <MetricComparisonRow
                   label="Net Worth"
-                  baseline={summary.baseline.net_worth}
-                  scenario={summary.scenario.net_worth}
+                  baseline={summary.baseline.netWorth}
+                  scenario={summary.scenario.netWorth}
                   type="currency"
                 />
                 <MetricComparisonRow
                   label="Liquidity"
-                  baseline={summary.baseline.liquidity_months}
-                  scenario={summary.scenario.liquidity_months}
+                  baseline={summary.baseline.liquidityMonths}
+                  scenario={summary.scenario.liquidityMonths}
                   type="months"
                 />
                 <MetricComparisonRow
@@ -189,14 +189,14 @@ export function DecisionResults({ result, onStartAnother }: DecisionResultsProps
                 />
                 <MetricComparisonRow
                   label="Savings Rate"
-                  baseline={summary.baseline.savings_rate}
-                  scenario={summary.scenario.savings_rate}
+                  baseline={summary.baseline.savingsRate}
+                  scenario={summary.scenario.savingsRate}
                   type="percent"
                 />
                 <MetricComparisonRow
                   label="Monthly Surplus"
-                  baseline={summary.baseline.monthly_surplus}
-                  scenario={summary.scenario.monthly_surplus}
+                  baseline={summary.baseline.monthlySurplus}
+                  scenario={summary.scenario.monthlySurplus}
                   type="currency"
                 />
               </tbody>
@@ -206,24 +206,24 @@ export function DecisionResults({ result, onStartAnother }: DecisionResultsProps
       )}
 
       {/* Goal Status Comparison */}
-      {summary?.goal_status && summary.goal_status.scenario.length > 0 && (
+      {summary?.goalStatus && summary.goalStatus.scenario.length > 0 && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-lg">Goal Impact</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {summary.goal_status.scenario.map((goal, index) => {
-                const baselineGoal = summary.goal_status.baseline.find(g => g.goal_id === goal.goal_id)
+              {summary.goalStatus.scenario.map((goal) => {
+                const baselineGoal = summary.goalStatus.baseline.find(g => g.goalId === goal.goalId)
                 const statusChanged = baselineGoal && baselineGoal.status !== goal.status
 
                 return (
                   <div
-                    key={goal.goal_id}
+                    key={goal.goalId}
                     className="flex items-center justify-between p-3 bg-muted/50 rounded-lg"
                   >
                     <div>
-                      <p className="font-medium">{goal.name}</p>
+                      <p className="font-medium">{goal.goalName}</p>
                       {statusChanged && (
                         <p className="text-sm text-muted-foreground">
                           Status changed from {baselineGoal?.status}

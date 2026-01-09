@@ -64,8 +64,8 @@ export function BaselineStatus({ health, onRefresh }: BaselineStatusProps) {
 
   if (!health) return null;
 
-  const isLive = health.baseline_mode === 'live';
-  const isPinned = health.baseline_mode === 'pinned';
+  const isLive = health.baselineMode === 'live';
+  const isPinned = health.baselineMode === 'pinned';
   const isRefreshing = refreshMutation.isPending;
   const isUnpinning = unpinMutation.isPending;
 
@@ -91,7 +91,7 @@ export function BaselineStatus({ health, onRefresh }: BaselineStatusProps) {
                 ) : (
                   <>
                     <Pin className="h-4 w-4" />
-                    Pinned baseline: {health.baseline_pinned_as_of_date}
+                    Pinned baseline: {health.baselinePinnedAsOfDate}
                   </>
                 )}
               </div>
@@ -99,7 +99,7 @@ export function BaselineStatus({ health, onRefresh }: BaselineStatusProps) {
               {/* Last projected timestamp */}
               <div className="flex items-center gap-1 text-sm text-muted-foreground">
                 <Clock className="h-4 w-4" />
-                Last projected: {formatRelativeTime(health.last_projected_at)}
+                Last projected: {formatRelativeTime(health.lastProjectedAt)}
               </div>
             </div>
 

@@ -796,6 +796,48 @@ class ScenarioEngine:
             # The scenario object's rates are used in _apply_growth
             pass  # Handled by checking params during growth calculation
 
+        elif change.change_type == ChangeType.ADJUST_INTEREST_RATES:
+            # Adjust interest rates on liabilities
+            adjustment_percent = Decimal(str(params.get('adjustment_percent', 0)))
+            applies_to = params.get('applies_to', 'all')
+
+            for lid, liab in state.liabilities.items():
+                if applies_to == 'all' or applies_to in liab.account_type:
+                    # Apply percentage adjustment to existing rate
+                    liab.rate = liab.rate * (1 + adjustment_percent / 100)
+                    # Recalculate payment if we have term info
+                    if liab.term_months > 0 and liab.rate > 0:
+                        monthly_rate = liab.rate / 12
+                        remaining_term = max(1, liab.term_months - state.month)
+                        new_payment = liab.balance * (monthly_rate * (1 + monthly_rate) ** remaining_term) / ((1 + monthly_rate) ** remaining_term - 1)
+                        liab.payment = new_payment.quantize(Decimal('0.01'))
+
+        elif change.change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
+            # Apply a one-time adjustment to investment values (e.g., market crash)
+            if change_key in state.applied_changes:
+                return state
+            state.applied_changes.add(change_key)
+
+            percent_change = Decimal(str(params.get('percent_change', 0)))
+            applies_to = params.get('applies_to', 'all')
+            multiplier = 1 + (percent_change / 100)
+
+            for aid, asset in state.assets.items():
+                if applies_to == 'all':
+                    if asset.is_retirement or asset.account_type in ('brokerage', 'crypto'):
+                        asset.balance = asset.balance * multiplier
+                elif applies_to in asset.account_type:
+                    asset.balance = asset.balance * multiplier
+
+        elif change.change_type == ChangeType.OVERRIDE_INFLATION:
+            # Override inflation rate for a period
+            # This modifies the scenario's inflation rate temporarily
+            new_rate = Decimal(str(params.get('rate', self.scenario.inflation_rate)))
+            # Store original if not already stored
+            if not hasattr(self, '_original_inflation_rate'):
+                self._original_inflation_rate = self.scenario.inflation_rate
+            self.scenario.inflation_rate = new_rate
+
         elif change.change_type == ChangeType.MODIFY_WITHHOLDING:
             # Modify withholding affects take-home but not liability
             extra_withholding = Decimal(str(params.get('extra_monthly', 0)))
