@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { SectionCard } from '@/components/layout/SectionCard'
+import { StatusBadge, Status } from '@/components/ui/StatusBadge'
+import { SidebarCardSkeleton } from '@/components/ui/Skeletons'
 import {
   ArrowRight,
   CreditCard,
@@ -28,21 +29,21 @@ interface SuggestedAction {
   priority: 'high' | 'medium' | 'low'
 }
 
+const priorityToStatus: Record<string, Status> = {
+  high: 'critical',
+  medium: 'warning',
+  low: 'neutral',
+}
+
+const priorityLabel: Record<string, string> = {
+  high: 'High',
+  medium: 'Medium',
+  low: 'Low',
+}
+
 export function ActionPanel({ metrics, goalStatus, isLoading }: ActionPanelProps) {
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Suggested Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-3">
-            <div className="h-12 bg-muted rounded" />
-            <div className="h-12 bg-muted rounded" />
-          </div>
-        </CardContent>
-      </Card>
-    )
+    return <SidebarCardSkeleton />
   }
 
   // Generate suggested actions based on goal status
@@ -126,43 +127,40 @@ export function ActionPanel({ metrics, goalStatus, isLoading }: ActionPanelProps
     .slice(0, 3)
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base">Suggested Actions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-2">
-          {sortedActions.map((action) => (
-            <Button
-              key={action.id}
-              variant="ghost"
-              className="w-full justify-start h-auto py-3 px-3"
-              asChild
-            >
-              <Link href={action.href as '/decisions'}>
-                <div className="flex items-start gap-3 w-full">
-                  <div className={`p-2 rounded-lg ${
-                    action.priority === 'high'
-                      ? 'bg-red-100 text-red-600'
-                      : action.priority === 'medium'
-                      ? 'bg-yellow-100 text-yellow-600'
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {action.icon}
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-medium text-sm">{action.title}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {action.description}
-                    </p>
-                  </div>
-                  <ArrowRight className="h-4 w-4 text-muted-foreground self-center" />
-                </div>
-              </Link>
-            </Button>
-          ))}
-        </div>
-      </CardContent>
-    </Card>
+    <SectionCard dense title="Suggested Actions">
+      <div className="space-y-2">
+        {sortedActions.map((action) => (
+          <Link
+            key={action.id}
+            href={action.href as '/decisions'}
+            className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors group"
+          >
+            <div className={`p-2 rounded-lg ${
+              action.priority === 'high'
+                ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                : action.priority === 'medium'
+                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400'
+                : 'bg-primary/10 text-primary'
+            }`}>
+              {action.icon}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-sm truncate">{action.title}</p>
+                <StatusBadge
+                  status={priorityToStatus[action.priority]}
+                  statusLabel={priorityLabel[action.priority]}
+                  className="flex-shrink-0"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
+                {action.description}
+              </p>
+            </div>
+            <ArrowRight className="h-4 w-4 text-muted-foreground self-center opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+          </Link>
+        ))}
+      </div>
+    </SectionCard>
   )
 }

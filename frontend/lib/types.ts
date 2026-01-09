@@ -719,6 +719,14 @@ export interface DataQualityIssue {
   sourceId?: string
 }
 
+// Legacy type for components using older naming convention
+export interface DataQualityItem {
+  key: string
+  title: string
+  severity: 'critical' | 'warning' | 'info'
+  cta?: { label: string; route: string }
+}
+
 export interface DataQualityResponse {
   confidenceScore: number
   confidenceTier: 'high' | 'medium' | 'low'
@@ -733,19 +741,7 @@ export interface DataQualityResponse {
   }
 }
 
-// Types used by ModelConfidenceCard component
-export interface DataQualityItemCta {
-  label: string
-  route: string
-}
-
-export interface DataQualityItem {
-  key: string
-  title: string
-  severity: 'critical' | 'warning' | 'info'
-  cta?: DataQualityItemCta
-}
-
+// Alias for backward compatibility with existing components
 export interface DataQualityReport {
   confidenceScore: number
   confidenceLevel: 'high' | 'medium' | 'low'
