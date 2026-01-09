@@ -260,7 +260,7 @@ class BalanceSnapshot(TimestampedModel):
     class Meta:
         db_table = 'balance_snapshots'
         ordering = ['-as_of_date', '-recorded_at']
-        indexes = [models.Index(fields=['account', '-as_of_date'], name='balance_snapshot_account_as_of_date')]
+        indexes = [models.Index(fields=['account', '-as_of_date'], name='bal_snap_acct_as_of_date')]
 
     def __str__(self):
         return f"{self.account.name} @ {self.as_of_date}: {self.balance}"
