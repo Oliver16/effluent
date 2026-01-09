@@ -6,6 +6,7 @@ import type { ChartTheme } from './types';
 import type { DeepPartial, ChartOptions } from 'lightweight-charts';
 import { ColorType, CrosshairMode, LineStyle } from 'lightweight-charts';
 import { LW_CHART_COLORS, StatusTone } from '@/lib/design-tokens';
+import { formatCurrencyCompact } from '@/lib/format';
 
 // =============================================================================
 // CHART THEME HOOK — Uses Design Tokens for Consistency
@@ -118,6 +119,9 @@ export function useChartOptions(
         textColor: theme.textColor,
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 11,
+      },
+      localization: {
+        priceFormatter: (price: number) => formatCurrencyCompact(price),
       },
       grid: {
         vertLines: { color: theme.gridColor, style: LineStyle.Solid },
