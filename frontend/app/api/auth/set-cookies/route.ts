@@ -23,17 +23,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if request is over HTTPS (directly or via proxy)
+    const isSecure = request.headers.get('x-forwarded-proto') === 'https' ||
+      request.url.startsWith('https://');
+
     // Create response and set cookies on it directly
     // This ensures Set-Cookie headers are properly sent to the browser
     const response = NextResponse.json({ success: true });
 
     // Set token cookie
     // HttpOnly prevents JavaScript access (XSS protection)
-    // Secure ensures cookies are only sent over HTTPS in production
+    // Secure ensures cookies are only sent over HTTPS (only set if actually on HTTPS)
     // SameSite=Lax provides CSRF protection while allowing top-level navigation
     response.cookies.set('token', token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: isSecure,
       sameSite: 'lax',
       path: '/',
       // 2 hours - slightly longer than JWT access token lifetime (1 hour)
@@ -45,7 +49,7 @@ export async function POST(request: NextRequest) {
     if (refreshToken) {
       response.cookies.set('refreshToken', refreshToken, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecure,
         sameSite: 'lax',
         path: '/',
         // 7 days - matches JWT refresh token lifetime
@@ -57,7 +61,7 @@ export async function POST(request: NextRequest) {
     if (householdId) {
       response.cookies.set('householdId', householdId, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
+        secure: isSecure,
         sameSite: 'lax',
         path: '/',
         maxAge: 60 * 60 * 24 * 7,
