@@ -609,10 +609,10 @@ export default function FlowsPage() {
                           </span>
                         </TableCell>
                         <TableCell>{INCOME_CATEGORIES[flow.incomeCategory || ''] || flow.incomeCategory}</TableCell>
-                        <TableCell>{formatCurrency(flow.amount)}</TableCell>
+                        <TableCell>{formatCurrency(parseFloat(flow.amount))}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(flow.monthlyAmount)}
+                          {formatCurrency(parseFloat(flow.monthlyAmount))}
                         </TableCell>
                         <TableCell>
                           <StatusBadge
@@ -673,10 +673,10 @@ export default function FlowsPage() {
                           </span>
                         </TableCell>
                         <TableCell>{EXPENSE_CATEGORIES[flow.expenseCategory || ''] || flow.expenseCategory}</TableCell>
-                        <TableCell>{formatCurrency(flow.amount)}</TableCell>
+                        <TableCell>{formatCurrency(parseFloat(flow.amount))}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(flow.monthlyAmount)}
+                          {formatCurrency(parseFloat(flow.monthlyAmount))}
                         </TableCell>
                         <TableCell>
                           <StatusBadge
@@ -728,10 +728,10 @@ export default function FlowsPage() {
                     {transferFlows.map((flow) => (
                       <TableRow key={flow.id} className={!flow.isActive ? 'opacity-50' : ''}>
                         <TableCell className="font-medium">{flow.name}</TableCell>
-                        <TableCell>{formatCurrency(flow.amount)}</TableCell>
+                        <TableCell>{formatCurrency(parseFloat(flow.amount))}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(flow.monthlyAmount)}
+                          {formatCurrency(parseFloat(flow.monthlyAmount))}
                         </TableCell>
                         <TableCell>
                           <StatusBadge

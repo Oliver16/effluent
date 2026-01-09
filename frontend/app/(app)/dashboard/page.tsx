@@ -115,31 +115,30 @@ export default async function DashboardPage() {
 
       {/* Error Alert - uses new SystemAlert component */}
       {hasError && (
-        <SystemAlert
-          tone="critical"
-          title="Error loading data"
-          description="Unable to load dashboard data. This could be due to a session timeout. Try logging in again or refresh the page."
-          collapsible
-          action={{
-            label: 'Log in again',
-            onClick: () => (window.location.href = '/login'),
-          }}
-          className="mt-6"
-        />
+        <div className="mt-6 space-y-3">
+          <SystemAlert
+            tone="critical"
+            title="Error loading data"
+            description="Unable to load dashboard data. This could be due to a session timeout. Try logging in again or refresh the page."
+          />
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/login">Log in again</Link>
+          </Button>
+        </div>
       )}
 
       {/* Empty data notice - guided onboarding */}
       {hasNoData && !hasError && (
-        <SystemAlert
-          tone="info"
-          title="Welcome! Let's get started"
-          description="Your dashboard is empty because you haven't added any financial data yet. Complete your onboarding to see your financial health metrics."
-          action={{
-            label: 'Complete Onboarding',
-            onClick: () => (window.location.href = '/onboarding'),
-          }}
-          className="mt-6"
-        />
+        <div className="mt-6 space-y-3">
+          <SystemAlert
+            tone="info"
+            title="Welcome! Let's get started"
+            description="Your dashboard is empty because you haven't added any financial data yet. Complete your onboarding to see your financial health metrics."
+          />
+          <Button size="sm" asChild>
+            <Link href="/onboarding">Complete Onboarding</Link>
+          </Button>
+        </div>
       )}
 
       {/* North Star Cards - Key metrics with goal status */}

@@ -77,10 +77,8 @@ export default function DecisionsPage() {
         <SystemAlert
           tone="critical"
           title="Error loading templates"
-          icon={AlertCircle}
-        >
-          Unable to load decision templates. Please try again later.
-        </SystemAlert>
+          description="Unable to load decision templates. Please try again later."
+        />
       </ControlListLayout>
     )
   }
