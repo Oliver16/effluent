@@ -19,10 +19,15 @@ import type {
   SelfEmploymentTax,
   LifeEventTemplate,
   LifeEventCategoryGroup,
+  BaselineResponse,
+  BaselineActionResponse,
   DecisionCategoryGroup,
   DecisionTemplate,
   DecisionRunResponse,
   DecisionRun,
+  Goal,
+  GoalStatusDTO,
+  DataQualityReport,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -356,6 +361,9 @@ export const metrics = {
   current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/').then(data => toCamelCase<MetricSnapshot>(data)),
   history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`)
     .then(data => ({ results: toCamelCase<MetricSnapshot[]>(data.results || []) })),
+  dataQuality: () =>
+    api.get<DataQualityReport>('/api/v1/metrics/data-quality/')
+      .then(data => toCamelCase<DataQualityReport>(data)),
 }
 
 // Insights endpoints
@@ -507,6 +515,41 @@ export const lifeEventTemplates = {
     }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
 }
 
+// Baseline scenario endpoints
+export const baseline = {
+  /**
+   * Get the baseline scenario with health summary.
+   * Auto-creates the baseline if it doesn't exist.
+   */
+  get: () =>
+    api.get<BaselineResponse>('/api/v1/scenarios/baseline/')
+      .then(data => toCamelCase<BaselineResponse>(data)),
+
+  /**
+   * Refresh the baseline projection.
+   * @param force If true, refresh even if baseline is pinned.
+   */
+  refresh: (force = false) =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'refresh', force })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
+
+  /**
+   * Pin the baseline to a specific as-of date.
+   * Pinned baselines freeze the starting point for comparisons.
+   * @param asOfDate The date to pin to (YYYY-MM-DD format)
+   */
+  pin: (asOfDate: string) =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'pin', as_of_date: asOfDate })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
+
+  /**
+   * Unpin the baseline, returning it to live mode.
+   */
+  unpin: () =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'unpin' })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
+}
+
 // Decision Template endpoints
 export const decisions = {
   listTemplates: () =>
@@ -539,4 +582,25 @@ export const decisions = {
       .then(data => toCamelCase<DecisionRunResponse>(data)),
   deleteDraft: (id: string) =>
     api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
+}
+
+// Goals endpoints (TASK-13)
+export const goals = {
+  list: () =>
+    api.get<{ results: Goal[] }>('/api/v1/goals/')
+      .then(data => ({ results: toCamelCase<Goal[]>(data.results || []) })),
+  create: (data: Partial<Goal>) =>
+    api.post<Goal>('/api/v1/goals/', toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+  update: (id: string, data: Partial<Goal>) =>
+    api.patch<Goal>(`/api/v1/goals/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+  remove: (id: string) =>
+    api.delete<void>(`/api/v1/goals/${id}/`),
+  status: (scenarioId?: string) =>
+    api.get<{ results: GoalStatusDTO[] }>(
+      scenarioId
+        ? `/api/v1/goals/status/?scenario_id=${scenarioId}`
+        : '/api/v1/goals/status/'
+    ).then(data => ({ results: toCamelCase<GoalStatusDTO[]>(data.results || []) })),
 }

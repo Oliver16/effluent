@@ -199,12 +199,21 @@ export interface OnboardingStepResponse {
   validationErrors: Record<string, string>
 }
 
+export type BaselineMode = 'live' | 'pinned'
+
 export interface Scenario {
   id: string
   name: string
   description?: string
   isBaseline?: boolean
   parentScenario?: string | null
+  // Baseline-specific fields
+  baselineMode?: BaselineMode
+  baselineModeDisplay?: string
+  baselinePinnedAt?: string | null
+  baselinePinnedAsOfDate?: string | null
+  lastProjectedAt?: string | null
+  // Projection settings
   projectionMonths?: number
   startDate?: string
   inflationRate?: string
@@ -358,6 +367,43 @@ export interface LifeEventCategoryGroup {
   templates: LifeEventTemplate[]
 }
 
+// Baseline scenario types
+export interface MetricValue {
+  value: string
+  trend: 'up' | 'down' | 'stable' | null
+}
+
+export interface BaselineHealthMetrics {
+  as_of_date: string
+  net_worth: MetricValue
+  monthly_surplus: MetricValue
+  liquidity_months: MetricValue
+  savings_rate: MetricValue
+  dscr: MetricValue
+}
+
+export interface BaselineHealth {
+  baseline_id: string
+  baseline_mode: BaselineMode
+  baseline_pinned_at: string | null
+  baseline_pinned_as_of_date: string | null
+  last_projected_at: string | null
+  metrics: BaselineHealthMetrics | null
+}
+
+export interface BaselineResponse {
+  baseline: Scenario
+  health: BaselineHealth
+}
+
+export interface BaselineActionResponse {
+  status: string
+  baseline: Scenario
+  last_projected_at?: string | null
+  baseline_pinned_at?: string | null
+  baseline_pinned_as_of_date?: string | null
+}
+
 // Decision Templates
 export type DecisionCategory =
   | 'income'
@@ -445,4 +491,60 @@ export interface DecisionRun {
   isDraft: boolean
   completedAt?: string
   createdAt: string
+}
+
+// Goals (TASK-13)
+export type GoalType =
+  | 'emergency_fund_months'
+  | 'min_dscr'
+  | 'min_savings_rate'
+  | 'net_worth_target_by_date'
+  | 'retirement_age'
+
+export type GoalStatus = 'good' | 'warning' | 'critical'
+
+export interface Goal {
+  id: string
+  name: string
+  goalType: GoalType
+  targetValue: string
+  targetUnit: string
+  targetDate?: string
+  targetMeta?: Record<string, unknown>
+  isPrimary: boolean
+  isActive: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface GoalStatusDTO {
+  goalId: string
+  goalType: GoalType
+  name: string
+  targetValue: string
+  currentValue: string
+  status: GoalStatus
+  deltaToTarget: string
+  recommendation: string
+}
+
+// Data Quality (TASK-13)
+export type ConfidenceLevel = 'high' | 'medium' | 'low'
+
+export interface DataQualityItem {
+  key: string
+  severity: 'critical' | 'warning'
+  title: string
+  description: string
+  cta: {
+    label: string
+    route: string
+  }
+}
+
+export interface DataQualityReport {
+  confidenceLevel: ConfidenceLevel
+  confidenceScore: number
+  missing: DataQualityItem[]
+  warnings: DataQualityItem[]
 }

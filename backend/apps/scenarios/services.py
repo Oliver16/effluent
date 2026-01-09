@@ -123,10 +123,21 @@ class ScenarioEngine:
         changes.sort(key=lambda c: c.effective_date)
         return changes
 
-    def compute_projection(self) -> list[ScenarioProjection]:
-        """Compute full projection and save to database."""
-        # Initialize from current state
-        state = self._initialize_state()
+    def compute_projection(self, as_of_date: date | None = None) -> list[ScenarioProjection]:
+        """
+        Compute full projection and save to database.
+
+        Args:
+            as_of_date: Optional date to use for initializing state.
+                       When provided (for pinned baselines), account balances
+                       and flows are taken as of this date.
+                       When None, uses the latest available data.
+
+        Returns:
+            List of ScenarioProjection objects
+        """
+        # Initialize from current state (or as_of_date if pinned)
+        state = self._initialize_state(as_of_date=as_of_date)
 
         # Get scenario changes sorted by date, including inherited changes from parent
         changes = self._get_all_changes()
@@ -159,13 +170,34 @@ class ScenarioEngine:
 
         return projections
 
-    def _initialize_state(self) -> MonthlyState:
-        """Initialize state from current household data."""
+    def _initialize_state(self, as_of_date: date | None = None) -> MonthlyState:
+        """
+        Initialize state from household data.
+
+        Args:
+            as_of_date: Optional date to use for initializing balances.
+                       When provided, uses snapshots closest to this date.
+                       When None, uses the latest available snapshots.
+
+        Returns:
+            MonthlyState initialized from household data
+        """
         assets = {}
         liabilities = {}
 
+        # Determine the reference date for checking active flows
+        reference_date = as_of_date or self.scenario.start_date
+
         for acct in Account.objects.filter(household=self.household, is_active=True):
-            snap = acct.latest_snapshot
+            # Get appropriate snapshot based on as_of_date
+            if as_of_date:
+                # For pinned baselines, get snapshot closest to as_of_date
+                snap = acct.snapshots.filter(
+                    snapshot_date__lte=as_of_date
+                ).order_by('-snapshot_date').first()
+            else:
+                snap = acct.latest_snapshot
+
             if snap:
                 if acct.is_asset:
                     assets[str(acct.id)] = AssetInfo(
@@ -201,10 +233,10 @@ class ScenarioEngine:
 
         # Include income from IncomeSource objects (primary source of income data)
         for source in IncomeSource.objects.filter(household=self.household, is_active=True):
-            # Check if source is active on the start date
-            if source.start_date and source.start_date > self.scenario.start_date:
+            # Check if source is active on the reference date
+            if source.start_date and source.start_date > reference_date:
                 continue
-            if source.end_date and source.end_date < self.scenario.start_date:
+            if source.end_date and source.end_date < reference_date:
                 continue
             incomes.append({
                 'id': f'income_source_{source.id}',
@@ -217,7 +249,12 @@ class ScenarioEngine:
             })
 
         # Also include baseline flows for projection (scenario-specific flows are added via changes)
-        for flow in RecurringFlow.objects.filter(household=self.household, is_active=True, is_baseline=True):
+        # Use is_active_on() method to check if flow is active on the reference date
+        for flow in RecurringFlow.objects.filter(household=self.household, is_baseline=True):
+            # Skip flows that are not active on the reference date
+            if not flow.is_active_on(reference_date):
+                continue
+
             f = {
                 'id': str(flow.id),
                 'name': flow.name,

@@ -1,8 +1,14 @@
 import uuid
 from decimal import Decimal
 from django.db import models
+from django.db.models import Q
 from django.contrib.postgres.fields import ArrayField
 from apps.core.models import HouseholdOwnedModel, TimestampedModel
+
+
+class BaselineMode(models.TextChoices):
+    LIVE = 'live', 'Live'
+    PINNED = 'pinned', 'Pinned'
 
 
 class Scenario(HouseholdOwnedModel):
@@ -15,6 +21,23 @@ class Scenario(HouseholdOwnedModel):
     parent_scenario = models.ForeignKey(
         'self', on_delete=models.SET_NULL, null=True, blank=True, related_name='children'
     )
+
+    # Baseline-specific fields
+    baseline_mode = models.CharField(
+        max_length=20,
+        choices=BaselineMode.choices,
+        default=BaselineMode.LIVE
+    )
+    baseline_pinned_at = models.DateTimeField(null=True, blank=True)
+    baseline_pinned_as_of_date = models.DateField(null=True, blank=True)
+    baseline_metric_snapshot = models.ForeignKey(
+        'metrics.MetricSnapshot',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='baseline_scenarios'
+    )
+    last_projected_at = models.DateTimeField(null=True, blank=True)
 
     # Projection settings
     projection_months = models.PositiveIntegerField(default=60)  # 5 years
@@ -31,6 +54,13 @@ class Scenario(HouseholdOwnedModel):
     class Meta:
         db_table = 'scenarios'
         ordering = ['-created_at']
+        constraints = [
+            models.UniqueConstraint(
+                fields=['household'],
+                condition=Q(is_baseline=True),
+                name='unique_baseline_per_household'
+            )
+        ]
 
     def __str__(self):
         return f"{self.household.name} - {self.name}"
@@ -709,3 +739,50 @@ class LifeEventTemplate(models.Model):
                 ],
             },
         ]
+
+
+class RealityChangeEventType(models.TextChoices):
+    ACCOUNTS_CHANGED = 'accounts_changed', 'Accounts Changed'
+    FLOWS_CHANGED = 'flows_changed', 'Flows Changed'
+    TAXES_CHANGED = 'taxes_changed', 'Taxes Changed'
+    ONBOARDING_COMPLETED = 'onboarding_completed', 'Onboarding Completed'
+    MANUAL_REFRESH = 'manual_refresh', 'Manual Refresh'
+
+
+class RealityChangeEventStatus(models.TextChoices):
+    PENDING = 'pending', 'Pending'
+    PROCESSED = 'processed', 'Processed'
+    FAILED = 'failed', 'Failed'
+
+
+class RealityChangeEvent(HouseholdOwnedModel):
+    """
+    Lightweight event log to trigger baseline recompute.
+    Acts as a queue for processing baseline updates when reality changes.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    event_type = models.CharField(
+        max_length=30,
+        choices=RealityChangeEventType.choices
+    )
+    payload = models.JSONField(default=dict, blank=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+    status = models.CharField(
+        max_length=20,
+        choices=RealityChangeEventStatus.choices,
+        default=RealityChangeEventStatus.PENDING
+    )
+    error = models.TextField(blank=True)
+
+    class Meta:
+        db_table = 'reality_change_events'
+        ordering = ['created_at']
+        indexes = [
+            models.Index(
+                fields=['household', 'status', 'created_at'],
+                name='reality_event_household_status'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.household.name} - {self.event_type} ({self.status})"

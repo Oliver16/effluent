@@ -4,13 +4,16 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
+from rest_framework.views import APIView
 
 from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory
 from .serializers import (
     ScenarioSerializer, ScenarioDetailSerializer, ScenarioChangeSerializer,
-    ScenarioProjectionSerializer, ScenarioComparisonSerializer, LifeEventTemplateSerializer
+    ScenarioProjectionSerializer, ScenarioComparisonSerializer, LifeEventTemplateSerializer,
+    BaselineScenarioSerializer
 )
 from .services import ScenarioEngine
+from .baseline import BaselineScenarioService
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -99,6 +102,80 @@ class ScenarioComparisonViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(household=self.request.household)
+
+
+class BaselineView(APIView):
+    """
+    API endpoints for managing the baseline scenario.
+
+    GET /api/scenarios/baseline/ - Get baseline scenario
+    POST /api/scenarios/baseline/refresh/ - Trigger refresh
+    POST /api/scenarios/baseline/pin/ - Pin baseline to a date
+    POST /api/scenarios/baseline/unpin/ - Unpin baseline
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get the baseline scenario with health summary."""
+        baseline = BaselineScenarioService.get_or_create_baseline(request.household)
+        health = BaselineScenarioService.get_baseline_health(request.household)
+
+        return Response({
+            'baseline': BaselineScenarioSerializer(baseline).data,
+            'health': health,
+        })
+
+    def post(self, request):
+        """Handle baseline actions via action parameter."""
+        action_type = request.data.get('action')
+
+        if action_type == 'refresh':
+            baseline = BaselineScenarioService.refresh_baseline(
+                request.household,
+                force=request.data.get('force', False)
+            )
+            return Response({
+                'status': 'refreshed',
+                'baseline': BaselineScenarioSerializer(baseline).data,
+                'last_projected_at': baseline.last_projected_at.isoformat() if baseline.last_projected_at else None,
+            })
+
+        elif action_type == 'pin':
+            as_of_date_str = request.data.get('as_of_date')
+            if not as_of_date_str:
+                return Response(
+                    {'error': 'as_of_date is required for pin action'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            try:
+                as_of_date = date.fromisoformat(as_of_date_str)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            baseline = BaselineScenarioService.pin_baseline(request.household, as_of_date)
+            return Response({
+                'status': 'pinned',
+                'baseline': BaselineScenarioSerializer(baseline).data,
+                'baseline_pinned_at': baseline.baseline_pinned_at.isoformat() if baseline.baseline_pinned_at else None,
+                'baseline_pinned_as_of_date': baseline.baseline_pinned_as_of_date.isoformat() if baseline.baseline_pinned_as_of_date else None,
+            })
+
+        elif action_type == 'unpin':
+            baseline = BaselineScenarioService.unpin_baseline(request.household)
+            return Response({
+                'status': 'unpinned',
+                'baseline': BaselineScenarioSerializer(baseline).data,
+            })
+
+        else:
+            return Response(
+                {'error': f'Unknown action: {action_type}. Valid actions: refresh, pin, unpin'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 
 class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):

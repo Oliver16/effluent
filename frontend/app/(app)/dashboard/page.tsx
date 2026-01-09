@@ -2,13 +2,14 @@
 
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { metrics, accounts, insights as insightsApi } from '@/lib/api';
+import { metrics, accounts, insights as insightsApi, baseline } from '@/lib/api';
 import { MetricCards } from '@/components/dashboard/metric-cards';
 import { NetWorthChart } from '@/components/dashboard/net-worth-chart';
 import { AccountsList } from '@/components/dashboard/accounts-list';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
 import { CashFlowSummary } from '@/components/dashboard/cash-flow-summary';
 import { DecisionPicker } from '@/components/decisions/decision-picker';
+import { BaselineHealthTiles, BaselineStatus, BaselineProjectionCharts } from '@/components/baseline';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Plus } from 'lucide-react';
@@ -35,6 +36,16 @@ export default function DashboardPage() {
     queryFn: () => insightsApi.insights(),
   });
 
+  const {
+    data: baselineData,
+    isLoading: baselineLoading,
+    isError: baselineError,
+    refetch: refetchBaseline,
+  } = useQuery({
+    queryKey: ['baseline'],
+    queryFn: () => baseline.get(),
+  });
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -43,7 +54,7 @@ export default function DashboardPage() {
     );
   }
 
-  const hasError = metricsError || historyError || accountsError || insightsError;
+  const hasError = metricsError || historyError || accountsError || insightsError || baselineError;
 
   return (
     <div className="space-y-6">
@@ -66,6 +77,26 @@ export default function DashboardPage() {
           </AlertDescription>
         </Alert>
       )}
+
+      {/* Baseline Health Section */}
+      <BaselineHealthTiles
+        metrics={baselineData?.health?.metrics || null}
+        isLoading={baselineLoading}
+      />
+
+      {/* Baseline Projection Charts */}
+      {baselineData?.baseline?.projections && baselineData.baseline.projections.length > 0 && (
+        <BaselineProjectionCharts
+          projections={baselineData.baseline.projections}
+          months={12}
+        />
+      )}
+
+      {/* Baseline Status */}
+      <BaselineStatus
+        health={baselineData?.health || null}
+        onRefresh={() => refetchBaseline()}
+      />
 
       <MetricCards metrics={metricsData} />
       <InsightsPanel insights={insightsData?.results || []} />
