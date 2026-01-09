@@ -5,9 +5,32 @@ import { useTheme } from 'next-themes';
 import type { ChartTheme } from './types';
 import type { DeepPartial, ChartOptions } from 'lightweight-charts';
 import { ColorType, CrosshairMode, LineStyle } from 'lightweight-charts';
+import { LW_CHART_COLORS, StatusTone } from '@/lib/design-tokens';
+
+// =============================================================================
+// CHART THEME HOOK — Uses Design Tokens for Consistency
+// =============================================================================
+//
+// All chart colors are derived from lib/design-tokens.ts to ensure visual
+// consistency across the application. This prevents "charts feel like a
+// different product" syndrome.
+//
+// =============================================================================
+
+/**
+ * Status colors for chart elements (RGB format for canvas)
+ */
+export const CHART_STATUS_COLORS: Record<StatusTone, string> = {
+  good: LW_CHART_COLORS.good,
+  warning: LW_CHART_COLORS.warning,
+  critical: LW_CHART_COLORS.critical,
+  neutral: LW_CHART_COLORS.neutral,
+  info: 'rgb(59, 130, 246)', // blue-500
+};
 
 /**
  * Returns chart theme based on current app theme
+ * All colors are sourced from design-tokens.ts for consistency
  */
 export function useChartTheme(): ChartTheme {
   const { resolvedTheme } = useTheme();
@@ -16,16 +39,53 @@ export function useChartTheme(): ChartTheme {
   return useMemo(
     () => ({
       backgroundColor: 'transparent',
-      textColor: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)', // gray-400 / gray-500
-      gridColor: isDark ? 'rgba(75, 85, 99, 0.3)' : 'rgba(209, 213, 219, 0.5)', // gray-600/30 / gray-300/50
-      borderColor: isDark ? 'rgb(55, 65, 81)' : 'rgb(229, 231, 235)', // gray-700 / gray-200
-      crosshairColor: isDark ? 'rgb(156, 163, 175)' : 'rgb(107, 114, 128)',
-      upColor: 'rgb(16, 185, 129)', // emerald-500
-      downColor: 'rgb(239, 68, 68)', // red-500
-      primaryColor: isDark ? 'rgb(139, 92, 246)' : 'rgb(124, 58, 237)', // violet-500 / violet-600
-      secondaryColor: isDark ? 'rgba(156, 163, 175, 0.5)' : 'rgba(107, 114, 128, 0.5)',
+      // Text/grid colors from design tokens
+      textColor: isDark ? LW_CHART_COLORS.text.dark : LW_CHART_COLORS.text.light,
+      gridColor: isDark ? LW_CHART_COLORS.grid.dark : LW_CHART_COLORS.grid.light,
+      borderColor: isDark ? LW_CHART_COLORS.border.dark : LW_CHART_COLORS.border.light,
+      crosshairColor: isDark ? LW_CHART_COLORS.crosshair.dark : LW_CHART_COLORS.crosshair.light,
+      // Status colors from design tokens
+      upColor: LW_CHART_COLORS.positive,
+      downColor: LW_CHART_COLORS.negative,
+      // Series colors from design tokens
+      primaryColor: LW_CHART_COLORS.primary.line,
+      secondaryColor: isDark
+        ? LW_CHART_COLORS.secondary.fillTop
+        : `${LW_CHART_COLORS.secondary.line.replace('rgb', 'rgba').replace(')', ', 0.5)')}`,
     }),
     [isDark]
+  );
+}
+
+/**
+ * Extended chart theme with all series colors
+ */
+export interface ExtendedChartTheme extends ChartTheme {
+  series: {
+    primary: typeof LW_CHART_COLORS.primary;
+    secondary: typeof LW_CHART_COLORS.secondary;
+    tertiary: typeof LW_CHART_COLORS.tertiary;
+  };
+  status: typeof CHART_STATUS_COLORS;
+}
+
+/**
+ * Returns extended chart theme with series and status colors
+ */
+export function useExtendedChartTheme(): ExtendedChartTheme {
+  const baseTheme = useChartTheme();
+
+  return useMemo(
+    () => ({
+      ...baseTheme,
+      series: {
+        primary: LW_CHART_COLORS.primary,
+        secondary: LW_CHART_COLORS.secondary,
+        tertiary: LW_CHART_COLORS.tertiary,
+      },
+      status: CHART_STATUS_COLORS,
+    }),
+    [baseTheme]
   );
 }
 

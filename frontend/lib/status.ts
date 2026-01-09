@@ -266,3 +266,287 @@ export function toneToStatus(tone: StatusTone): Status {
 export function statusToTone(status: Status): StatusTone {
   return status;
 }
+
+// ============================================
+// STATUS REGISTRY — Unified Status Semantics
+// ============================================
+
+/**
+ * Status entry in the registry
+ */
+export interface StatusRegistryEntry {
+  /** Status tone key */
+  tone: StatusTone;
+  /** User-facing label */
+  label: string;
+  /** Description of what this status means */
+  description: string;
+  /** Recommended actions for this status */
+  recommendedActions: string[];
+  /** Priority level (higher = more urgent) */
+  priority: number;
+}
+
+/**
+ * Metric registry entry defining how a metric should be evaluated
+ */
+export interface MetricRegistryEntry {
+  /** Metric identifier */
+  id: string;
+  /** Human-readable label */
+  label: string;
+  /** Unit of measurement */
+  unit: string;
+  /** Default thresholds */
+  thresholds: {
+    warning: number;
+    critical: number;
+  };
+  /** Direction for evaluation */
+  direction: 'higher-is-better' | 'lower-is-better';
+  /** Status labels for each tone */
+  statusLabels: {
+    good: string;
+    warning: string;
+    critical: string;
+  };
+  /** Recommended actions for each status */
+  recommendedActions: {
+    good: string[];
+    warning: string[];
+    critical: string[];
+  };
+}
+
+/**
+ * Global status definitions with semantics
+ */
+export const STATUS_REGISTRY: Record<StatusTone, StatusRegistryEntry> = {
+  good: {
+    tone: 'good',
+    label: 'Healthy',
+    description: 'This metric is within the target range',
+    recommendedActions: ['Continue current strategy', 'Monitor for changes'],
+    priority: 0,
+  },
+  warning: {
+    tone: 'warning',
+    label: 'Warning',
+    description: 'This metric needs attention before it becomes critical',
+    recommendedActions: ['Review current trajectory', 'Consider adjustments'],
+    priority: 1,
+  },
+  critical: {
+    tone: 'critical',
+    label: 'Critical',
+    description: 'Immediate action is required to address this metric',
+    recommendedActions: ['Take immediate corrective action', 'Review financial plan'],
+    priority: 2,
+  },
+  neutral: {
+    tone: 'neutral',
+    label: 'Neutral',
+    description: 'This metric has no target or is not being evaluated',
+    recommendedActions: [],
+    priority: -1,
+  },
+  info: {
+    tone: 'info',
+    label: 'Info',
+    description: 'Informational status with no evaluation',
+    recommendedActions: [],
+    priority: -1,
+  },
+};
+
+/**
+ * Metric-specific registry with thresholds, labels, and actions
+ */
+export const METRIC_REGISTRY: Record<string, MetricRegistryEntry> = {
+  liquidity_months: {
+    id: 'liquidity_months',
+    label: 'Emergency Fund',
+    unit: 'months',
+    thresholds: { warning: 6, critical: 3 },
+    direction: 'higher-is-better',
+    statusLabels: {
+      good: 'Fully Funded',
+      warning: 'Building',
+      critical: 'Underfunded',
+    },
+    recommendedActions: {
+      good: ['Maintain current savings rate', 'Consider investing excess'],
+      warning: ['Increase monthly savings', 'Review discretionary spending'],
+      critical: ['Prioritize emergency fund', 'Reduce non-essential expenses', 'Consider additional income'],
+    },
+  },
+  dscr: {
+    id: 'dscr',
+    label: 'Debt Service Coverage',
+    unit: 'x',
+    thresholds: { warning: 1.25, critical: 1.0 },
+    direction: 'higher-is-better',
+    statusLabels: {
+      good: 'Comfortable',
+      warning: 'Tight',
+      critical: 'Stressed',
+    },
+    recommendedActions: {
+      good: ['Maintain income stability', 'Consider debt paydown'],
+      warning: ['Build cash buffer', 'Avoid new debt', 'Review expenses'],
+      critical: ['Immediate debt review needed', 'Consider refinancing', 'Increase income'],
+    },
+  },
+  savings_rate: {
+    id: 'savings_rate',
+    label: 'Savings Rate',
+    unit: '%',
+    thresholds: { warning: 0.15, critical: 0.05 },
+    direction: 'higher-is-better',
+    statusLabels: {
+      good: 'Strong',
+      warning: 'Moderate',
+      critical: 'Low',
+    },
+    recommendedActions: {
+      good: ['Maximize tax-advantaged accounts', 'Consider investment diversification'],
+      warning: ['Review budget for savings opportunities', 'Automate savings'],
+      critical: ['Create a budget', 'Track expenses', 'Find savings opportunities'],
+    },
+  },
+  debt_to_income: {
+    id: 'debt_to_income',
+    label: 'Debt-to-Income Ratio',
+    unit: '%',
+    thresholds: { warning: 0.36, critical: 0.43 },
+    direction: 'lower-is-better',
+    statusLabels: {
+      good: 'Low',
+      warning: 'Moderate',
+      critical: 'High',
+    },
+    recommendedActions: {
+      good: ['Maintain current debt levels', 'Focus on wealth building'],
+      warning: ['Avoid new debt', 'Consider extra payments on high-interest debt'],
+      critical: ['Prioritize debt reduction', 'Consider debt consolidation', 'Review all recurring payments'],
+    },
+  },
+  monthly_surplus: {
+    id: 'monthly_surplus',
+    label: 'Monthly Cash Flow',
+    unit: 'USD',
+    thresholds: { warning: 0, critical: -500 },
+    direction: 'higher-is-better',
+    statusLabels: {
+      good: 'Positive',
+      warning: 'Break-even',
+      critical: 'Negative',
+    },
+    recommendedActions: {
+      good: ['Direct surplus to goals', 'Build emergency fund'],
+      warning: ['Track all expenses', 'Review subscriptions and recurring costs'],
+      critical: ['Immediate budget review needed', 'Cut discretionary spending', 'Find income opportunities'],
+    },
+  },
+  net_worth_growth: {
+    id: 'net_worth_growth',
+    label: 'Net Worth Trend',
+    unit: '%',
+    thresholds: { warning: 0, critical: -0.05 },
+    direction: 'higher-is-better',
+    statusLabels: {
+      good: 'Growing',
+      warning: 'Stable',
+      critical: 'Declining',
+    },
+    recommendedActions: {
+      good: ['Continue current strategy', 'Review asset allocation'],
+      warning: ['Review spending patterns', 'Ensure savings rate is adequate'],
+      critical: ['Identify causes of decline', 'Review all financial accounts', 'Create action plan'],
+    },
+  },
+};
+
+/**
+ * Get metric registry entry with optional user overrides
+ */
+export function getMetricConfig(
+  metricId: string,
+  userOverrides?: Partial<MetricRegistryEntry>
+): MetricRegistryEntry | null {
+  const base = METRIC_REGISTRY[metricId];
+  if (!base) return null;
+
+  if (userOverrides) {
+    return {
+      ...base,
+      ...userOverrides,
+      thresholds: { ...base.thresholds, ...userOverrides.thresholds },
+      statusLabels: { ...base.statusLabels, ...userOverrides.statusLabels },
+      recommendedActions: { ...base.recommendedActions, ...userOverrides.recommendedActions },
+    };
+  }
+
+  return base;
+}
+
+/**
+ * Compute status using the metric registry
+ */
+export function computeStatusFromRegistry(
+  metricId: string,
+  value: number,
+  userOverrides?: Partial<MetricRegistryEntry>
+): {
+  tone: StatusTone;
+  label: string;
+  recommendations: string[];
+} | null {
+  const config = getMetricConfig(metricId, userOverrides);
+  if (!config) return null;
+
+  const { thresholds, direction, statusLabels, recommendedActions } = config;
+
+  let tone: StatusTone;
+  if (direction === 'higher-is-better') {
+    if (value >= thresholds.warning) {
+      tone = 'good';
+    } else if (value >= thresholds.critical) {
+      tone = 'warning';
+    } else {
+      tone = 'critical';
+    }
+  } else {
+    if (value <= thresholds.warning) {
+      tone = 'good';
+    } else if (value <= thresholds.critical) {
+      tone = 'warning';
+    } else {
+      tone = 'critical';
+    }
+  }
+
+  return {
+    tone,
+    label: statusLabels[tone as 'good' | 'warning' | 'critical'],
+    recommendations: recommendedActions[tone as 'good' | 'warning' | 'critical'],
+  };
+}
+
+/**
+ * Get the highest priority status from a list of tones
+ */
+export function getHighestPriorityStatus(tones: StatusTone[]): StatusTone {
+  let highest: StatusTone = 'neutral';
+  let highestPriority = -1;
+
+  for (const tone of tones) {
+    const entry = STATUS_REGISTRY[tone];
+    if (entry.priority > highestPriority) {
+      highest = tone;
+      highestPriority = entry.priority;
+    }
+  }
+
+  return highest;
+}
