@@ -37,7 +37,7 @@ const navigationItems: CommandPaletteItem[] = [
   { name: 'Accounts', href: '/accounts', icon: Wallet, keywords: ['bank', 'balance', 'money'] },
   { name: 'Flows', href: '/flows', icon: ArrowRightLeft, keywords: ['income', 'expense', 'recurring'] },
   { name: 'Scenarios', href: '/scenarios', icon: GitBranch, keywords: ['what-if', 'projection'] },
-  { name: 'Goals', href: '/settings/goals', icon: Target, keywords: ['target', 'objective'] },
+  { name: 'Goals', href: '/goals', icon: Target, keywords: ['target', 'objective'] },
   { name: 'Stress Tests', href: '/scenarios/compare', icon: Zap, keywords: ['risk', 'simulation'] },
   { name: 'Settings', href: '/settings', icon: Settings, keywords: ['preferences', 'config'] },
 ];
