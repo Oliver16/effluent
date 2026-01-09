@@ -19,6 +19,8 @@ import type {
   SelfEmploymentTax,
   LifeEventTemplate,
   LifeEventCategoryGroup,
+  BaselineResponse,
+  BaselineActionResponse,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -501,4 +503,39 @@ export const lifeEventTemplates = {
       changes_created: number;
       changes: ScenarioChange[];
     }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
+}
+
+// Baseline scenario endpoints
+export const baseline = {
+  /**
+   * Get the baseline scenario with health summary.
+   * Auto-creates the baseline if it doesn't exist.
+   */
+  get: () =>
+    api.get<BaselineResponse>('/api/v1/scenarios/baseline/')
+      .then(data => toCamelCase<BaselineResponse>(data)),
+
+  /**
+   * Refresh the baseline projection.
+   * @param force If true, refresh even if baseline is pinned.
+   */
+  refresh: (force = false) =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'refresh', force })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
+
+  /**
+   * Pin the baseline to a specific as-of date.
+   * Pinned baselines freeze the starting point for comparisons.
+   * @param asOfDate The date to pin to (YYYY-MM-DD format)
+   */
+  pin: (asOfDate: string) =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'pin', as_of_date: asOfDate })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
+
+  /**
+   * Unpin the baseline, returning it to live mode.
+   */
+  unpin: () =>
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'unpin' })
+      .then(data => toCamelCase<BaselineActionResponse>(data)),
 }

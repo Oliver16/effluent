@@ -24,7 +24,7 @@ from apps.metrics.views import (
     InsightViewSet, MetricThresholdViewSet
 )
 from apps.onboarding import views as onboarding_views
-from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet
+from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet, BaselineView
 
 router = DefaultRouter()
 router.register('households', HouseholdViewSet, basename='household')
@@ -70,4 +70,7 @@ urlpatterns = [
     path('api/v1/onboarding/complete/', onboarding_views.complete_step, name='onboarding-complete'),
     path('api/v1/onboarding/skip/', onboarding_views.skip_step, name='onboarding-skip'),
     path('api/v1/onboarding/back/', onboarding_views.go_back, name='onboarding-back'),
+
+    # Baseline scenario endpoint
+    path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline-scenario'),
 ]
