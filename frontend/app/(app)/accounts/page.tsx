@@ -445,8 +445,8 @@ export default function AccountsPage() {
                       {asset.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {asset.lastUpdated ? (
-                        <FreshnessIndicator lastUpdated={asset.lastUpdated} />
+                      {asset.updatedAt ? (
+                        <FreshnessIndicator lastUpdated={asset.updatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
