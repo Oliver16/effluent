@@ -69,11 +69,11 @@ export default function NewScenarioPage() {
     mutation.mutate({
       name,
       description,
-      projection_months: parseInt(projectionMonths, 10) || 60,
-      start_date: startDate,
-      inflation_rate: (parseFloat(inflationRate) / 100 || 0).toString(),
-      investment_return_rate: (parseFloat(investmentReturnRate) / 100 || 0).toString(),
-      salary_growth_rate: (parseFloat(salaryGrowthRate) / 100 || 0).toString(),
+      projectionMonths: parseInt(projectionMonths, 10) || 60,
+      startDate: startDate,
+      inflationRate: (parseFloat(inflationRate) / 100 || 0).toString(),
+      investmentReturnRate: (parseFloat(investmentReturnRate) / 100 || 0).toString(),
+      salaryGrowthRate: (parseFloat(salaryGrowthRate) / 100 || 0).toString(),
     });
   };
 

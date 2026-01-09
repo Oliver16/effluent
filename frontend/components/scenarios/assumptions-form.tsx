@@ -20,9 +20,9 @@ export function AssumptionsForm({ scenario }: AssumptionsFormProps) {
   const [salaryGrowth, setSalaryGrowth] = useState('');
 
   useEffect(() => {
-    setInflationRate(((parseFloat(scenario.inflation_rate || '0') || 0) * 100).toString());
-    setInvestmentReturn(((parseFloat(scenario.investment_return_rate || '0') || 0) * 100).toString());
-    setSalaryGrowth(((parseFloat(scenario.salary_growth_rate || '0') || 0) * 100).toString());
+    setInflationRate(((parseFloat(scenario.inflationRate || '0') || 0) * 100).toString());
+    setInvestmentReturn(((parseFloat(scenario.investmentReturnRate || '0') || 0) * 100).toString());
+    setSalaryGrowth(((parseFloat(scenario.salaryGrowthRate || '0') || 0) * 100).toString());
   }, [scenario]);
 
   const mutation = useMutation({
@@ -32,9 +32,9 @@ export function AssumptionsForm({ scenario }: AssumptionsFormProps) {
 
   const handleSubmit = () => {
     mutation.mutate({
-      inflation_rate: (parseFloat(inflationRate) / 100 || 0).toString(),
-      investment_return_rate: (parseFloat(investmentReturn) / 100 || 0).toString(),
-      salary_growth_rate: (parseFloat(salaryGrowth) / 100 || 0).toString(),
+      inflationRate: (parseFloat(inflationRate) / 100 || 0).toString(),
+      investmentReturnRate: (parseFloat(investmentReturn) / 100 || 0).toString(),
+      salaryGrowthRate: (parseFloat(salaryGrowth) / 100 || 0).toString(),
     });
   };
 

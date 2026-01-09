@@ -81,7 +81,7 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
         solution.plan,
         `Achieve: ${goal.displayName}`
       )
-      router.push(response.redirectUrl)
+      router.push(response.redirectUrl as `/scenarios/${string}`)
     } catch (err) {
       console.error('Failed to apply solution:', err)
       setError('Failed to create scenario from solution.')
@@ -224,7 +224,7 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
                       <span className="text-sm">
                         {step.name || step.changeType.replace(/_/g, ' ')}
                       </span>
-                      {step.parameters.monthly_adjustment && (
+                      {step.parameters.monthly_adjustment !== undefined && (
                         <Badge variant="outline" className="ml-auto">
                           ${Math.abs(parseFloat(String(step.parameters.monthly_adjustment)))}/mo
                         </Badge>
@@ -244,7 +244,7 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
                 </p>
                 {solution.plan.length > 0 && (
                   <p className="text-sm">
-                    Best attempt achieves: <strong>{solution.result.bestValue}</strong>
+                    Best attempt achieves: <strong>{solution.result.finalValue}</strong>
                   </p>
                 )}
               </div>

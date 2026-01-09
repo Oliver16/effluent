@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
 import { AlertCircle, AlertTriangle, CheckCircle2, ArrowRight } from 'lucide-react'
-import { DataQualityReport, DataQualityItem } from '@/lib/types'
+import { DataQualityResponse, DataQualityIssue } from '@/lib/types'
 
 interface ModelConfidenceCardProps {
-  report: DataQualityReport | null
+  report: DataQualityResponse | null
   isLoading?: boolean
 }
 
@@ -38,11 +38,11 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
   }
 
   const confidencePercent = Math.round(report.confidenceScore * 100)
-  const allItems = [...report.missing, ...report.warnings]
-  const hasIssues = allItems.length > 0
+  const allIssues = [...report.issues, ...report.warnings]
+  const hasIssues = allIssues.length > 0
 
   const getConfidenceBadgeVariant = () => {
-    switch (report.confidenceLevel) {
+    switch (report.confidenceTier) {
       case 'high':
         return 'default'
       case 'medium':
@@ -55,7 +55,7 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
   }
 
   const getConfidenceColor = () => {
-    switch (report.confidenceLevel) {
+    switch (report.confidenceTier) {
       case 'high':
         return 'text-green-600'
       case 'medium':
@@ -67,10 +67,9 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
     }
   }
 
-  const handleCtaClick = (item: DataQualityItem) => {
-    if (item.cta?.route) {
-      router.push(item.cta.route)
-    }
+  const handleIssueClick = () => {
+    // Navigate to settings page
+    router.push('/settings')
   }
 
   return (
@@ -79,7 +78,7 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">Model Confidence</CardTitle>
           <Badge variant={getConfidenceBadgeVariant()}>
-            {report.confidenceLevel.charAt(0).toUpperCase() + report.confidenceLevel.slice(1)}
+            {report.confidenceTier.charAt(0).toUpperCase() + report.confidenceTier.slice(1)}
           </Badge>
         </div>
       </CardHeader>
@@ -100,37 +99,37 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              {allItems.length} item{allItems.length !== 1 ? 's' : ''} need{allItems.length === 1 ? 's' : ''} attention
+              {allIssues.length} item{allIssues.length !== 1 ? 's' : ''} need{allIssues.length === 1 ? 's' : ''} attention
             </p>
             <div className="space-y-2">
-              {allItems.slice(0, 3).map((item) => (
+              {allIssues.slice(0, 3).map((issue, index) => (
                 <div
-                  key={item.key}
+                  key={`${issue.field}-${index}`}
                   className="flex items-start gap-2 p-2 rounded-md bg-muted/50"
                 >
-                  {item.severity === 'critical' ? (
+                  {issue.severity === 'critical' ? (
                     <AlertCircle className="h-4 w-4 text-red-500 mt-0.5 flex-shrink-0" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{item.title}</p>
+                    <p className="text-sm font-medium truncate">{issue.message}</p>
                     <Button
                       variant="link"
                       size="sm"
                       className="h-auto p-0 text-xs"
-                      onClick={() => handleCtaClick(item)}
+                      onClick={handleIssueClick}
                     >
-                      {item.cta?.label || 'Fix'}
+                      Fix
                       <ArrowRight className="h-3 w-3 ml-1" />
                     </Button>
                   </div>
                 </div>
               ))}
             </div>
-            {allItems.length > 3 && (
+            {allIssues.length > 3 && (
               <p className="text-xs text-muted-foreground">
-                +{allItems.length - 3} more items
+                +{allIssues.length - 3} more items
               </p>
             )}
           </div>

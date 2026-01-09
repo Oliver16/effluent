@@ -4,10 +4,10 @@ import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Target, Lightbulb, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react'
-import { GoalStatusDTO } from '@/lib/types'
+import { GoalStatusResult } from '@/lib/types'
 
 interface DashboardHeaderProps {
-  goalStatus: GoalStatusDTO[] | null
+  goalStatus: GoalStatusResult[] | null
   isLoading?: boolean
 }
 
@@ -33,7 +33,7 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
     // Group by status
     const critical = goalStatus.filter(g => g.status === 'critical')
     const warning = goalStatus.filter(g => g.status === 'warning')
-    const good = goalStatus.filter(g => g.status === 'good')
+    const onTrack = goalStatus.filter(g => g.status === 'on_track' || g.status === 'achieved')
 
     const parts = []
 
@@ -55,11 +55,11 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
       )
     }
 
-    if (good.length > 0) {
+    if (onTrack.length > 0) {
       parts.push(
-        <span key="good" className="inline-flex items-center gap-1">
+        <span key="onTrack" className="inline-flex items-center gap-1">
           <CheckCircle className="h-4 w-4 text-green-500" />
-          <span className="text-green-600 font-medium">{good.length} on track</span>
+          <span className="text-green-600 font-medium">{onTrack.length} on track</span>
         </span>
       )
     }

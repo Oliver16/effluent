@@ -16,8 +16,8 @@ import { MilestoneComparison } from '@/components/scenarios/milestone-comparison
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
 import { Scenario, ScenarioProjection } from '@/lib/types';
 
-function isBaseline(scenario: Scenario) {
-  return scenario.is_baseline === true || (scenario as Scenario & { isBaseline?: boolean }).isBaseline === true;
+function isBaselineScenario(scenario: Scenario) {
+  return scenario.isBaseline === true;
 }
 
 export default function ScenarioDetailPage() {
@@ -45,7 +45,7 @@ export default function ScenarioDetailPage() {
   });
 
   const baselineScenario = useMemo(() => {
-    return allScenarios.find(isBaseline);
+    return allScenarios.find(isBaselineScenario);
   }, [allScenarios]);
 
   const { data: baselineProjections } = useQuery({

@@ -70,7 +70,7 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
     unit: 'percent',
     description: 'Target percentage of income saved',
   },
-  net_worth_target_by_date: {
+  net_worth_target: {
     label: 'Net Worth Target',
     icon: <DollarSign className="h-4 w-4" />,
     unit: 'usd',
@@ -82,20 +82,34 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
     unit: 'age',
     description: 'Target age for retirement',
   },
+  debt_free_date: {
+    label: 'Debt Free Date',
+    icon: <Calendar className="h-4 w-4" />,
+    unit: 'date',
+    description: 'Target date to become debt-free',
+  },
+  custom: {
+    label: 'Custom Goal',
+    icon: <Target className="h-4 w-4" />,
+    unit: 'custom',
+    description: 'A custom financial goal',
+  },
 }
 
 const goalFormSchema = z.object({
   name: z.string().min(1, 'Name is required').max(120),
-  goal_type: z.enum([
+  goalType: z.enum([
     'emergency_fund_months',
     'min_dscr',
     'min_savings_rate',
-    'net_worth_target_by_date',
+    'net_worth_target',
     'retirement_age',
+    'debt_free_date',
+    'custom',
   ] as const),
-  target_value: z.string().min(1, 'Target value is required'),
-  target_date: z.string().optional(),
-  is_primary: z.boolean().default(false),
+  targetValue: z.string().min(1, 'Target value is required'),
+  targetDate: z.string().optional(),
+  isPrimary: z.boolean().default(false),
 })
 
 type GoalFormValues = z.infer<typeof goalFormSchema>
@@ -117,17 +131,20 @@ export default function GoalsSettingsPage() {
     resolver: zodResolver(goalFormSchema),
     defaultValues: {
       name: '',
-      goal_type: 'emergency_fund_months',
-      target_value: '',
-      target_date: '',
-      is_primary: false,
+      goalType: 'emergency_fund_months',
+      targetValue: '',
+      targetDate: '',
+      isPrimary: false,
     },
   })
 
   const createMutation = useMutation({
     mutationFn: (data: GoalFormValues) => goals.create({
-      ...data,
-      target_value: data.target_value,
+      name: data.name,
+      goalType: data.goalType,
+      targetValue: data.targetValue,
+      targetDate: data.targetDate || undefined,
+      isPrimary: data.isPrimary,
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
@@ -144,8 +161,11 @@ export default function GoalsSettingsPage() {
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: GoalFormValues }) =>
       goals.update(id, {
-        ...data,
-        target_value: data.target_value,
+        name: data.name,
+        goalType: data.goalType,
+        targetValue: data.targetValue,
+        targetDate: data.targetDate || undefined,
+        isPrimary: data.isPrimary,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
@@ -161,7 +181,7 @@ export default function GoalsSettingsPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => goals.remove(id),
+    mutationFn: (id: string) => goals.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['goals'] })
       queryClient.invalidateQueries({ queryKey: ['goals', 'status'] })
@@ -178,10 +198,10 @@ export default function GoalsSettingsPage() {
       setEditingGoal(goal)
       form.reset({
         name: goal.name,
-        goal_type: goal.goalType as GoalType,
-        target_value: goal.targetValue,
-        target_date: goal.targetDate || '',
-        is_primary: goal.isPrimary,
+        goalType: goal.goalType as GoalType,
+        targetValue: goal.targetValue,
+        targetDate: goal.targetDate || '',
+        isPrimary: goal.isPrimary,
       })
     } else {
       setEditingGoal(null)
@@ -198,8 +218,8 @@ export default function GoalsSettingsPage() {
     }
   }
 
-  const goalType = form.watch('goal_type')
-  const needsTargetDate = goalType === 'net_worth_target_by_date'
+  const goalType = form.watch('goalType')
+  const needsTargetDate = goalType === 'net_worth_target' || goalType === 'debt_free_date'
   const config = GOAL_TYPE_CONFIG[goalType as GoalType]
 
   if (isLoading) {
@@ -234,7 +254,7 @@ export default function GoalsSettingsPage() {
     )
   }
 
-  const goalsList = data?.results || []
+  const goalsList = data || []
 
   return (
     <div className="space-y-6">
@@ -332,7 +352,7 @@ export default function GoalsSettingsPage() {
             <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
               <FormField
                 control={form.control}
-                name="goal_type"
+                name="goalType"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Goal Type</FormLabel>
@@ -380,7 +400,7 @@ export default function GoalsSettingsPage() {
 
               <FormField
                 control={form.control}
-                name="target_value"
+                name="targetValue"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Target Value ({config?.unit})</FormLabel>
@@ -400,7 +420,7 @@ export default function GoalsSettingsPage() {
               {needsTargetDate && (
                 <FormField
                   control={form.control}
-                  name="target_date"
+                  name="targetDate"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Target Date</FormLabel>
@@ -415,7 +435,7 @@ export default function GoalsSettingsPage() {
 
               <FormField
                 control={form.control}
-                name="is_primary"
+                name="isPrimary"
                 render={({ field }) => (
                   <FormItem className="flex items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">

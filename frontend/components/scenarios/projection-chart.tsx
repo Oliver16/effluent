@@ -28,22 +28,22 @@ export function ProjectionChart({
 
     // Add scenario projections
     projections.forEach((projection) => {
-      const monthNum = projection.month_number;
+      const monthNum = projection.monthNumber;
       const existing = projectionsByMonth.get(monthNum) || {};
       projectionsByMonth.set(monthNum, {
         ...existing,
-        scenario: parseFloat(projection.net_worth),
+        scenario: parseFloat(projection.netWorth),
       });
     });
 
     // Add comparison projections (baseline)
     if (hasComparison) {
       compareProjections.forEach((projection) => {
-        const monthNum = projection.month_number;
+        const monthNum = projection.monthNumber;
         const existing = projectionsByMonth.get(monthNum) || {};
         projectionsByMonth.set(monthNum, {
           ...existing,
-          baseline: parseFloat(projection.net_worth),
+          baseline: parseFloat(projection.netWorth),
         });
       });
     }

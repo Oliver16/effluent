@@ -11,11 +11,11 @@ import {
   TrendingUp,
   Wallet,
 } from 'lucide-react'
-import { MetricSnapshot, GoalStatusDTO } from '@/lib/types'
+import { MetricSnapshot, GoalStatusResult } from '@/lib/types'
 
 interface ActionPanelProps {
   metrics: MetricSnapshot | null
-  goalStatus: GoalStatusDTO[] | null
+  goalStatus: GoalStatusResult[] | null
   isLoading?: boolean
 }
 
@@ -139,7 +139,7 @@ export function ActionPanel({ metrics, goalStatus, isLoading }: ActionPanelProps
               className="w-full justify-start h-auto py-3 px-3"
               asChild
             >
-              <Link href={action.href}>
+              <Link href={action.href as '/decisions'}>
                 <div className="flex items-start gap-3 w-full">
                   <div className={`p-2 rounded-lg ${
                     action.priority === 'high'

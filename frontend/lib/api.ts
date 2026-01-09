@@ -487,8 +487,8 @@ export const scenarios = {
     api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/')
       .then(normalizeListResponse),
   get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`),
-  create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', data),
-  update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, data),
+  create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
+  update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   delete: (id: string) => api.delete<void>(`/api/v1/scenarios/${id}/`),
   compute: (id: string) => api.post<{ status: string; projection_count: number }>(`/api/v1/scenarios/${id}/compute/`),
   getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`),

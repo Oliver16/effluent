@@ -2,12 +2,12 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { MetricSnapshot, GoalStatusDTO, GoalType } from '@/lib/types'
+import { MetricSnapshot, GoalStatusResult, GoalType } from '@/lib/types'
 import { DollarSign, Calendar, TrendingUp, TrendingDown, Minus, Shield, PiggyBank, Wallet } from 'lucide-react'
 
 interface NorthStarCardsProps {
   metrics: MetricSnapshot | null
-  goalStatus: GoalStatusDTO[] | null
+  goalStatus: GoalStatusResult[] | null
   isLoading?: boolean
 }
 
@@ -16,9 +16,9 @@ interface MetricCardData {
   title: string
   icon: React.ReactNode
   getValue: (m: MetricSnapshot) => string
-  getTarget: (goals: GoalStatusDTO[]) => string | null
-  getDelta: (goals: GoalStatusDTO[]) => string | null
-  getStatus: (goals: GoalStatusDTO[]) => 'good' | 'warning' | 'critical' | null
+  getTarget: (goals: GoalStatusResult[]) => string | null
+  getDelta: (goals: GoalStatusResult[]) => string | null
+  getStatus: (goals: GoalStatusResult[]) => 'good' | 'warning' | 'critical' | null
   format: 'currency' | 'months' | 'ratio' | 'percent'
   goalType: GoalType | null
 }
@@ -30,19 +30,19 @@ const METRIC_CARDS: MetricCardData[] = [
     icon: <DollarSign className="h-4 w-4" />,
     getValue: (m) => m.netWorthMarket,
     getTarget: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target_by_date')
+      const goal = goals.find(g => g.goalType === 'net_worth_target')
       return goal ? goal.targetValue : null
     },
     getDelta: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target_by_date')
+      const goal = goals.find(g => g.goalType === 'net_worth_target')
       return goal ? goal.deltaToTarget : null
     },
     getStatus: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target_by_date')
+      const goal = goals.find(g => g.goalType === 'net_worth_target')
       return goal ? (goal.status as 'good' | 'warning' | 'critical') : null
     },
     format: 'currency',
-    goalType: 'net_worth_target_by_date',
+    goalType: 'net_worth_target',
   },
   {
     key: 'monthlySurplus',
@@ -173,7 +173,7 @@ function MetricCard({
 }: {
   card: MetricCardData
   metrics: MetricSnapshot | null
-  goalStatus: GoalStatusDTO[] | null
+  goalStatus: GoalStatusResult[] | null
   isLoading?: boolean
 }) {
   if (isLoading) {
