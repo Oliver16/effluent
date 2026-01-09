@@ -798,13 +798,27 @@ class ScenarioEngine:
 
         elif change.change_type == ChangeType.ADJUST_INTEREST_RATES:
             # Adjust interest rates on liabilities
+            # adjustment_percent is in percentage points (e.g., 2 means +2%)
             adjustment_percent = Decimal(str(params.get('adjustment_percent', 0)))
             applies_to = params.get('applies_to', 'all')
 
+            # Define variable-rate debt types for "variable" filter
+            variable_rate_types = {'credit_card', 'heloc', 'arm', 'variable_rate', 'line_of_credit'}
+
             for lid, liab in state.liabilities.items():
-                if applies_to == 'all' or applies_to in liab.account_type:
-                    # Apply percentage adjustment to existing rate
-                    liab.rate = liab.rate * (1 + adjustment_percent / 100)
+                should_apply = False
+                if applies_to == 'all':
+                    should_apply = True
+                elif applies_to == 'variable':
+                    # Match debts with typically variable rates
+                    should_apply = liab.account_type in variable_rate_types
+                elif applies_to in liab.account_type:
+                    should_apply = True
+
+                if should_apply:
+                    # Convert percentage points to decimal and add to rate
+                    rate_adjustment = adjustment_percent / Decimal('100')
+                    liab.rate = liab.rate + rate_adjustment
                     # Recalculate payment if we have term info
                     if liab.term_months > 0 and liab.rate > 0:
                         monthly_rate = liab.rate / 12
@@ -818,9 +832,11 @@ class ScenarioEngine:
                 return state
             state.applied_changes.add(change_key)
 
+            # percent_change is a ratio (e.g., -0.20 for a 20% drop)
             percent_change = Decimal(str(params.get('percent_change', 0)))
             applies_to = params.get('applies_to', 'all')
-            multiplier = 1 + (percent_change / 100)
+            recovery_months = int(params.get('recovery_months', 0))
+            multiplier = 1 + percent_change  # percent_change is already a ratio
 
             for aid, asset in state.assets.items():
                 if applies_to == 'all':
@@ -829,14 +845,26 @@ class ScenarioEngine:
                 elif applies_to in asset.account_type:
                     asset.balance = asset.balance * multiplier
 
+            # Store recovery info for gradual recovery in _apply_growth
+            if recovery_months > 0 and percent_change < 0:
+                # Calculate monthly recovery rate to restore over recovery_months
+                # total_drop is negative (e.g., -0.20), so recovery per month is positive
+                monthly_recovery = -percent_change / recovery_months
+                state.contribution_rates['_investment_recovery_monthly'] = monthly_recovery
+                state.contribution_rates['_investment_recovery_remaining'] = recovery_months
+
         elif change.change_type == ChangeType.OVERRIDE_INFLATION:
-            # Override inflation rate for a period
-            # This modifies the scenario's inflation rate temporarily
-            new_rate = Decimal(str(params.get('rate', self.scenario.inflation_rate)))
-            # Store original if not already stored
-            if not hasattr(self, '_original_inflation_rate'):
-                self._original_inflation_rate = self.scenario.inflation_rate
-            self.scenario.inflation_rate = new_rate
+            # Override inflation rate for a period (duration_months)
+            # rate can be passed as 'rate' or 'inflation_rate' from stress tests
+            new_rate = Decimal(str(params.get('rate', params.get('inflation_rate', self.scenario.inflation_rate))))
+            duration_months = int(params.get('duration_months', 0))
+
+            # Store the override and duration info for _apply_growth
+            state.contribution_rates['_override_inflation'] = new_rate
+            if duration_months > 0:
+                state.contribution_rates['_inflation_duration_remaining'] = duration_months
+                # Store original rate to revert to after duration
+                state.contribution_rates['_original_inflation'] = self.scenario.inflation_rate
 
         elif change.change_type == ChangeType.MODIFY_WITHHOLDING:
             # Modify withholding affects take-home but not liability
@@ -866,55 +894,6 @@ class ScenarioEngine:
                     'monthly': monthly_equiv,
                 })
 
-        # TASK-15: Stress test change types
-        elif change.change_type == ChangeType.ADJUST_INTEREST_RATES:
-            # Adjust interest rates on debts (for stress testing rate hikes)
-            adjustment_percent = Decimal(str(params.get('adjustment_percent', 0)))
-            applies_to = params.get('applies_to', 'all')
-
-            for lid, liab in state.liabilities.items():
-                # Apply adjustment (adjustment_percent is in percentage points, e.g., 2 means +2%)
-                if applies_to == 'all' or liab.account_type == applies_to:
-                    # Convert percentage points to decimal
-                    rate_adjustment = adjustment_percent / Decimal('100')
-                    liab.rate = liab.rate + rate_adjustment
-
-                    # Recalculate payment if we have term info
-                    if liab.term_months > 0 and liab.rate > 0:
-                        monthly_rate = liab.rate / 12
-                        # Approximate remaining balance as current balance
-                        remaining_term = max(1, liab.term_months - (state.month * 12) // 12)
-                        if monthly_rate > 0:
-                            new_payment = liab.balance * (monthly_rate * (1 + monthly_rate) ** remaining_term) / ((1 + monthly_rate) ** remaining_term - 1)
-                            liab.payment = new_payment.quantize(Decimal('0.01'))
-
-                            # Update payment expense
-                            for exp in state.expenses:
-                                if lid in exp.get('id', ''):
-                                    exp['amount'] = liab.payment
-                                    exp['monthly'] = liab.payment
-
-        elif change.change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
-            # Apply a one-time shock to investment values (for stress testing market crashes)
-            percent_change = Decimal(str(params.get('percent_change', 0)))
-            applies_to = params.get('applies_to', 'all')
-
-            change_key = f'investment_shock_{change.id}'
-            if change_key not in state.applied_changes:
-                state.applied_changes.add(change_key)
-
-                for aid, asset in state.assets.items():
-                    if asset.is_retirement or asset.account_type in ('brokerage', 'crypto'):
-                        if applies_to == 'all' or asset.account_type == applies_to:
-                            # Apply percent change (e.g., -30 means -30%)
-                            multiplier = 1 + (percent_change / Decimal('100'))
-                            asset.balance = asset.balance * multiplier
-
-        elif change.change_type == ChangeType.OVERRIDE_INFLATION:
-            # Override inflation rate for the scenario (stored in contribution_rates for access in _apply_growth)
-            new_rate = Decimal(str(params.get('rate', self.scenario.inflation_rate)))
-            state.contribution_rates['_override_inflation'] = new_rate
-
         elif change.change_type == ChangeType.OVERRIDE_INVESTMENT_RETURN:
             # Override investment return rate
             new_rate = Decimal(str(params.get('rate', self.scenario.investment_return_rate)))
@@ -934,14 +913,46 @@ class ScenarioEngine:
             '_override_salary_growth',
             self.scenario.salary_growth_rate
         )
-        inflation_rate = state.contribution_rates.get(
-            '_override_inflation',
-            self.scenario.inflation_rate
-        )
+
+        # Handle inflation rate with duration tracking
+        if '_inflation_duration_remaining' in state.contribution_rates:
+            remaining = state.contribution_rates['_inflation_duration_remaining']
+            if remaining > 0:
+                inflation_rate = state.contribution_rates.get('_override_inflation', self.scenario.inflation_rate)
+                state.contribution_rates['_inflation_duration_remaining'] = remaining - 1
+            else:
+                # Duration expired, revert to original rate
+                inflation_rate = state.contribution_rates.get('_original_inflation', self.scenario.inflation_rate)
+                # Clean up the override
+                state.contribution_rates.pop('_override_inflation', None)
+                state.contribution_rates.pop('_inflation_duration_remaining', None)
+                state.contribution_rates.pop('_original_inflation', None)
+        else:
+            inflation_rate = state.contribution_rates.get(
+                '_override_inflation',
+                self.scenario.inflation_rate
+            )
+
         investment_return_rate = state.contribution_rates.get(
             '_override_investment_return',
             self.scenario.investment_return_rate
         )
+
+        # Apply investment recovery if active (gradual recovery after market drop)
+        if '_investment_recovery_remaining' in state.contribution_rates:
+            remaining = state.contribution_rates['_investment_recovery_remaining']
+            if remaining > 0:
+                monthly_recovery = state.contribution_rates.get('_investment_recovery_monthly', Decimal('0'))
+                # Apply recovery to investment accounts
+                for aid, asset in state.assets.items():
+                    if asset.is_retirement or asset.account_type in ('brokerage', 'crypto'):
+                        # Recovery adds back value: balance * (1 + monthly_recovery)
+                        asset.balance = asset.balance * (1 + monthly_recovery)
+                state.contribution_rates['_investment_recovery_remaining'] = remaining - 1
+            else:
+                # Recovery complete, clean up
+                state.contribution_rates.pop('_investment_recovery_monthly', None)
+                state.contribution_rates.pop('_investment_recovery_remaining', None)
 
         if month > 0 and month % 12 == 0:
             # Annual salary growth

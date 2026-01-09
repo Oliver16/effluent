@@ -199,19 +199,29 @@ class BaselineScenarioService:
         """
         baseline = cls.get_or_create_baseline(household)
 
-        # Get latest metric snapshot
-        latest_snapshot = MetricSnapshot.objects.filter(
-            household=household
-        ).order_by('-as_of_date').first()
+        # For pinned baselines, use the pinned snapshot if available
+        if baseline.baseline_mode == BaselineMode.PINNED and baseline.baseline_metric_snapshot:
+            latest_snapshot = baseline.baseline_metric_snapshot
+            # Get previous snapshot before the pinned date for trend calculation
+            previous_snapshot = MetricSnapshot.objects.filter(
+                household=household,
+                as_of_date__lt=latest_snapshot.as_of_date
+            ).order_by('-as_of_date').first()
+        else:
+            # Get latest metric snapshot for live baselines
+            latest_snapshot = MetricSnapshot.objects.filter(
+                household=household
+            ).order_by('-as_of_date').first()
 
-        # Get previous snapshot for trend calculation
-        previous_snapshot = MetricSnapshot.objects.filter(
-            household=household
-        ).order_by('-as_of_date')[1:2].first() if latest_snapshot else None
+            # Get previous snapshot for trend calculation
+            previous_snapshot = MetricSnapshot.objects.filter(
+                household=household
+            ).order_by('-as_of_date')[1:2].first() if latest_snapshot else None
 
         # Calculate trends
         def get_trend(current, previous, higher_is_better=True):
-            if not current or not previous:
+            # Use explicit None check to handle Decimal('0') correctly
+            if current is None or previous is None:
                 return None
             diff = float(current) - float(previous)
             if abs(diff) < 0.001:

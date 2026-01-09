@@ -12,40 +12,13 @@ from django.utils import timezone
 from apps.core.models import Household
 from apps.scenarios.models import Scenario, ScenarioChange, ChangeType
 from apps.scenarios.services import ScenarioEngine
+from apps.scenarios.baseline import BaselineScenarioService
 from .models import DecisionTemplate, DecisionRun
 
 
 class DecisionCompilerError(Exception):
     """Error during decision compilation."""
     pass
-
-
-class BaselineService:
-    """Service for managing baseline scenarios."""
-
-    @staticmethod
-    def get_or_create_baseline(household: Household) -> Scenario:
-        """Get or create the baseline scenario for a household."""
-        baseline = Scenario.objects.filter(
-            household=household,
-            is_baseline=True,
-            is_active=True
-        ).first()
-
-        if not baseline:
-            baseline = Scenario.objects.create(
-                household=household,
-                name="Baseline",
-                description="Your current financial trajectory based on existing data.",
-                is_baseline=True,
-                start_date=date.today().replace(day=1),  # First of current month
-                projection_months=60,
-            )
-            # Compute initial projection
-            engine = ScenarioEngine(baseline)
-            engine.compute_projection()
-
-        return baseline
 
 
 class DecisionCompiler:
@@ -88,8 +61,8 @@ class DecisionCompiler:
             (Scenario, list[ScenarioChange])
         """
         with transaction.atomic():
-            # Get or create baseline
-            baseline = BaselineService.get_or_create_baseline(self.household)
+            # Get or create baseline using canonical service to avoid duplicate baselines
+            baseline = BaselineScenarioService.get_or_create_baseline(self.household)
 
             # Determine scenario start date
             effective_start = self.start_date or baseline.start_date
