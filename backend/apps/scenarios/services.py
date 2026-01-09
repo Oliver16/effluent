@@ -371,7 +371,18 @@ class ScenarioEngine:
         change_key = str(change.id)
 
         # Check if this is a one-time change that was already applied
-        one_time_types = {ChangeType.LUMP_SUM_INCOME, ChangeType.LUMP_SUM_EXPENSE}
+        # These change types should only be applied once, not every month
+        one_time_types = {
+            ChangeType.LUMP_SUM_INCOME,
+            ChangeType.LUMP_SUM_EXPENSE,
+            ChangeType.ADD_INCOME,
+            ChangeType.ADD_EXPENSE,
+            ChangeType.REMOVE_INCOME,
+            ChangeType.REMOVE_EXPENSE,
+            ChangeType.ADD_DEBT,
+            ChangeType.ADD_ASSET,
+            ChangeType.SELL_ASSET,
+        }
         if change.change_type in one_time_types:
             if change_key in state.applied_changes:
                 return state
