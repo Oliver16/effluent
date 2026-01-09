@@ -108,15 +108,15 @@ export function LifeEventTemplatesDialog({
   const applyMutation = useMutation({
     mutationFn: (data: {
       templateName: string;
-      scenario_id: string;
-      effective_date: string;
-      change_values: Record<string, Record<string, unknown>>;
+      scenarioId: string;
+      effectiveDate: string;
+      changeValues: Record<string, Record<string, unknown>>;
     }) => {
       // Use template name as ID since we're using defaults
       return lifeEventTemplates.apply(data.templateName, {
-        scenario_id: data.scenario_id,
-        effective_date: data.effective_date,
-        change_values: data.change_values,
+        scenarioId: data.scenarioId,
+        effectiveDate: data.effectiveDate,
+        changeValues: data.changeValues,
       });
     },
     onSuccess: () => {
@@ -136,10 +136,10 @@ export function LifeEventTemplatesDialog({
     setSelectedTemplate(template);
     // Initialize change values from template
     const initialValues: Record<string, ChangeValue> = {};
-    template.suggested_changes.forEach((change, idx) => {
+    template.suggestedChanges.forEach((change, idx) => {
       initialValues[String(idx)] = {
-        _skip: !change.is_required,
-        ...change.parameters_template,
+        _skip: !change.isRequired,
+        ...change.parametersTemplate,
       };
     });
     setChangeValues(initialValues);
@@ -160,9 +160,9 @@ export function LifeEventTemplatesDialog({
 
     applyMutation.mutate({
       templateName: selectedTemplate.name,
-      scenario_id: scenarioId,
-      effective_date: effectiveDate,
-      change_values: changeValues,
+      scenarioId: scenarioId,
+      effectiveDate: effectiveDate,
+      changeValues: changeValues,
     });
   };
 
@@ -176,7 +176,7 @@ export function LifeEventTemplatesDialog({
             className="flex items-center gap-2"
           >
             {CATEGORY_ICONS[group.category]}
-            <span className="hidden sm:inline">{group.category_display}</span>
+            <span className="hidden sm:inline">{group.categoryDisplay}</span>
           </TabsTrigger>
         ))}
       </TabsList>
@@ -208,14 +208,14 @@ export function LifeEventTemplatesDialog({
                   <CardContent className="pt-0">
                     <CardDescription>{template.description}</CardDescription>
                     <div className="flex flex-wrap gap-1 mt-2">
-                      {template.suggested_changes.slice(0, 3).map((change, cIdx) => (
+                      {template.suggestedChanges.slice(0, 3).map((change, cIdx) => (
                         <Badge key={cIdx} variant="secondary" className="text-xs">
                           {change.name}
                         </Badge>
                       ))}
-                      {template.suggested_changes.length > 3 && (
+                      {template.suggestedChanges.length > 3 && (
                         <Badge variant="outline" className="text-xs">
-                          +{template.suggested_changes.length - 3} more
+                          +{template.suggestedChanges.length - 3} more
                         </Badge>
                       )}
                     </div>
@@ -262,7 +262,7 @@ export function LifeEventTemplatesDialog({
         <ScrollArea className="h-[350px]">
           <div className="space-y-4 pr-4">
             <h4 className="font-medium">Changes to Apply</h4>
-            {selectedTemplate.suggested_changes.map((change, idx) => (
+            {selectedTemplate.suggestedChanges.map((change, idx) => (
               <Card key={idx} className={cn(
                 changeValues[String(idx)]?._skip && 'opacity-50'
               )}>
@@ -278,7 +278,7 @@ export function LifeEventTemplatesDialog({
                       />
                       <Label htmlFor={`change-${idx}`} className="font-medium cursor-pointer">
                         {change.name}
-                        {change.is_required && (
+                        {change.isRequired && (
                           <Badge variant="destructive" className="ml-2 text-xs">
                             Required
                           </Badge>
@@ -291,7 +291,7 @@ export function LifeEventTemplatesDialog({
                 {!changeValues[String(idx)]?._skip && (
                   <CardContent className="pt-0 ml-6">
                     <div className="grid gap-3 sm:grid-cols-2">
-                      {Object.entries(change.parameters_template).map(([key, defaultValue]) => {
+                      {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
                         if (key === '_skip') return null;
 
                         const value = changeValues[String(idx)]?.[key] ?? defaultValue;

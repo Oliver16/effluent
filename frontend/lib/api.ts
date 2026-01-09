@@ -329,7 +329,8 @@ export const settings = {
 export const members = {
   list: () =>
     api.get<HouseholdMember[] | { results: HouseholdMember[] }>('/api/v1/members/')
-      .then(normalizeListResponse),
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<HouseholdMember[]>(data)),
 }
 
 // Account endpoints
@@ -495,20 +496,26 @@ export const selfEmploymentTax = {
 export const scenarios = {
   list: () =>
     api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/')
-      .then(normalizeListResponse),
-  get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`),
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<Scenario[]>(data)),
+  get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`).then(data => toCamelCase<Scenario>(data)),
   create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   delete: (id: string) => api.delete<void>(`/api/v1/scenarios/${id}/`),
-  compute: (id: string) => api.post<{ status: string; projection_count: number }>(`/api/v1/scenarios/${id}/compute/`),
-  getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`),
+  compute: (id: string) => api.post<{ status: string; projectionCount: number }>(`/api/v1/scenarios/${id}/compute/`)
+    .then(data => toCamelCase<{ status: string; projectionCount: number }>(data)),
+  getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`)
+    .then(data => toCamelCase<ScenarioProjection[]>(data)),
   listChanges: (scenarioId: string) =>
     api.get<ScenarioChange[] | { results: ScenarioChange[] }>(`/api/v1/scenario-changes/?scenario=${scenarioId}`)
-      .then(normalizeListResponse),
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<ScenarioChange[]>(data)),
   addChange: (data: Partial<ScenarioChange>) =>
-    api.post<ScenarioChange>('/api/v1/scenario-changes/', data),
+    api.post<ScenarioChange>('/api/v1/scenario-changes/', toSnakeCase(data))
+      .then(data => toCamelCase<ScenarioChange>(data)),
   updateChange: (changeId: string, data: Partial<ScenarioChange>) =>
-    api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, data),
+    api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, toSnakeCase(data))
+      .then(data => toCamelCase<ScenarioChange>(data)),
   deleteChange: (changeId: string) => api.delete<void>(`/api/v1/scenario-changes/${changeId}/`),
   /**
    * Compare scenarios with optional driver analysis.
@@ -532,22 +539,33 @@ export const scenarios = {
 // Life Event Template endpoints
 export const lifeEventTemplates = {
   list: () =>
-    api.get<{ results: LifeEventCategoryGroup[]; count: number }>('/api/v1/life-event-templates/'),
+    api.get<{ results: LifeEventCategoryGroup[]; count: number }>('/api/v1/life-event-templates/')
+      .then(data => ({
+        results: toCamelCase<LifeEventCategoryGroup[]>(data.results || []),
+        count: data.count,
+      })),
   get: (id: string) =>
-    api.get<LifeEventTemplate>(`/api/v1/life-event-templates/${id}/`),
+    api.get<LifeEventTemplate>(`/api/v1/life-event-templates/${id}/`)
+      .then(data => toCamelCase<LifeEventTemplate>(data)),
   categories: () =>
     api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/life-event-templates/categories/'),
   apply: (templateId: string, data: {
-    scenario_id: string;
-    effective_date: string;
-    change_values?: Record<string, Record<string, unknown>>;
+    scenarioId: string;
+    effectiveDate: string;
+    changeValues?: Record<string, Record<string, unknown>>;
   }) =>
     api.post<{
       status: string;
-      template_name: string;
-      changes_created: number;
+      templateName: string;
+      changesCreated: number;
       changes: ScenarioChange[];
-    }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
+    }>(`/api/v1/life-event-templates/${templateId}/apply/`, toSnakeCase(data))
+      .then(data => toCamelCase<{
+        status: string;
+        templateName: string;
+        changesCreated: number;
+        changes: ScenarioChange[];
+      }>(data)),
 }
 
 // Goals endpoints (TASK-14)
@@ -680,7 +698,7 @@ export const baseline = {
    * @param asOfDate The date to pin to (YYYY-MM-DD format)
    */
   pin: (asOfDate: string) =>
-    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'pin', as_of_date: asOfDate })
+    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', toSnakeCase({ action: 'pin', asOfDate }))
       .then(data => toCamelCase<BaselineActionResponse>(data)),
 
   /**
@@ -704,11 +722,11 @@ export const decisions = {
       .then(data => toCamelCase<DecisionTemplate>(data)),
   categories: () =>
     api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/decisions/templates/categories/'),
-  run: (data: { template_key: string; inputs: Record<string, unknown>; scenario_name_override?: string }) =>
-    api.post<DecisionRunResponse>('/api/v1/decisions/run/', data)
+  run: (data: { templateKey: string; inputs: Record<string, unknown>; scenarioNameOverride?: string }) =>
+    api.post<DecisionRunResponse>('/api/v1/decisions/run/', toSnakeCase(data))
       .then(data => toCamelCase<DecisionRunResponse>(data)),
-  saveDraft: (data: { template_key: string; inputs: Record<string, unknown> }) =>
-    api.post<{ id: string; saved: boolean; created: boolean }>('/api/v1/decisions/draft/', data),
+  saveDraft: (data: { templateKey: string; inputs: Record<string, unknown> }) =>
+    api.post<{ id: string; saved: boolean; created: boolean }>('/api/v1/decisions/draft/', toSnakeCase(data)),
   listRuns: () =>
     api.get<{ results: DecisionRun[]; count: number }>('/api/v1/decisions/runs/')
       .then(data => ({
@@ -718,8 +736,8 @@ export const decisions = {
   getRun: (id: string) =>
     api.get<DecisionRun>(`/api/v1/decisions/runs/${id}/`)
       .then(data => toCamelCase<DecisionRun>(data)),
-  completeDraft: (id: string, data?: { inputs?: Record<string, unknown>; scenario_name_override?: string }) =>
-    api.post<DecisionRunResponse>(`/api/v1/decisions/runs/${id}/complete/`, data || {})
+  completeDraft: (id: string, data?: { inputs?: Record<string, unknown>; scenarioNameOverride?: string }) =>
+    api.post<DecisionRunResponse>(`/api/v1/decisions/runs/${id}/complete/`, toSnakeCase(data || {}))
       .then(data => toCamelCase<DecisionRunResponse>(data)),
   deleteDraft: (id: string) =>
     api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
@@ -741,11 +759,11 @@ export const stressTests = {
    * @param horizonMonths Projection horizon (default 60)
    */
   run: (testKey: string, inputs?: Record<string, unknown>, horizonMonths?: number) =>
-    api.post<StressTestResult>('/api/v1/stress-tests/run/', {
-      test_key: testKey,
+    api.post<StressTestResult>('/api/v1/stress-tests/run/', toSnakeCase({
+      testKey,
       inputs: inputs || {},
-      horizon_months: horizonMonths || 60,
-    }).then(data => toCamelCase<StressTestResult>(data)),
+      horizonMonths: horizonMonths || 60,
+    })).then(data => toCamelCase<StressTestResult>(data)),
 
   /**
    * Run multiple stress tests in batch.
@@ -753,8 +771,8 @@ export const stressTests = {
    * @param horizonMonths Projection horizon (default 60)
    */
   batch: (testKeys?: string[], horizonMonths?: number) =>
-    api.post<StressTestBatchResponse>('/api/v1/stress-tests/batch/', {
-      test_keys: testKeys || [],
-      horizon_months: horizonMonths || 60,
-    }).then(data => toCamelCase<StressTestBatchResponse>(data)),
+    api.post<StressTestBatchResponse>('/api/v1/stress-tests/batch/', toSnakeCase({
+      testKeys: testKeys || [],
+      horizonMonths: horizonMonths || 60,
+    })).then(data => toCamelCase<StressTestBatchResponse>(data)),
 }

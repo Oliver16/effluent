@@ -342,11 +342,11 @@ export type LifeEventCategory =
   | 'retirement'
 
 export interface SuggestedChange {
-  change_type: string
+  changeType: string
   name: string
   description: string
-  parameters_template: Record<string, unknown>
-  is_required: boolean
+  parametersTemplate: Record<string, unknown>
+  isRequired: boolean
 }
 
 export interface LifeEventTemplate {
@@ -354,16 +354,16 @@ export interface LifeEventTemplate {
   name: string
   description: string
   category: LifeEventCategory
-  category_display?: string
+  categoryDisplay?: string
   icon: string
-  suggested_changes: SuggestedChange[]
-  display_order?: number
-  is_active?: boolean
+  suggestedChanges: SuggestedChange[]
+  displayOrder?: number
+  isActive?: boolean
 }
 
 export interface LifeEventCategoryGroup {
   category: LifeEventCategory
-  category_display: string
+  categoryDisplay: string
   templates: LifeEventTemplate[]
 }
 
@@ -503,9 +503,9 @@ export interface DecisionRunResponse {
   changesCreated: number
   projections: {
     now?: ScenarioProjection
-    year_1?: ScenarioProjection
-    year_3?: ScenarioProjection
-    year_5?: ScenarioProjection
+    year1?: ScenarioProjection
+    year3?: ScenarioProjection
+    year5?: ScenarioProjection
   }
   summary?: DecisionSummary
 }

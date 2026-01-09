@@ -71,27 +71,27 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
   );
 
   const handleSubmit = () => {
-    // Convert parameters, mapping specific flow fields back to generic source_flow_id
+    // Convert parameters, mapping specific flow fields back to generic sourceFlowId
     const convertedParams = convertFormParameters(params);
 
-    // Map source_income_flow_id and source_expense_flow_id back to source_flow_id for backend
+    // Map sourceIncomeFlowId and sourceExpenseFlowId back to sourceFlowId for backend
     if (convertedParams.source_income_flow_id) {
-      convertedParams.source_flow_id = convertedParams.source_income_flow_id;
+      convertedParams.sourceFlowId = convertedParams.source_income_flow_id;
       delete convertedParams.source_income_flow_id;
     }
     if (convertedParams.source_expense_flow_id) {
-      convertedParams.source_flow_id = convertedParams.source_expense_flow_id;
+      convertedParams.sourceFlowId = convertedParams.source_expense_flow_id;
       delete convertedParams.source_expense_flow_id;
     }
 
     mutation.mutate({
       scenario: scenarioId,
-      change_type: changeType,
+      changeType: changeType,
       name,
       description,
-      effective_date: effectiveDate,
+      effectiveDate: effectiveDate,
       parameters: convertedParams,
-      is_enabled: true,
+      isEnabled: true,
     });
   };
 

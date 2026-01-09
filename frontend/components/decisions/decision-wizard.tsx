@@ -106,7 +106,7 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
 
   const runMutation = useMutation({
     mutationFn: (inputs: Record<string, unknown>) =>
-      decisions.run({ template_key: template.key, inputs }),
+      decisions.run({ templateKey: template.key, inputs }),
     onSuccess: (data) => {
       setResult(data)
       toast.success('Scenario created!', {
