@@ -1,7 +1,7 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,8 +10,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { auth, households } from '@/lib/api'
 import { setAuthCookies } from '@/lib/auth'
 
-export default function LoginPage() {
+// Validate redirect URL to prevent open redirect attacks
+function isValidRedirectUrl(url: string): boolean {
+  // Only allow relative URLs starting with /
+  if (!url.startsWith('/')) return false
+  // Prevent protocol-relative URLs (//evil.com)
+  if (url.startsWith('//')) return false
+  // Prevent redirect to login page itself
+  if (url.startsWith('/login')) return false
+  return true
+}
+
+function LoginPageContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const redirectUrl = searchParams.get('redirect')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -43,7 +56,12 @@ export default function LoginPage() {
           (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
 
         if (onboardingComplete) {
-          router.push('/dashboard')
+          // Use redirect URL if valid, otherwise default to dashboard
+          if (redirectUrl && isValidRedirectUrl(redirectUrl)) {
+            window.location.href = redirectUrl
+          } else {
+            router.push('/dashboard')
+          }
         } else {
           router.push('/onboarding')
         }
@@ -114,5 +132,22 @@ export default function LoginPage() {
         </p>
       </CardFooter>
     </Card>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">Sign In</CardTitle>
+          <CardDescription className="text-center">
+            Loading...
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    }>
+      <LoginPageContent />
+    </Suspense>
   )
 }
