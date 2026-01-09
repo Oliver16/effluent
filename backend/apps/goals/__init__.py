@@ -1,1 +1,1 @@
-# Goals app for financial goal tracking and evaluation
+default_app_config = 'apps.goals.apps.GoalsConfig'

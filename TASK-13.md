@@ -16,194 +16,6 @@
 >
 > **Primary Outcome:** The app feels like a **financial decision cockpit**, not a passive metrics page.
 
-
----
-
-# TASK-13 Addendum (v1.1) — Incorporated Review Feedback (Jan 2026)
-
-This addendum updates TASK-13 to address reviewer feedback where it materially improves implementation correctness and developer velocity. The changes below should be considered **part of the spec**.
-
-## A) Goal data model improvements
-
-**What was the issue?** Goals have different units/types (months, ratios, %, USD, age). A single numeric field works, but you must also store the unit/meaning so the UI and evaluation logic don’t confuse `65` (age) with `$65` or `65%`.
-**Problem:** `target_value` as a single Decimal doesn’t fit all goal types cleanly, and goals need user-facing labels.
-
-**Update (recommended for V1):**
-- Keep `target_value` as `DecimalField` for simplicity and to avoid polymorphic DB complexity.
-- Add a `name` field for user-facing display.
-- Add `target_unit` and `target_meta` JSON for typed interpretation in the service layer.
-
-### Updated Goal model fields
-- `name: CharField(max_length=120, default="", blank=True)` — e.g. “Emergency fund”
-- `goal_type: CharField(choices=GoalType)`
-- `target_value: DecimalField(max_digits=12, decimal_places=2)`  
-  - **Interpretation rule:** `target_value` is always numeric; the **meaning** comes from `goal_type` and `target_unit`.
-  - **Example:** for `retirement_age`, store age as `target_value` (e.g. `65.00`) with `target_unit="age"`, and cast to int in UI.
-- `target_unit: CharField(max_length=24, default="")`
-  - examples: `"months"`, `"ratio"`, `"percent"`, `"usd"`, `"age"`
-- `target_date: DateField(null=True, blank=True)` — required for time-bound goals only
-- `target_meta: JSONField(default=dict, blank=True)` — optional typed config (e.g. `{ "months_to_goal": 24 }`)
-- `is_primary`, `is_active`, timestamps
-
-> **Alternative:** If you want a stricter schema later, migrate to typed goal submodels. Do not block V1 on this.
-
-## B) Fix Goals API client query param bug
-The goals status endpoint is `/api/v1/goals/status/` and query params must be appended without breaking the trailing slash.
-
-**Replace this:**
-```ts
-status: (scenarioId?: string) =>
-  api.get(`/api/v1/goals/status/${scenarioId ? `?scenario_id=${scenarioId}` : ''}`),
-```
-
-**With this:**
-```ts
-status: (scenarioId?: string) =>
-  api.get(
-    scenarioId
-      ? `/api/v1/goals/status/?scenario_id=${scenarioId}`
-      : '/api/v1/goals/status/'
-  ),
-```
-
-## C) Fully specify add_income / add_expense templates (required inputs + parameters)
-
-**Template: add_income**
-- Requires: `name`, `amount`, `frequency`, `start_date`, `end_date` (optional), `tax_treatment` (optional; default `"w2"`)
-- `change_type = ADD_INCOME`
-- parameters:
-```json
-{ "name": "Side gig", "amount": "500.00", "frequency": "monthly", "tax_treatment": "w2" }
-```
-
-**Template: add_expense**
-- Requires: `name`, `amount`, `frequency`, `category`, `start_date`, `end_date` (optional)
-- `change_type = ADD_EXPENSE`
-- parameters:
-```json
-{ "name": "Daycare", "amount": "800.00", "frequency": "monthly", "category": "childcare" }
-```
-
-## D) Error handling & validation (API contract)
-All new endpoints introduced in TASK-13 MUST return consistent error shapes.
-
-### Validation errors (400)
-```json
-{
-  "error": "validation_error",
-  "details": {
-    "debt_account_id": "Account not found or not a debt account",
-    "extra_monthly": "Must be positive"
-  }
-}
-```
-
-### Business logic errors (422)
-```json
-{
-  "error": "business_rule_violation",
-  "message": "Cannot refinance: debt is already paid off"
-}
-```
-
-### Edge cases to explicitly handle
-- Referenced account doesn’t exist or isn’t owned by household → 400
-- Debt already paid off → 422
-- Start date in the past (earlier than scenario.start_date) → 400 (or clamp to start_date; choose one and document)
-- No baseline scenario exists → auto-create baseline and compute its projection
-- Baseline projection missing → compute on demand
-- Projection computation failure → rollback scenario creation transaction
-
-## E) Recommendation generation rules (Goal evaluation)
-The `recommendation` field in GoalStatusDTO MUST be generated deterministically.
-
-### emergency_fund_months
-- `dollar_gap = max(0, (target_months - current_months) * monthly_expenses)`
-- `months_to_goal = goal.target_meta.get("months_to_goal", 24)`
-- `monthly_gap = dollar_gap / months_to_goal`
-- Render:
-  - “Increase liquidity by ${dollar_gap} or increase surplus by ${monthly_gap}/mo”
-
-### min_dscr
-- Estimate required adjustment via surplus:
-  - If `dscr < target`, recommend reducing debt service or increasing net income:
-  - “Increase net income by ${x}/mo or reduce debt payments by ${y}/mo”
-  - Compute x/y as:
-    - `required_income = (target_dscr * essential_and_debt_expenses) - income`
-    - clamp at 0
-
-### min_savings_rate
-- `savings_gap = max(0, target_rate - current_rate)`
-- `required_surplus_increase = savings_gap * income`
-- “Increase surplus by ${required_surplus_increase}/mo (reduce expenses or raise income).”
-
-> Keep this simple for V1. Precision improves in later iterations.
-
-## F) Frontend loading & error states (required)
-### Dashboard
-- NorthStarCards: skeleton cards while loading
-- ModelConfidenceCard: “Analyzing…” placeholder while loading
-- Actions list (if present later): skeleton rows
-- Any fetch error: toast + “Retry” button
-
-### Decision Builder
-- Submit button shows loading state: “Creating scenario… Computing projections…”
-- Disable navigation during submission to avoid duplicate scenarios
-- On API error: show toast with error message; preserve inputs so user can retry
-
-## G) Sparkline data strategy (clarify)
-**Preferred approach (V1):**
-- Batch fetch history for the 5 North Star metrics in parallel on dashboard mount:
-  - `/api/v1/metrics/history/?metric=liquidity_months&months=24` etc.
-- Cache in React Query with `staleTime: 5 * 60 * 1000`
-
-If you want a more efficient single call later:
-- Add `/api/v1/metrics/history/batch/?metrics=...&months=24`
-
-## H) Baseline scenario creation procedure (Decision Builder must be explicit)
-When Decision Builder runs and no baseline exists:
-
-1) Query:
-```py
-baseline = Scenario.objects.filter(household=household, is_baseline=True).first()
-```
-2) If missing, create:
-- `name="Baseline"`
-- `is_baseline=True`
-- `start_date=today.replace(day=1)`
-- set default assumptions and `projection_months=60`
-3) Compute baseline projections immediately:
-```py
-ScenarioEngine(baseline).compute_projection()
-```
-
-## I) Performance considerations (pragmatic V1 — **no Redis required**)
-V1 should avoid new infrastructure. Do **not** add Redis just for caching.
-
-- **Goal status evaluation:** compute on-demand from latest `MetricSnapshot` / `ScenarioProjection`.
-- **Data quality report:** compute on-demand (rule checks are cheap).
-- **Frontend caching:** use React Query `staleTime` (e.g., 60s) and disable `refetchOnWindowFocus` on dashboard.
-- **Decision builder:** projections computed synchronously in V1; consider async only for long horizons later (TASK-15 multi-horizon).
-
-## J) Expanded test cases (backend)
-### Goals status
-- no metrics snapshot exists → service returns default values and a warning, not a 500
-- multiple goals of same type → return all
-- inactive goals excluded
-- unknown goal_type returns 400 on create/update
-
-### Decision Builder
-- invalid template_key returns 400
-- missing required inputs returns 400 with field-level errors
-- non-existent account_id returns 400
-- already paid-off debt returns 422
-- scenario creation rolls back on projection failure (transactional)
-
-## K) Document integrity note
-If any copies of TASK-13 appear truncated in external viewers, use the canonical version in the repo or the downloaded file produced by ChatGPT to ensure all sections are present.
-
----
-
 ---
 
 ## 0) Existing System Inventory (What we’re building on)
@@ -397,7 +209,7 @@ export const goals = {
   update: (id: string, data: any) => api.patch(`/api/v1/goals/${id}/`, data),
   remove: (id: string) => api.delete(`/api/v1/goals/${id}/`),
   status: (scenarioId?: string) =>
-    api.get(`/api/v1/goals/status/${scenarioId ? `?scenario_id=${scenarioId}` : ''}`),
+    api.get('/api/v1/goals/status/', { params: scenarioId ? { scenario_id: scenarioId } : {} }),
 };
 ```
 
@@ -954,3 +766,106 @@ Buttons:
 - Decision Builder creates scenarios reliably and immediately shows baseline vs scenario deltas.
 - Data quality makes the model trustworthy and self-auditing.
 
+
+
+
+### 3.3.0 Template System Foundation (NEW)
+
+To prevent **template system fragmentation** across TASK-13/14/15, implement a single template framework.
+
+**Path:** `backend/apps/templates/`
+
+**Files**
+- `base.py` — BaseTemplate + input schema types
+- `registry.py` — registration + lookup utilities
+- `action.py` — ActionTemplate subclass
+- `stress_test.py` — StressTestTemplate subclass
+
+**registry.py**
+```py
+from typing import Dict
+from .base import BaseTemplate
+
+TEMPLATE_REGISTRY: Dict[str, BaseTemplate] = {}
+
+def register_template(t: BaseTemplate):
+    TEMPLATE_REGISTRY[t.key] = t
+    return t
+
+def get_template(key: str) -> BaseTemplate:
+    if key not in TEMPLATE_REGISTRY:
+        raise KeyError(f"Template not found: {key}")
+    return TEMPLATE_REGISTRY[key]
+```
+
+All decision templates in this task must inherit from `BaseTemplate` and be registered via `register_template()`.
+
+TASK-14 action templates must inherit from `ActionTemplate`.
+TASK-15 stress tests must inherit from `StressTestTemplate`.
+
+
+
+### 3.3.4 Shared Decision Builder Function (NEW)
+
+All scenario creation from templates (Decision Builder, Actions, Solver Apply, Stress Tests) must call a **single shared function**.
+
+**Path:** `backend/apps/scenarios/decision_builder.py`
+
+```py
+from dataclasses import dataclass
+from typing import Optional, List
+from django.db import transaction
+
+@dataclass
+class DecisionBuilderOptions:
+    template_key: str
+    scenario_name: str
+    inputs: dict
+    parent_scenario_id: Optional[str] = None  # default baseline
+    persist: bool = True
+    compute_summary: bool = True
+    projection_months: int = 60
+
+@dataclass
+class DecisionBuilderResult:
+    scenario: Optional["Scenario"]          # None if persist=False
+    changes: List["ScenarioChange"]         # saved if persist=True else unsaved
+    projections: list                       # persisted records or ProjectionDTO
+    summary: Optional[dict]
+    projections_computed: bool = True
+
+def run_decision_template(household, options: DecisionBuilderOptions) -> DecisionBuilderResult:
+    # 1) Lookup template
+    template = get_template(options.template_key)
+
+    # 2) Validate
+    errors = template.validate_inputs(options.inputs)
+    if errors:
+        raise ValidationError({"inputs": errors})
+
+    # 3) Compile (ScenarioChange specs)
+    compiled = template.compile(household, options.inputs)
+
+    # 4) Parent scenario
+    parent = Scenario.objects.get(id=options.parent_scenario_id) if options.parent_scenario_id else get_or_create_baseline(household)
+
+    # 5) Create scenario + changes or keep in-memory
+    if options.persist:
+        with transaction.atomic():
+            scenario = Scenario.objects.create(household=household, name=options.scenario_name, parent_scenario=parent)
+            changes = [ScenarioChange.objects.create(scenario=scenario, **c) for c in compiled["changes"]]
+            projections = ScenarioEngine(scenario).compute_projection(months=options.projection_months)
+    else:
+        scenario = None
+        changes = [ScenarioChange(scenario=parent, **c) for c in compiled["changes"]]  # unsaved
+        projections = ScenarioEngine(parent).compute_projection_to_memory(months=options.projection_months, override_changes=changes)
+
+    summary = compute_scenario_summary(household, parent, scenario, projections) if options.compute_summary else None
+
+    return DecisionBuilderResult(scenario=scenario, changes=changes, projections=projections, summary=summary)
+```
+
+**Notes**
+- TASK-14 implements `ScenarioEngine.compute_projection_to_memory(...)`.
+- Stress tests may call this with `projection_months=24` for speed.
+- Solver iterations call this with `persist=False` and `compute_summary=False`.

@@ -10,6 +10,7 @@ import {
   LineChart,
   Settings,
   LogOut,
+  Lightbulb,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Accounts', href: '/accounts', icon: Wallet },
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
+  { name: 'Decisions', href: '/decisions', icon: Lightbulb },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const

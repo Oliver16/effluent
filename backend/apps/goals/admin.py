@@ -1,14 +1,39 @@
 from django.contrib import admin
-from .models import Goal, GoalSolution
+
+from apps.goals.models import Goal, GoalSolution
 
 
 @admin.register(Goal)
 class GoalAdmin(admin.ModelAdmin):
-    list_display = ['display_name', 'household', 'goal_type', 'target_value', 'current_status', 'is_primary', 'is_active']
-    list_filter = ['goal_type', 'current_status', 'is_primary', 'is_active']
+    list_display = [
+        'name',
+        'goal_type',
+        'target_value',
+        'target_unit',
+        'is_primary',
+        'is_active',
+        'household',
+        'created_at',
+    ]
+    list_filter = ['goal_type', 'is_primary', 'is_active']
     search_fields = ['name', 'household__name']
-    readonly_fields = ['id', 'current_value', 'last_evaluated_at', 'created_at', 'updated_at']
-    ordering = ['household', '-is_primary', '-created_at']
+    readonly_fields = ['id', 'created_at', 'updated_at']
+
+    fieldsets = (
+        (None, {
+            'fields': ('name', 'household', 'goal_type')
+        }),
+        ('Target', {
+            'fields': ('target_value', 'target_unit', 'target_date', 'target_meta')
+        }),
+        ('Settings', {
+            'fields': ('is_primary', 'is_active')
+        }),
+        ('Metadata', {
+            'fields': ('id', 'created_at', 'updated_at'),
+            'classes': ('collapse',)
+        }),
+    )
 
 
 @admin.register(GoalSolution)

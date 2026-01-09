@@ -1,40 +1,42 @@
+"""URL Configuration for Effluent backend."""
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
-from apps.core.views import (
-    HouseholdViewSet,
-    HouseholdMemberViewSet,
-    UserProfileView,
-    ChangePasswordView,
-    NotificationSettingsView,
-    TwoFactorSettingsView,
-    SessionsView,
-    DataExportView,
-)
-from apps.accounts.views import AccountViewSet, AssetGroupViewSet
+# Import views
+from apps.core.views import ProfileView, PasswordChangeView
+from apps.households.views import HouseholdViewSet, HouseholdMemberViewSet
+from apps.accounts.views import AccountViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
-    IncomeSourceViewSet, PreTaxDeductionViewSet,
-    PostTaxDeductionViewSet, SelfEmploymentTaxViewSet, TaxSummaryView
+    IncomeSourceViewSet, W2WithholdingViewSet,
+    PreTaxDeductionViewSet, PostTaxDeductionViewSet,
+    SelfEmploymentTaxViewSet, TaxSummaryView
 )
 from apps.metrics.views import (
     MetricSnapshotViewSet, CurrentMetricsView, MetricsHistoryView,
     InsightViewSet, MetricThresholdViewSet, DataQualityView
 )
-from apps.onboarding import views as onboarding_views
-from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet, BaselineView
+from apps.onboarding.views import (
+    OnboardingCurrentView, OnboardingSaveView, OnboardingCompleteView,
+    OnboardingSkipView, OnboardingBackView
+)
+from apps.scenarios.views import (
+    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet
+)
+from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
 from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
 
+# Create routers
 router = DefaultRouter()
 router.register('households', HouseholdViewSet, basename='household')
 router.register('members', HouseholdMemberViewSet, basename='member')
 router.register('accounts', AccountViewSet, basename='account')
-router.register('asset-groups', AssetGroupViewSet, basename='asset-group')
 router.register('flows', RecurringFlowViewSet, basename='flow')
 router.register('income-sources', IncomeSourceViewSet, basename='income-source')
+router.register('w2-withholding', W2WithholdingViewSet, basename='w2-withholding')
 router.register('pretax-deductions', PreTaxDeductionViewSet, basename='pretax-deduction')
 router.register('posttax-deductions', PostTaxDeductionViewSet, basename='posttax-deduction')
 router.register('self-employment-tax', SelfEmploymentTaxViewSet, basename='self-employment-tax')
@@ -43,12 +45,17 @@ router.register('insights', InsightViewSet, basename='insight')
 router.register('thresholds', MetricThresholdViewSet, basename='threshold')
 router.register('scenarios', ScenarioViewSet, basename='scenario')
 router.register('scenario-changes', ScenarioChangeViewSet, basename='scenario-change')
-router.register('scenario-comparisons', ScenarioComparisonViewSet, basename='scenario-comparison')
 router.register('life-event-templates', LifeEventTemplateViewSet, basename='life-event-template')
 router.register('goals', GoalViewSet, basename='goal')
 router.register('goal-solutions', GoalSolutionViewSet, basename='goal-solution')
 
+# Decision router
+decision_router = DefaultRouter()
+decision_router.register('templates', DecisionTemplateViewSet, basename='decision-template')
+decision_router.register('runs', DecisionRunViewSet, basename='decision-run')
+
 urlpatterns = [
+    # Admin
     path('admin/', admin.site.urls),
 
     # Auth
@@ -57,38 +64,36 @@ urlpatterns = [
 
     # API v1
     path('api/v1/', include(router.urls)),
-    path('api/v1/profile/', UserProfileView.as_view(), name='user-profile'),
-    path('api/v1/profile/change-password/', ChangePasswordView.as_view(), name='change-password'),
-    path('api/v1/settings/notifications/', NotificationSettingsView.as_view(), name='notification-settings'),
-    path('api/v1/settings/two-factor/', TwoFactorSettingsView.as_view(), name='two-factor-settings'),
-    path('api/v1/settings/sessions/', SessionsView.as_view(), name='sessions'),
-    path('api/v1/settings/export/', DataExportView.as_view(), name='data-export'),
 
-    # Metrics endpoints
+    # Profile
+    path('api/v1/profile/', ProfileView.as_view(), name='profile'),
+    path('api/v1/profile/change-password/', PasswordChangeView.as_view(), name='password-change'),
+
+    # Metrics
     path('api/v1/metrics/current/', CurrentMetricsView.as_view(), name='metrics-current'),
     path('api/v1/metrics/history/', MetricsHistoryView.as_view(), name='metrics-history'),
-
-    # Onboarding endpoints
-    path('api/v1/onboarding/current/', onboarding_views.get_current_step, name='onboarding-current'),
-    path('api/v1/onboarding/save/', onboarding_views.save_draft, name='onboarding-save'),
-    path('api/v1/onboarding/complete/', onboarding_views.complete_step, name='onboarding-complete'),
-    path('api/v1/onboarding/skip/', onboarding_views.skip_step, name='onboarding-skip'),
-    path('api/v1/onboarding/back/', onboarding_views.go_back, name='onboarding-back'),
-
-    # Baseline scenario endpoint
-    path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline-scenario'),
-
-    # Goals endpoints
-    path('api/v1/goals/status/', GoalStatusView.as_view(), name='goals-status'),
-
-    # Data quality endpoint
     path('api/v1/metrics/data-quality/', DataQualityView.as_view(), name='data-quality'),
 
-    # Actions endpoints (TASK-14)
+    # Onboarding
+    path('api/v1/onboarding/current/', OnboardingCurrentView.as_view(), name='onboarding-current'),
+    path('api/v1/onboarding/save/', OnboardingSaveView.as_view(), name='onboarding-save'),
+    path('api/v1/onboarding/complete/', OnboardingCompleteView.as_view(), name='onboarding-complete'),
+    path('api/v1/onboarding/skip/', OnboardingSkipView.as_view(), name='onboarding-skip'),
+    path('api/v1/onboarding/back/', OnboardingBackView.as_view(), name='onboarding-back'),
+
+    # Decisions
+    path('api/v1/decisions/', include(decision_router.urls)),
+    path('api/v1/decisions/run/', DecisionRunViewSet.as_view({'post': 'run_decision'}), name='decision-run'),
+    path('api/v1/decisions/draft/', DecisionRunViewSet.as_view({'post': 'save_draft'}), name='decision-draft'),
+
+    # Goals
+    path('api/v1/goals/status/', GoalStatusView.as_view(), name='goal-status'),
+
+    # Taxes
+    path('api/v1/taxes/summary/', TaxSummaryView.as_view(), name='tax-summary'),
+
+    # Actions (TASK-14)
     path('api/v1/actions/next/', NextActionsView.as_view(), name='actions-next'),
     path('api/v1/actions/apply/', ApplyActionView.as_view(), name='actions-apply'),
     path('api/v1/actions/templates/', ActionTemplatesView.as_view(), name='actions-templates'),
-
-    # Tax summary endpoint (TASK-14)
-    path('api/v1/taxes/summary/', TaxSummaryView.as_view(), name='taxes-summary'),
 ]

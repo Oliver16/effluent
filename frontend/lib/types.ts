@@ -404,6 +404,124 @@ export interface BaselineActionResponse {
   baseline_pinned_as_of_date?: string | null
 }
 
+// Decision Templates (TASK-13)
+export type DecisionCategory =
+  | 'income'
+  | 'expenses'
+  | 'debt'
+  | 'housing'
+  | 'retirement'
+  | 'savings'
+
+export type DecisionFieldType =
+  | 'currency'
+  | 'percent'
+  | 'integer'
+  | 'select'
+  | 'date'
+  | 'toggle'
+  | 'text'
+
+export interface DecisionFieldOption {
+  value: string
+  label: string
+}
+
+export interface DecisionField {
+  key: string
+  type: DecisionFieldType
+  label: string
+  required?: boolean
+  default?: unknown
+  placeholder?: string
+  helperText?: string
+  options?: DecisionFieldOption[]
+  showIf?: string
+  min?: number
+  max?: number
+}
+
+export interface DecisionStep {
+  id: string
+  title: string
+  description?: string
+  fields: DecisionField[]
+}
+
+export interface DecisionUISchema {
+  steps: DecisionStep[]
+}
+
+export interface DecisionTemplate {
+  key: string
+  name: string
+  description: string
+  category: DecisionCategory
+  icon: string
+  uiSchema: DecisionUISchema
+  sortOrder?: number
+}
+
+export interface DecisionCategoryGroup {
+  category: DecisionCategory
+  categoryDisplay: string
+  templates: DecisionTemplate[]
+}
+
+export interface DecisionMetricComparison {
+  net_worth: string
+  liquidity_months: string
+  dscr: string
+  savings_rate: string
+  monthly_surplus: string
+}
+
+export interface DecisionGoalStatusComparison {
+  goal_id: string
+  goal_type: string
+  name: string
+  target_value: string
+  current_value: string
+  status: string
+  delta_to_target: string
+}
+
+export interface DecisionSummary {
+  baseline: DecisionMetricComparison
+  scenario: DecisionMetricComparison
+  goal_status: {
+    baseline: DecisionGoalStatusComparison[]
+    scenario: DecisionGoalStatusComparison[]
+  }
+  takeaways: string[]
+}
+
+export interface DecisionRunResponse {
+  scenarioId: string
+  scenarioName: string
+  decisionRunId: string
+  changesCreated: number
+  projections: {
+    now?: ScenarioProjection
+    year_1?: ScenarioProjection
+    year_3?: ScenarioProjection
+    year_5?: ScenarioProjection
+  }
+  summary?: DecisionSummary
+}
+
+export interface DecisionRun {
+  id: string
+  templateKey: string
+  templateName: string
+  inputs: Record<string, unknown>
+  createdScenario?: string
+  scenarioNameOverride?: string
+  isDraft: boolean
+  completedAt?: string
+  createdAt: string
+}
+
 // TASK-14: Goals types
 export type GoalType =
   | 'emergency_fund_months'

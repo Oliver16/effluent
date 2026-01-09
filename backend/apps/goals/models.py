@@ -1,12 +1,14 @@
 import uuid
 from decimal import Decimal
+
 from django.db import models
 from django.db.models import Q
+
 from apps.core.models import HouseholdOwnedModel, TimestampedModel
 
 
 class GoalType(models.TextChoices):
-    """Types of financial goals."""
+    """Types of financial goals users can set."""
     EMERGENCY_FUND_MONTHS = 'emergency_fund_months', 'Emergency Fund (Months)'
     MIN_DSCR = 'min_dscr', 'Minimum DSCR'
     MIN_SAVINGS_RATE = 'min_savings_rate', 'Minimum Savings Rate'
@@ -18,60 +20,74 @@ class GoalType(models.TextChoices):
 
 class GoalStatus(models.TextChoices):
     """Status of goal achievement."""
-    ON_TRACK = 'on_track', 'On Track'
+    GOOD = 'good', 'On Track'
     WARNING = 'warning', 'Warning'
     CRITICAL = 'critical', 'Critical'
-    ACHIEVED = 'achieved', 'Achieved'
 
 
 class Goal(HouseholdOwnedModel):
     """
-    A financial goal for a household.
+    User-defined financial goal with target values and status tracking.
 
-    Goals define targets for metrics like emergency fund, DSCR, savings rate, etc.
-    The target_value is always numeric; interpretation depends on goal_type and target_unit.
+    Goals are evaluated against current metrics or scenario projections
+    to determine status (good/warning/critical) and generate recommendations.
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
-    # User-facing name
-    name = models.CharField(max_length=120, blank=True, default='')
-
-    # Goal type and target
-    goal_type = models.CharField(max_length=30, choices=GoalType.choices)
-    target_value = models.DecimalField(max_digits=12, decimal_places=2)
-
-    # Unit for interpretation (months, ratio, percent, usd, age)
-    target_unit = models.CharField(max_length=24, default='', blank=True)
-
-    # Optional deadline for time-bound goals
-    target_date = models.DateField(null=True, blank=True)
-
-    # Optional typed configuration
-    target_meta = models.JSONField(default=dict, blank=True)
-    # Example meta:
-    # emergency_fund_months: {"months_to_goal": 24}
-    # net_worth_target: {"milestone_name": "First million"}
-
-    # Priority and status
-    is_primary = models.BooleanField(default=False)
-    is_active = models.BooleanField(default=True)
-
-    # Computed status (updated by evaluation service)
-    current_status = models.CharField(
-        max_length=20,
-        choices=GoalStatus.choices,
-        default=GoalStatus.WARNING
+    name = models.CharField(
+        max_length=120,
+        default='',
+        blank=True,
+        help_text='User-facing display name for this goal'
     )
-    current_value = models.DecimalField(
+
+    goal_type = models.CharField(
+        max_length=50,
+        choices=GoalType.choices,
+        db_index=True,
+        help_text='Type of goal which determines how target_value is interpreted'
+    )
+
+    target_value = models.DecimalField(
         max_digits=12,
         decimal_places=2,
-        null=True,
-        blank=True
+        help_text='Numeric target value; interpretation depends on goal_type and target_unit'
     )
-    last_evaluated_at = models.DateTimeField(null=True, blank=True)
+
+    target_unit = models.CharField(
+        max_length=24,
+        default='',
+        blank=True,
+        help_text='Unit of measurement: months, ratio, percent, usd, age'
+    )
+
+    target_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text='Target date for time-bound goals like net_worth_target'
+    )
+
+    target_meta = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text='Additional typed configuration (e.g., {"months_to_goal": 24})'
+    )
+
+    is_primary = models.BooleanField(
+        default=False,
+        help_text='Whether this is the primary goal for the household'
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        db_index=True,
+        help_text='Inactive goals are excluded from evaluation'
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        db_table = 'goals'
         ordering = ['-is_primary', '-created_at']
         constraints = [
             models.UniqueConstraint(
@@ -83,12 +99,39 @@ class Goal(HouseholdOwnedModel):
 
     def __str__(self):
         name = self.name or self.get_goal_type_display()
-        return f"{self.household.name} - {name}"
+        return f"{name} ({self.target_value} {self.target_unit})"
 
     @property
     def display_name(self):
         """Return display name, falling back to goal type label."""
         return self.name or self.get_goal_type_display()
+
+    def save(self, *args, **kwargs):
+        # Auto-set target_unit based on goal_type if not provided
+        if not self.target_unit:
+            unit_map = {
+                GoalType.EMERGENCY_FUND_MONTHS: 'months',
+                GoalType.MIN_DSCR: 'ratio',
+                GoalType.MIN_SAVINGS_RATE: 'percent',
+                GoalType.NET_WORTH_TARGET: 'usd',
+                GoalType.RETIREMENT_AGE: 'age',
+                GoalType.DEBT_FREE_DATE: 'date',
+            }
+            self.target_unit = unit_map.get(self.goal_type, '')
+
+        # Auto-set name based on goal_type if not provided
+        if not self.name:
+            name_map = {
+                GoalType.EMERGENCY_FUND_MONTHS: 'Emergency Fund',
+                GoalType.MIN_DSCR: 'Debt Safety Ratio',
+                GoalType.MIN_SAVINGS_RATE: 'Savings Rate',
+                GoalType.NET_WORTH_TARGET: 'Net Worth Target',
+                GoalType.RETIREMENT_AGE: 'Retirement Age',
+                GoalType.DEBT_FREE_DATE: 'Debt Free Date',
+            }
+            self.name = name_map.get(self.goal_type, 'Goal')
+
+        super().save(*args, **kwargs)
 
 
 class GoalSolution(TimestampedModel):
@@ -103,30 +146,12 @@ class GoalSolution(TimestampedModel):
 
     # Solver options used
     options = models.JSONField(default=dict)
-    # Example options:
-    # {
-    #   "allowed_interventions": ["reduce_expenses", "increase_income"],
-    #   "bounds": {"max_reduce_expenses_monthly": "1200.00"},
-    #   "start_date": "2026-02-01",
-    #   "projection_months": 60
-    # }
 
     # Solution plan (list of changes)
     plan = models.JSONField(default=list)
-    # Example plan:
-    # [
-    #   {"change_type": "ADJUST_TOTAL_EXPENSES", "parameters": {"monthly_adjustment": "-650.00"}},
-    #   {"change_type": "ADJUST_TOTAL_INCOME", "parameters": {"monthly_adjustment": "400.00"}}
-    # ]
 
     # Result summary
     result = models.JSONField(default=dict)
-    # Example result:
-    # {
-    #   "baseline_value": "2.40",
-    #   "final_value": "6.10",
-    #   "worst_month_value": "5.95"
-    # }
 
     success = models.BooleanField(default=False)
     error_message = models.TextField(blank=True)

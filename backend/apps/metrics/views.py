@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from .models import MetricSnapshot, MetricThreshold, Insight
 from .serializers import MetricSnapshotSerializer, MetricThresholdSerializer, InsightSerializer
 from .services import MetricsCalculator, InsightGenerator
+from .data_quality import DataQualityService
 
 
 class MetricSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
@@ -93,126 +94,87 @@ class MetricThresholdViewSet(viewsets.ModelViewSet):
 
 class DataQualityView(APIView):
     """
-    Data quality report endpoint.
+    API endpoint for data quality and model confidence assessment.
 
-    GET /api/v1/metrics/data-quality/
-
-    Returns a report on data completeness and modeling confidence.
+    Returns a report indicating data completeness and confidence level.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get data quality report for the household."""
-        from apps.accounts.models import Account, ASSET_TYPES, LIABILITY_TYPES
-        from apps.flows.models import RecurringFlow, FlowType
-        from apps.taxes.models import IncomeSource
-
         household = request.household
-        issues = []
-        warnings = []
+        service = DataQualityService(household)
+        report = service.build_report()
 
-        # Check for accounts
-        accounts = Account.objects.filter(household=household, is_active=True)
-        asset_count = accounts.filter(account_type__in=ASSET_TYPES).count()
-        liability_count = accounts.filter(account_type__in=LIABILITY_TYPES).count()
+        return Response({
+            'confidence_level': report.confidence_level,
+            'confidence_score': report.confidence_score,
+            'confidence_tier': report.confidence_level,  # Alias for TASK-14 compatibility
+            'tier_description': self._get_tier_description(report.confidence_level),
+            'issues': [
+                {
+                    'key': item.key,
+                    'field': item.key,  # Alias for TASK-14 compatibility
+                    'severity': item.severity,
+                    'title': item.title,
+                    'message': item.description,  # Alias for TASK-14 compatibility
+                    'description': item.description,
+                    'cta': item.cta,
+                }
+                for item in report.missing
+            ],
+            'warnings': [
+                {
+                    'key': item.key,
+                    'field': item.key,
+                    'severity': item.severity,
+                    'title': item.title,
+                    'message': item.description,
+                    'description': item.description,
+                    'cta': item.cta,
+                }
+                for item in report.warnings
+            ],
+            'summary': {
+                'asset_accounts': self._count_accounts(household, 'asset'),
+                'liability_accounts': self._count_accounts(household, 'liability'),
+                'income_sources': self._count_income_sources(household),
+                'expense_flows': self._count_expense_flows(household),
+            }
+        })
 
-        if asset_count == 0:
-            issues.append({
-                'field': 'accounts',
-                'message': 'No asset accounts found. Add at least one checking or savings account.',
-                'severity': 'critical'
-            })
+    def _get_tier_description(self, level: str) -> str:
+        """Get description for confidence tier."""
+        descriptions = {
+            'high': 'Data is complete and projections are highly reliable.',
+            'medium': 'Some data is missing. Projections may not be fully accurate.',
+            'low': 'Significant data is missing. Please complete your profile for accurate projections.',
+        }
+        return descriptions.get(level, '')
 
-        # Check for stale account balances
-        stale_date = date.today() - timedelta(days=30)
-        for acct in accounts:
-            snapshot = acct.latest_snapshot
-            if snapshot and snapshot.snapshot_date < stale_date:
-                warnings.append({
-                    'field': 'accounts',
-                    'message': f'Balance for "{acct.name}" is over 30 days old.',
-                    'severity': 'warning',
-                    'account_id': str(acct.id)
-                })
+    def _count_accounts(self, household, account_class: str) -> int:
+        """Count accounts by class."""
+        from apps.accounts.models import Account, ASSET_TYPES, LIABILITY_TYPES
+        types = ASSET_TYPES if account_class == 'asset' else LIABILITY_TYPES
+        return Account.objects.filter(
+            household=household,
+            account_type__in=types,
+            is_active=True
+        ).count()
 
-        # Check for income sources
-        income_sources = IncomeSource.objects.filter(household=household, is_active=True)
-        if income_sources.count() == 0:
-            issues.append({
-                'field': 'income',
-                'message': 'No income sources found. Add your salary or other income.',
-                'severity': 'critical'
-            })
+    def _count_income_sources(self, household) -> int:
+        """Count active income sources."""
+        from apps.taxes.models import IncomeSource
+        return IncomeSource.objects.filter(
+            household=household,
+            is_active=True
+        ).count()
 
-        # Check for incomplete income sources
-        for source in income_sources:
-            if not source.gross_annual or source.gross_annual <= 0:
-                issues.append({
-                    'field': 'income',
-                    'message': f'Income source "{source.name}" has no gross annual amount.',
-                    'severity': 'warning',
-                    'source_id': str(source.id)
-                })
-
-        # Check for expense flows
-        expense_flows = RecurringFlow.objects.filter(
+    def _count_expense_flows(self, household) -> int:
+        """Count expense flows."""
+        from apps.flows.models import RecurringFlow, FlowType
+        return RecurringFlow.objects.filter(
             household=household,
             flow_type=FlowType.EXPENSE,
             is_active=True
-        )
-        if expense_flows.count() == 0:
-            warnings.append({
-                'field': 'expenses',
-                'message': 'No recurring expenses found. Add your regular bills and expenses for better projections.',
-                'severity': 'warning'
-            })
-
-        # Check for liability details
-        liability_accounts = accounts.filter(account_type__in=LIABILITY_TYPES)
-        for acct in liability_accounts:
-            if not hasattr(acct, 'liability_details') or not acct.liability_details:
-                warnings.append({
-                    'field': 'liabilities',
-                    'message': f'Debt account "{acct.name}" is missing interest rate and payment details.',
-                    'severity': 'warning',
-                    'account_id': str(acct.id)
-                })
-            elif acct.liability_details and not acct.liability_details.interest_rate:
-                warnings.append({
-                    'field': 'liabilities',
-                    'message': f'Debt account "{acct.name}" has no interest rate.',
-                    'severity': 'info',
-                    'account_id': str(acct.id)
-                })
-
-        # Calculate confidence score
-        total_checks = 10  # Base checks
-        failed_critical = len([i for i in issues if i.get('severity') == 'critical'])
-        failed_warning = len(warnings)
-
-        confidence = max(0, 100 - (failed_critical * 20) - (failed_warning * 5))
-
-        # Determine confidence tier
-        if confidence >= 80:
-            tier = 'high'
-            tier_description = 'Data is complete and projections are highly reliable.'
-        elif confidence >= 50:
-            tier = 'medium'
-            tier_description = 'Some data is missing. Projections may not be fully accurate.'
-        else:
-            tier = 'low'
-            tier_description = 'Significant data is missing. Please complete your profile for accurate projections.'
-
-        return Response({
-            'confidence_score': confidence,
-            'confidence_tier': tier,
-            'tier_description': tier_description,
-            'issues': issues,
-            'warnings': warnings,
-            'summary': {
-                'asset_accounts': asset_count,
-                'liability_accounts': liability_count,
-                'income_sources': income_sources.count(),
-                'expense_flows': expense_flows.count(),
-            }
-        })
+        ).count()

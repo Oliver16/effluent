@@ -1,13 +1,4 @@
-"""
-Goals API views.
-
-Provides endpoints for:
-- Goal CRUD operations
-- Goal status evaluation
-- Goal seek solver
-- Apply solution as scenario
-"""
-from datetime import date
+"""Goals API views."""
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,61 +6,59 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 from django.utils import timezone
 
-from .models import Goal, GoalSolution
-from .serializers import (
-    GoalSerializer, GoalCreateSerializer, GoalStatusSerializer,
+from apps.core.mixins import HouseholdScopedViewMixin
+from apps.goals.models import Goal, GoalSolution
+from apps.goals.serializers import (
+    GoalSerializer, GoalStatusSerializer,
     GoalSolutionSerializer, GoalSolveOptionsSerializer, GoalApplySolutionSerializer
 )
-from .services import GoalEvaluator, GoalSeekSolver
+from apps.goals.services import GoalEvaluator, GoalSeekSolver
 
 
-class GoalViewSet(viewsets.ModelViewSet):
+class GoalViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
     """
-    ViewSet for managing goals.
+    ViewSet for managing household goals.
 
-    Provides CRUD operations plus status evaluation and solving.
+    Provides CRUD operations for goals and goal status evaluation.
     """
+    serializer_class = GoalSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        qs = Goal.objects.filter(household=self.request.household)
+        """Return active goals for the current household."""
+        qs = Goal.objects.filter(household=self.get_household())
         if self.request.query_params.get('active_only', 'true').lower() == 'true':
             qs = qs.filter(is_active=True)
-        return qs
-
-    def get_serializer_class(self):
-        if self.action in ['create', 'update', 'partial_update']:
-            return GoalCreateSerializer
-        return GoalSerializer
+        return qs.order_by('-is_primary', '-created_at')
 
     def perform_create(self, serializer):
+        """Set household when creating a goal."""
+        household = self.get_household()
         # If setting as primary, unset any existing primary goal
         if serializer.validated_data.get('is_primary', False):
             Goal.objects.filter(
-                household=self.request.household,
+                household=household,
                 is_primary=True,
                 is_active=True
             ).update(is_primary=False)
 
-        serializer.save(household=self.request.household)
+        serializer.save(household=household)
 
     def perform_update(self, serializer):
-        # If setting as primary, unset any existing primary goal
+        """Handle primary goal updates."""
         if serializer.validated_data.get('is_primary', False):
             Goal.objects.filter(
-                household=self.request.household,
+                household=self.get_household(),
                 is_primary=True,
                 is_active=True
             ).exclude(id=self.get_object().id).update(is_primary=False)
 
         serializer.save()
 
-    def destroy(self, request, *args, **kwargs):
+    def perform_destroy(self, instance):
         """Soft delete by setting is_active=False."""
-        goal = self.get_object()
-        goal.is_active = False
-        goal.save()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        instance.is_active = False
+        instance.save()
 
     @action(detail=True, methods=['post'])
     def solve(self, request, pk=None):
@@ -77,15 +66,6 @@ class GoalViewSet(viewsets.ModelViewSet):
         Solve for required changes to achieve this goal.
 
         POST /api/v1/goals/{id}/solve/
-        Body: {
-            "allowed_interventions": ["reduce_expenses", "increase_income"],
-            "bounds": {
-                "max_reduce_expenses_monthly": "1200.00",
-                "max_increase_income_monthly": "1500.00"
-            },
-            "start_date": "2026-02-01",
-            "projection_months": 24
-        }
         """
         goal = self.get_object()
 
@@ -98,14 +78,8 @@ class GoalViewSet(viewsets.ModelViewSet):
 
         options = serializer.validated_data
 
-        # Convert bounds Decimal values to Decimal
-        bounds = {}
-        for key, val in options.get('bounds', {}).items():
-            bounds[key] = val
-        options['bounds'] = bounds
-
         # Run solver
-        solver = GoalSeekSolver(request.household)
+        solver = GoalSeekSolver(self.get_household())
         solution = solver.solve_goal(goal, options)
 
         return Response(GoalSolutionSerializer(solution).data)
@@ -116,10 +90,6 @@ class GoalViewSet(viewsets.ModelViewSet):
         Apply a solution plan as a scenario.
 
         POST /api/v1/goals/{id}/apply-solution/
-        Body: {
-            "plan": [...],
-            "scenario_name": "Improve Liquidity"
-        }
         """
         goal = self.get_object()
 
@@ -138,7 +108,7 @@ class GoalViewSet(viewsets.ModelViewSet):
 
         try:
             result = run_decision_plan(
-                household=request.household,
+                household=self.get_household(),
                 plan=plan,
                 scenario_name=scenario_name,
                 goal=goal
@@ -168,55 +138,58 @@ class GoalViewSet(viewsets.ModelViewSet):
         })
 
 
-class GoalStatusView(APIView):
+class GoalStatusView(HouseholdScopedViewMixin, APIView):
     """
-    Evaluate goal status for the household.
+    API endpoint for evaluating goal status.
 
-    GET /api/v1/goals/status/
-    Optional query: ?scenario_id=uuid
+    Returns current status of all active goals with recommendations.
     """
     permission_classes = [IsAuthenticated]
 
     def get(self, request):
+        """Get goal status for all active goals."""
+        household = self.get_household()
         scenario_id = request.query_params.get('scenario_id')
 
-        evaluator = GoalEvaluator(request.household)
-        results = evaluator.evaluate_goals(scenario_id=scenario_id)
+        evaluator = GoalEvaluator(household)
 
-        # Convert dataclass results to serializable dicts
-        serialized = []
-        for result in results:
-            serialized.append({
-                'goal_id': result.goal_id,
-                'goal_type': result.goal_type,
-                'goal_name': result.goal_name,
-                'target_value': str(result.target_value),
-                'target_unit': result.target_unit,
-                'current_value': str(result.current_value),
-                'status': result.status,
-                'delta_to_target': str(result.delta_to_target),
-                'percentage_complete': str(result.percentage_complete) if result.percentage_complete else None,
-                'recommendation': result.recommendation,
+        try:
+            statuses = evaluator.evaluate_goals(scenario_id=scenario_id)
+        except Exception as e:
+            return Response(
+                {'error': 'evaluation_error', 'message': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+        # Convert dataclass to dict for serialization
+        results = []
+        for s in statuses:
+            results.append({
+                'goal_id': s.goal_id,
+                'goal_type': s.goal_type,
+                'goal_name': s.goal_name,
+                'target_value': s.target_value,
+                'target_unit': s.target_unit,
+                'current_value': s.current_value,
+                'status': s.status,
+                'delta_to_target': s.delta_to_target,
+                'percentage_complete': s.percentage_complete,
+                'recommendation': s.recommendation,
             })
 
-        return Response({
-            'results': serialized,
-            'count': len(serialized)
-        })
+        return Response({'results': results, 'count': len(results)})
 
 
-class GoalSolutionViewSet(viewsets.ReadOnlyModelViewSet):
+class GoalSolutionViewSet(HouseholdScopedViewMixin, viewsets.ReadOnlyModelViewSet):
     """
     ViewSet for viewing goal solutions.
-
-    Read-only access to computed solutions.
     """
     serializer_class = GoalSolutionSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         goal_id = self.request.query_params.get('goal')
-        qs = GoalSolution.objects.filter(goal__household=self.request.household)
+        qs = GoalSolution.objects.filter(goal__household=self.get_household())
         if goal_id:
             qs = qs.filter(goal_id=goal_id)
         return qs.select_related('goal', 'applied_scenario')
