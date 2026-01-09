@@ -1,21 +1,25 @@
-'use client'
+'use client';
 
-import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { accounts as accountsApi } from '@/lib/api'
-import { Account } from '@/lib/types'
-import { formatCurrency } from '@/lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { accounts as accountsApi } from '@/lib/api';
+import { Account } from '@/lib/types';
+import { formatCurrency } from '@/lib/format';
+import { ControlListLayout } from '@/components/layout/ControlListLayout';
+import { MetricCard } from '@/components/ui/MetricCard';
+import { FreshnessIndicator } from '@/components/ui/FreshnessIndicator';
+import { TableDensityToggle } from '@/components/ui/TableDensityToggle';
+import { InstrumentPanel } from '@/components/ui/InstrumentPanel';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   Table,
   TableBody,
@@ -23,33 +27,96 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table'
-import { Plus, RefreshCw, Building2, Wallet, CreditCard, Home, Car, GraduationCap } from 'lucide-react'
+} from '@/components/ui/table';
+import { DENSITY, DensityMode, DEFAULT_DENSITY, TYPOGRAPHY } from '@/lib/design-tokens';
+import { cn } from '@/lib/utils';
+import {
+  Plus,
+  RefreshCw,
+  Building2,
+  Wallet,
+  CreditCard,
+  Home,
+  Car,
+  GraduationCap,
+  TrendingUp,
+  TrendingDown,
+  Loader2,
+  Landmark,
+} from 'lucide-react';
 
 const LIABILITY_TYPES = new Set([
-  // Credit Cards (Revolving)
-  'credit_card', 'store_card',
-  // Lines of Credit
-  'heloc', 'personal_loc', 'business_loc',
-  // Mortgages
-  'primary_mortgage', 'rental_mortgage', 'second_mortgage',
-  // Installment Loans
-  'auto_loan', 'personal_loan', 'student_loan_federal', 'student_loan_private', 'boat_loan',
-  // Other Liabilities
-  'medical_debt', 'tax_debt', 'family_loan', 'other_liability',
-])
+  'credit_card',
+  'store_card',
+  'heloc',
+  'personal_loc',
+  'business_loc',
+  'primary_mortgage',
+  'rental_mortgage',
+  'second_mortgage',
+  'auto_loan',
+  'personal_loan',
+  'student_loan_federal',
+  'student_loan_private',
+  'boat_loan',
+  'medical_debt',
+  'tax_debt',
+  'family_loan',
+  'other_liability',
+]);
+
+// Financial accounts with actual balances at institutions
+const ACCOUNT_ASSET_TYPES = new Set([
+  // Cash & Equivalents
+  'checking',
+  'savings',
+  'money_market',
+  'cd',
+  'cash',
+  // Investment Accounts
+  'brokerage',
+  'crypto',
+  // Retirement Accounts
+  'traditional_401k',
+  'roth_401k',
+  'traditional_ira',
+  'roth_ira',
+  'sep_ira',
+  'simple_ira',
+  'tsp',
+  'pension',
+  'annuity',
+  'hsa',
+]);
+
+// Physical/tangible assets (property, vehicles, etc.)
+const FIXED_ASSET_TYPES = new Set([
+  // Real Property
+  'primary_residence',
+  'rental_property',
+  'vacation_property',
+  'land',
+  'commercial_property',
+  // Personal Property
+  'vehicle',
+  'boat',
+  'jewelry',
+  'other_asset',
+  // Business & Receivables
+  'business_equity',
+  'accounts_receivable',
+  'loans_receivable',
+  'tax_refund',
+]);
 
 const ACCOUNT_TYPE_LABELS: Record<string, string> = {
-  // Cash & Equivalents
   checking: 'Checking',
   savings: 'Savings',
   money_market: 'Money Market',
   cd: 'Certificate of Deposit',
   cash: 'Cash on Hand',
-  // Investment
   brokerage: 'Brokerage',
   crypto: 'Cryptocurrency',
-  // Retirement (backend uses traditional_ira, roth_ira format)
   traditional_401k: '401(k) - Traditional',
   roth_401k: '401(k) - Roth',
   traditional_ira: 'IRA - Traditional',
@@ -60,52 +127,46 @@ const ACCOUNT_TYPE_LABELS: Record<string, string> = {
   pension: 'Pension',
   annuity: 'Annuity',
   hsa: 'Health Savings Account',
-  // Real Property
   primary_residence: 'Primary Residence',
   rental_property: 'Rental Property',
   vacation_property: 'Vacation Property',
   land: 'Land',
   commercial_property: 'Commercial Property',
-  // Personal Property
   vehicle: 'Vehicle',
   boat: 'Boat/RV',
   jewelry: 'Jewelry/Collectibles',
   other_asset: 'Other Asset',
-  // Credit Cards (Revolving)
+  business_equity: 'Business Equity',
+  accounts_receivable: 'Accounts Receivable',
+  loans_receivable: 'Loans Receivable',
+  tax_refund: 'Tax Refund',
   credit_card: 'Credit Card',
   store_card: 'Store Credit Card',
-  // Lines of Credit
-  heloc: 'Home Equity Line of Credit',
-  personal_loc: 'Personal Line of Credit',
-  business_loc: 'Business Line of Credit',
-  // Mortgages
-  primary_mortgage: 'Primary Residence Mortgage',
-  rental_mortgage: 'Rental Property Mortgage',
+  heloc: 'HELOC',
+  personal_loc: 'Personal LOC',
+  business_loc: 'Business LOC',
+  primary_mortgage: 'Primary Mortgage',
+  rental_mortgage: 'Rental Mortgage',
   second_mortgage: 'Second Mortgage',
-  // Installment Loans
   auto_loan: 'Auto Loan',
   personal_loan: 'Personal Loan',
   student_loan_federal: 'Federal Student Loan',
   student_loan_private: 'Private Student Loan',
   boat_loan: 'Boat/RV Loan',
-  // Other Liabilities
   medical_debt: 'Medical Debt',
   tax_debt: 'Tax Debt Owed',
-  family_loan: 'Loan from Family/Friends',
+  family_loan: 'Loan from Family',
   other_liability: 'Other Liability',
-}
+};
 
 const ACCOUNT_TYPE_ICONS: Record<string, React.ElementType> = {
-  // Cash
   checking: Wallet,
   savings: Wallet,
   money_market: Wallet,
   cd: Wallet,
   cash: Wallet,
-  // Investment
   brokerage: Building2,
   crypto: Building2,
-  // Retirement
   traditional_401k: Building2,
   roth_401k: Building2,
   traditional_ira: Building2,
@@ -116,97 +177,109 @@ const ACCOUNT_TYPE_ICONS: Record<string, React.ElementType> = {
   pension: Building2,
   annuity: Building2,
   hsa: Building2,
-  // Real Property
   primary_residence: Home,
   rental_property: Home,
   vacation_property: Home,
   land: Home,
   commercial_property: Home,
-  // Personal Property
   vehicle: Car,
   boat: Car,
-  // Credit
+  jewelry: Landmark,
+  other_asset: Landmark,
+  business_equity: Building2,
+  accounts_receivable: Wallet,
+  loans_receivable: Wallet,
+  tax_refund: Wallet,
   credit_card: CreditCard,
   store_card: CreditCard,
   heloc: Home,
-  // Mortgages
   primary_mortgage: Home,
   rental_mortgage: Home,
   second_mortgage: Home,
-  // Loans
   auto_loan: Car,
   student_loan_federal: GraduationCap,
   student_loan_private: GraduationCap,
-}
+};
 
 function getAccountIcon(accountType: string) {
-  return ACCOUNT_TYPE_ICONS[accountType] || Wallet
+  return ACCOUNT_TYPE_ICONS[accountType] || Wallet;
 }
 
 export default function AccountsPage() {
-  const [updateModalOpen, setUpdateModalOpen] = useState(false)
-  const [addModalOpen, setAddModalOpen] = useState(false)
-  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null)
-  const [newBalance, setNewBalance] = useState('')
+  const [updateModalOpen, setUpdateModalOpen] = useState(false);
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [newBalance, setNewBalance] = useState('');
+  const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY);
   const [newAccount, setNewAccount] = useState({
     name: '',
     accountType: 'checking',
     institution: '',
     currentBalance: '0',
-  })
+  });
 
-  const queryClient = useQueryClient()
+  const queryClient = useQueryClient();
 
   const { data: accountsData, isLoading } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => accountsApi.list(),
-  })
+  });
 
   const updateBalanceMutation = useMutation({
     mutationFn: ({ id, balance }: { id: string; balance: string }) =>
       accountsApi.updateBalance(id, balance, new Date().toISOString().split('T')[0]),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setUpdateModalOpen(false)
-      setSelectedAccount(null)
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['metrics'] });
+      setUpdateModalOpen(false);
+      setSelectedAccount(null);
     },
-  })
+  });
 
   const createAccountMutation = useMutation({
     mutationFn: (data: Partial<Account>) => accountsApi.create(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      setAddModalOpen(false)
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      setAddModalOpen(false);
       setNewAccount({
         name: '',
         accountType: 'checking',
         institution: '',
         currentBalance: '0',
-      })
+      });
     },
-  })
+  });
 
-  const accounts = accountsData?.results || []
-  const assets = accounts.filter(a => !LIABILITY_TYPES.has(a.accountType))
-  const liabilities = accounts.filter(a => LIABILITY_TYPES.has(a.accountType))
+  const allAccounts = accountsData?.results || [];
 
-  const totalAssets = assets.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0)
-  // Use Math.abs() since liabilities may be stored as negative values
-  const totalLiabilities = liabilities.reduce((sum, a) => sum + Math.abs(parseFloat(a.currentBalance || '0')), 0)
-  const netWorth = totalAssets - totalLiabilities
+  // Separate into accounts (financial), fixed assets (tangible property), and liabilities
+  const accounts = allAccounts.filter((a) => ACCOUNT_ASSET_TYPES.has(a.accountType));
+  const fixedAssets = allAccounts.filter((a) => FIXED_ASSET_TYPES.has(a.accountType));
+  const liabilities = allAccounts.filter((a) => LIABILITY_TYPES.has(a.accountType));
+
+  const totalAccounts = accounts.reduce((sum, a) => sum + parseFloat(a.currentBalance || '0'), 0);
+  const totalFixedAssets = fixedAssets.reduce(
+    (sum, a) => sum + parseFloat(a.currentBalance || '0'),
+    0
+  );
+  const totalAssets = totalAccounts + totalFixedAssets;
+  const totalLiabilities = liabilities.reduce(
+    (sum, a) => sum + Math.abs(parseFloat(a.currentBalance || '0')),
+    0
+  );
+  const netWorth = totalAssets - totalLiabilities;
 
   const openUpdateModal = (account: Account) => {
-    setSelectedAccount(account)
-    setNewBalance(account.currentBalance)
-    setUpdateModalOpen(true)
-  }
+    setSelectedAccount(account);
+    setNewBalance(account.currentBalance);
+    setUpdateModalOpen(true);
+  };
 
   const handleUpdateBalance = () => {
     if (selectedAccount) {
-      updateBalanceMutation.mutate({ id: selectedAccount.id, balance: newBalance })
+      updateBalanceMutation.mutate({ id: selectedAccount.id, balance: newBalance });
     }
-  }
+  };
 
   const handleCreateAccount = () => {
     createAccountMutation.mutate({
@@ -215,160 +288,266 @@ export default function AccountsPage() {
       institution: newAccount.institution,
       currentBalance: newAccount.currentBalance,
       isActive: true,
-    })
-  }
+    });
+  };
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Accounts</h1>
-        <p className="text-muted-foreground">Loading...</p>
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
-    )
+    );
   }
 
+  const densityStyles = DENSITY[density];
+
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Accounts</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your assets and liabilities
-          </p>
-        </div>
+    <ControlListLayout
+      title="Accounts"
+      subtitle="Manage your accounts, assets, and liabilities"
+      actions={
         <Button onClick={() => setAddModalOpen(true)}>
           <Plus className="h-4 w-4 mr-2" />
           Add Account
         </Button>
-      </div>
+      }
+      stats={
+        <>
+          <MetricCard
+            label="Total Assets"
+            value={formatCurrency(totalAssets)}
+            tone="neutral"
+            icon={TrendingUp}
+            statusLabel={`${accounts.length} accounts · ${fixedAssets.length} fixed`}
+          />
+          <MetricCard
+            label="Total Liabilities"
+            value={formatCurrency(totalLiabilities)}
+            tone="neutral"
+            icon={TrendingDown}
+          />
+          <MetricCard
+            label="Net Worth"
+            value={formatCurrency(netWorth)}
+            tone={netWorth >= 0 ? 'good' : 'warning'}
+            icon={Wallet}
+          />
+        </>
+      }
+      tableControls={
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground">
+            {allAccounts.length} total
+          </span>
+          <TableDensityToggle value={density} onChange={setDensity} />
+        </div>
+      }
+    >
+      {/* Accounts Section - Financial accounts with balances */}
+      <InstrumentPanel
+        title="Accounts"
+        subtitle={`${accounts.length} account${accounts.length !== 1 ? 's' : ''} · Cash, investment, and retirement`}
+      >
+        {accounts.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">No accounts added yet</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Account</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Type</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Institution</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Last Updated</TableHead>
+                <TableHead className={cn(TYPOGRAPHY.tableHeader, 'text-right')}>Balance</TableHead>
+                <TableHead className="w-12"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {accounts.map((account) => {
+                const Icon = getAccountIcon(account.accountType);
+                return (
+                  <TableRow key={account.id} className={cn(densityStyles.row)}>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{account.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
+                      {ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
+                    >
+                      {account.institution || '—'}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      {account.lastUpdated ? (
+                        <FreshnessIndicator lastUpdated={account.lastUpdated} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
+                    >
+                      {formatCurrency(parseFloat(account.currentBalance) || 0)}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => openUpdateModal(account)}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </InstrumentPanel>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Assets</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalAssets)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Liabilities</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">-{formatCurrency(totalLiabilities)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Net Worth</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-bold ${netWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(netWorth)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Fixed Assets Section - Property, vehicles, etc. */}
+      <InstrumentPanel
+        title="Fixed Assets"
+        subtitle={`${fixedAssets.length} asset${fixedAssets.length !== 1 ? 's' : ''} · Property, vehicles, and other tangible assets`}
+        className="mt-6"
+      >
+        {fixedAssets.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">No fixed assets added yet</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Asset</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Type</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Description</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Last Updated</TableHead>
+                <TableHead className={cn(TYPOGRAPHY.tableHeader, 'text-right')}>Value</TableHead>
+                <TableHead className="w-12"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {fixedAssets.map((asset) => {
+                const Icon = getAccountIcon(asset.accountType);
+                return (
+                  <TableRow key={asset.id} className={cn(densityStyles.row)}>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{asset.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
+                      {ACCOUNT_TYPE_LABELS[asset.accountType] || asset.accountType}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
+                    >
+                      {asset.institution || '—'}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      {asset.lastUpdated ? (
+                        <FreshnessIndicator lastUpdated={asset.lastUpdated} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
+                    >
+                      {formatCurrency(parseFloat(asset.currentBalance) || 0)}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => openUpdateModal(asset)}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </InstrumentPanel>
 
-      {/* Assets Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Assets</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {assets.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No assets added yet</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Institution</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-16"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {assets.map((account) => {
-                  const Icon = getAccountIcon(account.accountType)
-                  return (
-                    <TableRow key={account.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{account.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}</TableCell>
-                      <TableCell className="text-muted-foreground">{account.institution || '—'}</TableCell>
-                      <TableCell className="text-right font-semibold">
-                        {formatCurrency(account.currentBalance)}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => openUpdateModal(account)}>
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Liabilities Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Liabilities</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {liabilities.length === 0 ? (
-            <p className="text-muted-foreground text-center py-8">No liabilities added yet</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Account</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Institution</TableHead>
-                  <TableHead className="text-right">Balance</TableHead>
-                  <TableHead className="w-16"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {liabilities.map((account) => {
-                  const Icon = getAccountIcon(account.accountType)
-                  return (
-                    <TableRow key={account.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Icon className="h-4 w-4 text-muted-foreground" />
-                          <span className="font-medium">{account.name}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>{ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}</TableCell>
-                      <TableCell className="text-muted-foreground">{account.institution || '—'}</TableCell>
-                      <TableCell className="text-right font-semibold text-red-600">
-                        {formatCurrency(account.currentBalance)}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => openUpdateModal(account)}>
-                          <RefreshCw className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Liabilities Section */}
+      <InstrumentPanel
+        title="Liabilities"
+        subtitle={`${liabilities.length} account${liabilities.length !== 1 ? 's' : ''} · Loans, credit cards, and other debts`}
+        className="mt-6"
+      >
+        {liabilities.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">No liabilities added yet</div>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Account</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Type</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Institution</TableHead>
+                <TableHead className={TYPOGRAPHY.tableHeader}>Last Updated</TableHead>
+                <TableHead className={cn(TYPOGRAPHY.tableHeader, 'text-right')}>Balance</TableHead>
+                <TableHead className="w-12"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {liabilities.map((account) => {
+                const Icon = getAccountIcon(account.accountType);
+                return (
+                  <TableRow key={account.id} className={cn(densityStyles.row)}>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <div className="flex items-center gap-2">
+                        <Icon className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">{account.name}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
+                      {ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
+                    >
+                      {account.institution || '—'}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      {account.lastUpdated ? (
+                        <FreshnessIndicator lastUpdated={account.lastUpdated} />
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell
+                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
+                    >
+                      {formatCurrency(Math.abs(parseFloat(account.currentBalance) || 0))}
+                    </TableCell>
+                    <TableCell className={cn(densityStyles.cell)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 p-0"
+                        onClick={() => openUpdateModal(account)}
+                      >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </InstrumentPanel>
 
       {/* Update Balance Modal */}
       <Dialog open={updateModalOpen} onOpenChange={setUpdateModalOpen}>
@@ -404,16 +583,14 @@ export default function AccountsPage() {
 
       {/* Add Account Modal */}
       <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-auto">
           <DialogHeader>
             <DialogTitle>Add Account</DialogTitle>
-            <DialogDescription>
-              Add a new asset or liability account
-            </DialogDescription>
+            <DialogDescription>Add a new account, asset, or liability</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="name">Account Name</Label>
+              <Label htmlFor="name">Name</Label>
               <Input
                 id="name"
                 value={newAccount.name}
@@ -422,7 +599,7 @@ export default function AccountsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="type">Account Type</Label>
+              <Label htmlFor="type">Type</Label>
               <select
                 id="type"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -495,7 +672,7 @@ export default function AccountsPage() {
               </select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="institution">Institution</Label>
+              <Label htmlFor="institution">Institution / Description</Label>
               <Input
                 id="institution"
                 value={newAccount.institution}
@@ -504,7 +681,7 @@ export default function AccountsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="initialBalance">Current Balance</Label>
+              <Label htmlFor="initialBalance">Current Balance / Value</Label>
               <Input
                 id="initialBalance"
                 type="number"
@@ -527,6 +704,6 @@ export default function AccountsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
-  )
+    </ControlListLayout>
+  );
 }
