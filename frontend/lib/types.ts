@@ -322,3 +322,38 @@ export interface IncomeSourceDetail {
   startDate?: string
   endDate?: string
 }
+
+export type LifeEventCategory =
+  | 'career'
+  | 'housing'
+  | 'family'
+  | 'education'
+  | 'health'
+  | 'financial'
+  | 'retirement'
+
+export interface SuggestedChange {
+  change_type: string
+  name: string
+  description: string
+  parameters_template: Record<string, unknown>
+  is_required: boolean
+}
+
+export interface LifeEventTemplate {
+  id?: string
+  name: string
+  description: string
+  category: LifeEventCategory
+  category_display?: string
+  icon: string
+  suggested_changes: SuggestedChange[]
+  display_order?: number
+  is_active?: boolean
+}
+
+export interface LifeEventCategoryGroup {
+  category: LifeEventCategory
+  category_display: string
+  templates: LifeEventTemplate[]
+}
