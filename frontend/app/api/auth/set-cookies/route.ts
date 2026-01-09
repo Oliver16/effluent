@@ -1,4 +1,3 @@
-import { cookies } from 'next/headers';
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
@@ -24,13 +23,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const cookieStore = await cookies();
+    // Create response and set cookies on it directly
+    // This ensures Set-Cookie headers are properly sent to the browser
+    const response = NextResponse.json({ success: true });
 
     // Set token cookie
     // HttpOnly prevents JavaScript access (XSS protection)
     // Secure ensures cookies are only sent over HTTPS in production
     // SameSite=Lax provides CSRF protection while allowing top-level navigation
-    cookieStore.set('token', token, {
+    response.cookies.set('token', token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -42,7 +43,7 @@ export async function POST(request: NextRequest) {
 
     // Set refresh token cookie if provided (for server-side token refresh)
     if (refreshToken) {
-      cookieStore.set('refreshToken', refreshToken, {
+      response.cookies.set('refreshToken', refreshToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
 
     // Set householdId cookie if provided
     if (householdId) {
-      cookieStore.set('householdId', householdId, {
+      response.cookies.set('householdId', householdId, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
@@ -63,7 +64,7 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    return NextResponse.json({ success: true });
+    return response;
   } catch (error) {
     console.error('Error setting auth cookies:', error);
     return NextResponse.json(
