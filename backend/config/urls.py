@@ -5,8 +5,10 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 # Import views
-from apps.core.views import ProfileView, PasswordChangeView
-from apps.households.views import HouseholdViewSet, HouseholdMemberViewSet
+from apps.core.views import (
+    UserProfileView, ChangePasswordView,
+    HouseholdViewSet, HouseholdMemberViewSet
+)
 from apps.accounts.views import AccountViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
@@ -67,8 +69,8 @@ urlpatterns = [
     path('api/v1/', include(router.urls)),
 
     # Profile
-    path('api/v1/profile/', ProfileView.as_view(), name='profile'),
-    path('api/v1/profile/change-password/', PasswordChangeView.as_view(), name='password-change'),
+    path('api/v1/profile/', UserProfileView.as_view(), name='profile'),
+    path('api/v1/profile/change-password/', ChangePasswordView.as_view(), name='password-change'),
 
     # Metrics
     path('api/v1/metrics/current/', CurrentMetricsView.as_view(), name='metrics-current'),
