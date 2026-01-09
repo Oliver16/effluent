@@ -1,4 +1,5 @@
 import type { Status } from '@/components/ui/StatusBadge';
+import { StatusTone, FRESHNESS } from './design-tokens';
 
 // ============================================
 // Types
@@ -25,6 +26,16 @@ export const DEFAULT_THRESHOLDS: Record<string, ThresholdConfig> = {
   savings_rate: { good: 0.20, warning: 0.10, higherIsBetter: true },
   monthly_surplus: { good: 0, warning: -500, higherIsBetter: true },
 };
+
+/**
+ * Standard financial metric thresholds (new HMI format)
+ */
+export const METRIC_THRESHOLDS = {
+  liquidityMonths: { warning: 6, critical: 3 },
+  savingsRate: { warning: 0.15, critical: 0.05 },
+  dscr: { warning: 1.5, critical: 1.0 },
+  debtToIncome: { warning: 0.36, critical: 0.43 },
+} as const;
 
 // ============================================
 // Status Computation Functions
@@ -167,4 +178,91 @@ export function goalStatusToStatus(goalStatus: string): Status {
     default:
       return 'neutral';
   }
+}
+
+// ============================================
+// New HMI Status Utilities
+// ============================================
+
+/**
+ * Derive status tone from a value and thresholds
+ */
+export function deriveStatus(
+  value: number,
+  thresholds: { warning: number; critical: number },
+  direction: 'higher-is-better' | 'lower-is-better' = 'higher-is-better'
+): StatusTone {
+  if (direction === 'higher-is-better') {
+    if (value >= thresholds.warning) return 'good';
+    if (value >= thresholds.critical) return 'warning';
+    return 'critical';
+  } else {
+    if (value <= thresholds.warning) return 'good';
+    if (value <= thresholds.critical) return 'warning';
+    return 'critical';
+  }
+}
+
+/**
+ * Derive status from a delta value
+ * @param delta - The change value
+ * @param goodDirection - Whether positive change is good
+ */
+export function deriveDeltaStatus(
+  delta: number,
+  goodDirection: 'up' | 'down' = 'up'
+): StatusTone {
+  if (delta === 0) return 'neutral';
+
+  if (goodDirection === 'up') {
+    return delta > 0 ? 'good' : 'critical';
+  } else {
+    return delta < 0 ? 'good' : 'critical';
+  }
+}
+
+/**
+ * Derive delta direction
+ */
+export function deriveDeltaDirection(delta: number): 'up' | 'down' | 'flat' {
+  if (delta > 0) return 'up';
+  if (delta < 0) return 'down';
+  return 'flat';
+}
+
+/**
+ * Derive data freshness status
+ */
+export function deriveFreshnessStatus(lastUpdated: Date | string | number): {
+  tone: StatusTone;
+  label: string;
+} {
+  const d = new Date(lastUpdated);
+  const ageMs = Date.now() - d.getTime();
+
+  if (ageMs <= FRESHNESS.fresh.maxAgeMs) {
+    return { tone: 'good', label: 'Fresh' };
+  }
+  if (ageMs <= FRESHNESS.recent.maxAgeMs) {
+    return { tone: 'neutral', label: 'Recent' };
+  }
+  if (ageMs <= FRESHNESS.aging.maxAgeMs) {
+    return { tone: 'warning', label: 'Aging' };
+  }
+  return { tone: 'critical', label: 'Stale' };
+}
+
+/**
+ * Convert StatusTone to legacy Status type
+ */
+export function toneToStatus(tone: StatusTone): Status {
+  if (tone === 'info') return 'neutral';
+  return tone;
+}
+
+/**
+ * Convert legacy Status to StatusTone
+ */
+export function statusToTone(status: Status): StatusTone {
+  return status;
 }

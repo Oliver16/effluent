@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { lifeEventTemplates, scenarios } from '@/lib/api';
 import { LifeEventTemplate, LifeEventCategoryGroup, SuggestedChange } from '@/lib/types';
@@ -21,6 +21,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { SURFACE } from '@/lib/design-tokens';
 import {
   Briefcase,
   Home,
@@ -43,6 +44,8 @@ import {
   Calendar,
   ChevronRight,
   Loader2,
+  Search,
+  X,
 } from 'lucide-react';
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -98,12 +101,26 @@ export function LifeEventTemplatesDialog({
     new Date().toISOString().split('T')[0]
   );
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>({});
+  const [searchQuery, setSearchQuery] = useState('');
+  const [focusedIndex, setFocusedIndex] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const templateListRef = useRef<HTMLDivElement>(null);
 
   const { data: templatesData, isLoading } = useQuery({
     queryKey: ['life-event-templates'],
     queryFn: lifeEventTemplates.list,
     enabled: open,
   });
+
+  // Reset state when dialog opens/closes
+  useEffect(() => {
+    if (open) {
+      setSearchQuery('');
+      setFocusedIndex(0);
+      // Focus search input when dialog opens
+      setTimeout(() => searchInputRef.current?.focus(), 100);
+    }
+  }, [open]);
 
   const applyMutation = useMutation({
     mutationFn: (data: {
@@ -131,6 +148,81 @@ export function LifeEventTemplatesDialog({
   const categoryGroups = useMemo(() => {
     return templatesData?.results || [];
   }, [templatesData]);
+
+  // Flatten all templates for search/keyboard navigation
+  const allTemplates = useMemo(() => {
+    const templates: Array<{ template: LifeEventTemplate; category: string }> = [];
+    categoryGroups.forEach((group) => {
+      group.templates.forEach((template) => {
+        templates.push({ template, category: group.category });
+      });
+    });
+    return templates;
+  }, [categoryGroups]);
+
+  // Filter templates based on search query
+  const filteredTemplates = useMemo(() => {
+    if (!searchQuery.trim()) return allTemplates;
+    const query = searchQuery.toLowerCase();
+    return allTemplates.filter(
+      ({ template }) =>
+        template.name.toLowerCase().includes(query) ||
+        template.description.toLowerCase().includes(query) ||
+        template.suggestedChanges.some((change) =>
+          change.name.toLowerCase().includes(query)
+        )
+    );
+  }, [allTemplates, searchQuery]);
+
+  // Reset focused index when search changes
+  useEffect(() => {
+    setFocusedIndex(0);
+  }, [searchQuery]);
+
+  // Handle keyboard navigation
+  const handleKeyDown = useCallback(
+    (e: KeyboardEvent<HTMLInputElement>) => {
+      if (filteredTemplates.length === 0) return;
+
+      switch (e.key) {
+        case 'ArrowDown':
+          e.preventDefault();
+          setFocusedIndex((prev) =>
+            prev < filteredTemplates.length - 1 ? prev + 1 : 0
+          );
+          break;
+        case 'ArrowUp':
+          e.preventDefault();
+          setFocusedIndex((prev) =>
+            prev > 0 ? prev - 1 : filteredTemplates.length - 1
+          );
+          break;
+        case 'Enter':
+          e.preventDefault();
+          if (filteredTemplates[focusedIndex]) {
+            handleSelectTemplate(filteredTemplates[focusedIndex].template);
+          }
+          break;
+        case 'Escape':
+          if (searchQuery) {
+            e.preventDefault();
+            setSearchQuery('');
+          }
+          break;
+      }
+    },
+    [filteredTemplates, focusedIndex, searchQuery]
+  );
+
+  // Scroll focused item into view
+  useEffect(() => {
+    if (templateListRef.current && searchQuery) {
+      const focusedElement = templateListRef.current.querySelector(
+        `[data-index="${focusedIndex}"]`
+      );
+      focusedElement?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }, [focusedIndex, searchQuery]);
 
   const handleSelectTemplate = (template: LifeEventTemplate) => {
     setSelectedTemplate(template);
@@ -167,32 +259,51 @@ export function LifeEventTemplatesDialog({
   };
 
   const renderTemplateList = () => (
-    <Tabs defaultValue={categoryGroups[0]?.category || 'career'} className="w-full">
-      <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
-        {categoryGroups.map((group) => (
-          <TabsTrigger
-            key={group.category}
-            value={group.category}
-            className="flex items-center gap-2"
+    <div className="space-y-4">
+      {/* Search Input */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          ref={searchInputRef}
+          placeholder="Search life events..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onKeyDown={handleKeyDown}
+          className="pl-9 pr-9"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
-            {CATEGORY_ICONS[group.category]}
-            <span className="hidden sm:inline">{group.categoryDisplay}</span>
-          </TabsTrigger>
-        ))}
-      </TabsList>
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
 
-      {categoryGroups.map((group) => (
-        <TabsContent key={group.category} value={group.category} className="mt-0">
-          <ScrollArea className="h-[400px]">
-            <div className="grid gap-3 pr-4">
-              {group.templates.map((template, idx) => (
+      {/* Show filtered results when searching */}
+      {searchQuery ? (
+        <ScrollArea className="h-[400px]">
+          <div ref={templateListRef} className="grid gap-3 pr-4">
+            {filteredTemplates.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                No life events found for "{searchQuery}"
+              </div>
+            ) : (
+              filteredTemplates.map(({ template, category }, idx) => (
                 <Card
                   key={template.name + idx}
+                  data-index={idx}
                   className={cn(
-                    'cursor-pointer transition-all hover:border-primary',
-                    'hover:shadow-md'
+                    SURFACE.card,
+                    'cursor-pointer transition-all hover:border-primary hover:shadow-md',
+                    'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2',
+                    idx === focusedIndex && 'border-primary ring-2 ring-primary/20'
                   )}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectTemplate(template)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSelectTemplate(template)}
                 >
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
@@ -200,33 +311,94 @@ export function LifeEventTemplatesDialog({
                         <div className="p-2 bg-muted rounded-md">
                           {TEMPLATE_ICONS[template.icon] || <Calendar className="h-5 w-5" />}
                         </div>
-                        <CardTitle className="text-base">{template.name}</CardTitle>
+                        <div>
+                          <CardTitle className="text-base">{template.name}</CardTitle>
+                          <span className="text-xs text-muted-foreground capitalize">{category}</span>
+                        </div>
                       </div>
                       <ChevronRight className="h-5 w-5 text-muted-foreground" />
                     </div>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <CardDescription>{template.description}</CardDescription>
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {template.suggestedChanges.slice(0, 3).map((change, cIdx) => (
-                        <Badge key={cIdx} variant="secondary" className="text-xs">
-                          {change.name}
-                        </Badge>
-                      ))}
-                      {template.suggestedChanges.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{template.suggestedChanges.length - 3} more
-                        </Badge>
-                      )}
-                    </div>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          </ScrollArea>
-        </TabsContent>
-      ))}
-    </Tabs>
+              ))
+            )}
+          </div>
+        </ScrollArea>
+      ) : (
+        /* Show category tabs when not searching */
+        <Tabs defaultValue={categoryGroups[0]?.category || 'career'} className="w-full">
+          <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
+            {categoryGroups.map((group) => (
+              <TabsTrigger
+                key={group.category}
+                value={group.category}
+                className="flex items-center gap-2"
+              >
+                {CATEGORY_ICONS[group.category]}
+                <span className="hidden sm:inline">{group.categoryDisplay}</span>
+              </TabsTrigger>
+            ))}
+          </TabsList>
+
+          {categoryGroups.map((group) => (
+            <TabsContent key={group.category} value={group.category} className="mt-0">
+              <ScrollArea className="h-[350px]">
+                <div className="grid gap-3 pr-4">
+                  {group.templates.map((template, idx) => (
+                    <Card
+                      key={template.name + idx}
+                      className={cn(
+                        SURFACE.card,
+                        'cursor-pointer transition-all hover:border-primary hover:shadow-md',
+                        'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+                      )}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleSelectTemplate(template)}
+                      onKeyDown={(e) => e.key === 'Enter' && handleSelectTemplate(template)}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="p-2 bg-muted rounded-md">
+                              {TEMPLATE_ICONS[template.icon] || <Calendar className="h-5 w-5" />}
+                            </div>
+                            <CardTitle className="text-base">{template.name}</CardTitle>
+                          </div>
+                          <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        <CardDescription>{template.description}</CardDescription>
+                        <div className="flex flex-wrap gap-1 mt-2">
+                          {template.suggestedChanges.slice(0, 3).map((change, cIdx) => (
+                            <Badge key={cIdx} variant="secondary" className="text-xs">
+                              {change.name}
+                            </Badge>
+                          ))}
+                          {template.suggestedChanges.length > 3 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{template.suggestedChanges.length - 3} more
+                            </Badge>
+                          )}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </ScrollArea>
+            </TabsContent>
+          ))}
+        </Tabs>
+      )}
+
+      <p className="text-xs text-muted-foreground text-center">
+        Use ↑↓ to navigate, Enter to select
+      </p>
+    </div>
   );
 
   const renderChangeForm = () => {

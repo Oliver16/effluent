@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { flows as flowsApi, normalizeListResponse } from '@/lib/api'
 import { RecurringFlow } from '@/lib/types'
-import { formatCurrency } from '@/lib/utils'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { formatCurrency } from '@/lib/format'
+import { ControlListLayout } from '@/components/layout/ControlListLayout'
+import { MetricCard } from '@/components/ui/MetricCard'
+import { StatusBadge } from '@/components/ui/StatusBadge'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -26,6 +29,8 @@ import {
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, RefreshCw, Cpu } from 'lucide-react'
+import { deriveStatus } from '@/lib/status'
+import { StatusTone } from '@/lib/design-tokens'
 
 const INCOME_CATEGORIES: Record<string, string> = {
   // Employment
@@ -500,24 +505,29 @@ export default function FlowsPage() {
     })
   }
 
+  // Derive surplus status (positive surplus is good)
+  const surplusStatus: StatusTone = monthlySurplus >= totalMonthlyIncome * 0.2
+    ? 'good'
+    : monthlySurplus >= 0
+    ? 'warning'
+    : 'critical'
+
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Cash Flows</h1>
+      <ControlListLayout
+        title="Cash Flows"
+        subtitle="Manage your recurring income and expenses"
+      >
         <p className="text-muted-foreground">Loading...</p>
-      </div>
+      </ControlListLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Cash Flows</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage your recurring income and expenses
-          </p>
-        </div>
+    <ControlListLayout
+      title="Cash Flows"
+      subtitle="Manage your recurring income and expenses"
+      actions={
         <Button
           variant="outline"
           onClick={() => regenerateFlowsMutation.mutate()}
@@ -526,44 +536,33 @@ export default function FlowsPage() {
           <RefreshCw className={`h-4 w-4 mr-2 ${regenerateFlowsMutation.isPending ? 'animate-spin' : ''}`} />
           {regenerateFlowsMutation.isPending ? 'Regenerating...' : 'Sync Tax Flows'}
         </Button>
-      </div>
-
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <ArrowUpCircle className="h-4 w-4 text-green-600" />
-              Monthly Income
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">{formatCurrency(totalMonthlyIncome)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-              <ArrowDownCircle className="h-4 w-4 text-red-600" />
-              Monthly Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-red-600">{formatCurrency(totalMonthlyExpenses)}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Monthly Surplus</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className={`text-2xl font-bold ${monthlySurplus >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(monthlySurplus)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
+      }
+      stats={
+        <>
+          <MetricCard
+            label="Monthly Income"
+            value={formatCurrency(totalMonthlyIncome)}
+            icon={ArrowUpCircle}
+            tone="neutral"
+          />
+          <MetricCard
+            label="Monthly Expenses"
+            value={formatCurrency(totalMonthlyExpenses)}
+            icon={ArrowDownCircle}
+            tone="neutral"
+          />
+          <MetricCard
+            label="Monthly Surplus"
+            value={formatCurrency(monthlySurplus)}
+            tone={surplusStatus}
+            statusLabel={
+              surplusStatus === 'good' ? 'Healthy' :
+              surplusStatus === 'warning' ? 'Tight' : 'Deficit'
+            }
+          />
+        </>
+      }
+    >
       {/* Flows Tabs */}
       <Tabs defaultValue="income" className="space-y-4">
         <TabsList>
@@ -612,15 +611,15 @@ export default function FlowsPage() {
                         <TableCell>{INCOME_CATEGORIES[flow.incomeCategory || ''] || flow.incomeCategory}</TableCell>
                         <TableCell>{formatCurrency(flow.amount)}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
-                        <TableCell className="text-right font-semibold text-green-600">
+                        <TableCell className="text-right font-semibold">
                           {formatCurrency(flow.monthlyAmount)}
                         </TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            flow.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {flow.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <StatusBadge
+                            tone={flow.isActive ? 'good' : 'neutral'}
+                            label={flow.isActive ? 'Active' : 'Inactive'}
+                            size="sm"
+                          />
                         </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm" onClick={() => openEditModal(flow)}>
@@ -676,15 +675,15 @@ export default function FlowsPage() {
                         <TableCell>{EXPENSE_CATEGORIES[flow.expenseCategory || ''] || flow.expenseCategory}</TableCell>
                         <TableCell>{formatCurrency(flow.amount)}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
-                        <TableCell className="text-right font-semibold text-red-600">
+                        <TableCell className="text-right font-semibold">
                           {formatCurrency(flow.monthlyAmount)}
                         </TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            flow.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {flow.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <StatusBadge
+                            tone={flow.isActive ? 'good' : 'neutral'}
+                            label={flow.isActive ? 'Active' : 'Inactive'}
+                            size="sm"
+                          />
                         </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm" onClick={() => openEditModal(flow)}>
@@ -731,15 +730,15 @@ export default function FlowsPage() {
                         <TableCell className="font-medium">{flow.name}</TableCell>
                         <TableCell>{formatCurrency(flow.amount)}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
-                        <TableCell className="text-right font-semibold text-blue-600">
+                        <TableCell className="text-right font-semibold">
                           {formatCurrency(flow.monthlyAmount)}
                         </TableCell>
                         <TableCell>
-                          <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                            flow.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
-                          }`}>
-                            {flow.isActive ? 'Active' : 'Inactive'}
-                          </span>
+                          <StatusBadge
+                            tone={flow.isActive ? 'good' : 'neutral'}
+                            label={flow.isActive ? 'Active' : 'Inactive'}
+                            size="sm"
+                          />
                         </TableCell>
                         <TableCell>
                           <Button variant="ghost" size="sm" onClick={() => openEditModal(flow)}>
@@ -963,6 +962,6 @@ export default function FlowsPage() {
           )}
         </DialogContent>
       </Dialog>
-    </div>
+    </ControlListLayout>
   )
 }
