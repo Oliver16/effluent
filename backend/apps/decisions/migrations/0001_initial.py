@@ -9,7 +9,7 @@ class Migration(migrations.Migration):
 
     dependencies = [
         ('core', '0001_initial'),
-        ('scenarios', '0001_initial'),
+        ('scenarios', '0002_baseline_scenario_system'),
     ]
 
     operations = [
