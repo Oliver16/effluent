@@ -28,6 +28,7 @@ from apps.scenarios.views import (
 from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
 from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
+from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView
 
 # Create routers
 router = DefaultRouter()
@@ -96,4 +97,9 @@ urlpatterns = [
     path('api/v1/actions/next/', NextActionsView.as_view(), name='actions-next'),
     path('api/v1/actions/apply/', ApplyActionView.as_view(), name='actions-apply'),
     path('api/v1/actions/templates/', ActionTemplatesView.as_view(), name='actions-templates'),
+
+    # Stress Tests (TASK-15)
+    path('api/v1/stress-tests/', StressTestListView.as_view(), name='stress-test-list'),
+    path('api/v1/stress-tests/run/', StressTestRunView.as_view(), name='stress-test-run'),
+    path('api/v1/stress-tests/batch/', StressTestBatchRunView.as_view(), name='stress-test-batch'),
 ]

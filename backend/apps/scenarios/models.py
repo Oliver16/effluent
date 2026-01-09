@@ -110,6 +110,13 @@ class ChangeType(models.TextChoices):
     # TASK-14: Assumption overrides
     OVERRIDE_ASSUMPTIONS = 'override_assumptions', 'Override Scenario Assumptions'
 
+    # TASK-15: Stress test change types
+    ADJUST_INTEREST_RATES = 'adjust_interest_rates', 'Adjust Interest Rates'
+    ADJUST_INVESTMENT_VALUE = 'adjust_investment_value', 'Adjust Investment Value'
+    OVERRIDE_INFLATION = 'override_inflation', 'Override Inflation Rate'
+    OVERRIDE_INVESTMENT_RETURN = 'override_investment_return', 'Override Investment Return'
+    OVERRIDE_SALARY_GROWTH = 'override_salary_growth', 'Override Salary Growth'
+
 
 class ScenarioChange(TimestampedModel):
     """A single change within a scenario."""

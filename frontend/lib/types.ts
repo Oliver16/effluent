@@ -742,3 +742,102 @@ export interface AdoptScenarioResponse {
   skippedChanges: AdoptedChange[]
   scenarioArchived: boolean
 }
+
+// TASK-15: Stress test types
+export type StressTestCategory = 'income' | 'expense' | 'interest_rate' | 'market' | 'inflation'
+
+export interface StressTestTemplate {
+  key: string
+  name: string
+  category: StressTestCategory
+  description: string
+  severity: 'warning' | 'critical'
+}
+
+export interface StressTestSummary {
+  status: 'passed' | 'warning' | 'failed'
+  firstNegativeCashFlowMonth?: number | null
+  firstLiquidityBreachMonth?: number | null
+  minLiquidityMonths: number
+  minDscr: number
+  maxNetWorthDrawdownPercent: number
+  breachedThresholdsCount: number
+}
+
+export interface ThresholdBreach {
+  metric: string
+  threshold: number
+  firstBreachMonth: number
+  breachDurationMonths: number
+  worstValue: number
+}
+
+export interface MonthlyComparison {
+  months: number[]
+  baselineLiquidity: (number | null)[]
+  stressedLiquidity: number[]
+  baselineNetWorth: (number | null)[]
+  stressedNetWorth: number[]
+}
+
+export interface StressTestResult {
+  testKey: string
+  testName: string
+  scenarioId: string
+  summary: StressTestSummary
+  breaches: ThresholdBreach[]
+  monthlyComparison: MonthlyComparison
+  computedAt: string
+}
+
+export interface StressTestListResponse {
+  tests: StressTestTemplate[]
+  count: number
+}
+
+export interface StressTestBatchSummary {
+  totalTests: number
+  passed: number
+  warning: number
+  failed: number
+  resilienceScore: number
+}
+
+export interface StressTestBatchResponse {
+  results: Omit<StressTestResult, 'breaches' | 'monthlyComparison'>[]
+  errors: Array<{ testKey: string; error: string }>
+  summary: StressTestBatchSummary
+}
+
+// TASK-15: Scenario comparison types
+export interface DriverBucket {
+  name: string
+  amount: number
+  description: string
+}
+
+export interface ComparisonDriverAnalysis {
+  scenarioId: string
+  horizonMonths: number
+  baselineEndNw: number
+  scenarioEndNw: number
+  netWorthDelta: number
+  drivers: DriverBucket[]
+  reconciliationErrorPercent: number
+}
+
+export interface DriverAnalysisResult {
+  baselineId: string
+  baselineName: string
+  comparisons: ComparisonDriverAnalysis[]
+}
+
+export interface ScenarioComparisonResult {
+  scenario: Scenario
+  projections: ScenarioProjection[]
+}
+
+export interface ScenarioCompareResponse {
+  results: ScenarioComparisonResult[]
+  driverAnalysis?: DriverAnalysisResult | { error: string }
+}

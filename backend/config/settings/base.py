@@ -34,6 +34,7 @@ INSTALLED_APPS = [
     'apps.decisions',
     'apps.goals',
     'apps.actions',
+    'apps.stress_tests',
 ]
 
 MIDDLEWARE = [

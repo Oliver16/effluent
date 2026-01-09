@@ -14,6 +14,7 @@ from .serializers import (
 )
 from .services import ScenarioEngine
 from .baseline import BaselineScenarioService
+from .comparison import ScenarioComparisonService
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -54,22 +55,99 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def compare(self, request):
-        """Compare projections across scenarios."""
+        """
+        Compare projections across scenarios with driver decomposition.
+
+        POST /api/v1/scenarios/compare/
+        {
+            "scenario_ids": ["id1", "id2", ...],
+            "horizon_months": 60,  // optional, max 360
+            "include_drivers": true  // optional, default true
+        }
+
+        Returns projections for each scenario and driver decomposition
+        explaining what changed and why relative to the first scenario (baseline).
+        """
         scenario_ids = request.data.get('scenario_ids', [])
-        scenarios = Scenario.objects.filter(
+        horizon_months = request.data.get('horizon_months')
+        include_drivers = request.data.get('include_drivers', True)
+
+        # Validate constraints (TASK-15: max 4 scenarios, max 360 months)
+        if len(scenario_ids) > ScenarioComparisonService.MAX_SCENARIOS:
+            return Response(
+                {'error': f'Maximum {ScenarioComparisonService.MAX_SCENARIOS} scenarios allowed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if horizon_months and horizon_months > ScenarioComparisonService.MAX_HORIZON_MONTHS:
+            return Response(
+                {'error': f'Maximum horizon is {ScenarioComparisonService.MAX_HORIZON_MONTHS} months'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Fetch scenarios with ownership validation
+        scenarios = list(Scenario.objects.filter(
             household=request.household,
             id__in=scenario_ids
-        )
+        ))
 
+        if len(scenarios) != len(scenario_ids):
+            return Response(
+                {'error': 'One or more scenarios not found or not accessible'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Build basic comparison results
         comparisons = []
         for scenario in scenarios:
             projections = scenario.projections.all()
+            if horizon_months:
+                projections = projections[:horizon_months]
             comparisons.append({
                 'scenario': ScenarioSerializer(scenario).data,
                 'projections': ScenarioProjectionSerializer(projections, many=True).data,
             })
 
-        return Response({'results': comparisons})
+        result = {'results': comparisons}
+
+        # Add driver decomposition if requested and we have multiple scenarios
+        if include_drivers and len(scenarios) >= 2:
+            service = ScenarioComparisonService(request.household)
+            try:
+                driver_analysis = service.compare_multiple(
+                    scenarios,
+                    horizon_months=horizon_months
+                )
+
+                # Convert driver objects to dicts
+                result['driver_analysis'] = {
+                    'baseline_id': driver_analysis['baseline_id'],
+                    'baseline_name': driver_analysis['baseline_name'],
+                    'comparisons': [
+                        {
+                            'scenario_id': c.scenario_id,
+                            'horizon_months': c.horizon_months,
+                            'baseline_end_nw': float(c.baseline_end_nw),
+                            'scenario_end_nw': float(c.scenario_end_nw),
+                            'net_worth_delta': float(c.net_worth_delta),
+                            'drivers': [
+                                {
+                                    'name': d.name,
+                                    'amount': float(d.amount),
+                                    'description': d.description,
+                                }
+                                for d in c.drivers
+                            ],
+                            'reconciliation_error_percent': float(c.reconciliation_error_percent),
+                        }
+                        for c in driver_analysis['comparisons']
+                    ],
+                }
+            except ValueError as e:
+                # Include error but don't fail the whole request
+                result['driver_analysis'] = {'error': str(e)}
+
+        return Response(result)
 
     @action(detail=True, methods=['post'])
     def adopt(self, request, pk=None):

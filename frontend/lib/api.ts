@@ -39,6 +39,11 @@ import type {
   TaxSummaryResponse,
   DataQualityResponse,
   AdoptScenarioResponse,
+  // TASK-15 types
+  StressTestListResponse,
+  StressTestResult,
+  StressTestBatchResponse,
+  ScenarioCompareResponse,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -495,11 +500,23 @@ export const scenarios = {
   updateChange: (changeId: string, data: Partial<ScenarioChange>) =>
     api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, data),
   deleteChange: (changeId: string) => api.delete<void>(`/api/v1/scenario-changes/${changeId}/`),
-  compare: (scenarioIds: string[]) =>
-    api.post<{ results: Array<{ scenario: Scenario; projections: ScenarioProjection[] }> }>(
+  /**
+   * Compare scenarios with optional driver analysis.
+   * @param scenarioIds Array of scenario IDs to compare (first is baseline)
+   * @param options Optional: horizonMonths (max 360), includeDrivers (default true)
+   */
+  compare: (
+    scenarioIds: string[],
+    options?: { horizonMonths?: number; includeDrivers?: boolean }
+  ) =>
+    api.post<ScenarioCompareResponse>(
       '/api/v1/scenarios/compare/',
-      { scenario_ids: scenarioIds }
-    ),
+      {
+        scenario_ids: scenarioIds,
+        horizon_months: options?.horizonMonths,
+        include_drivers: options?.includeDrivers ?? true,
+      }
+    ).then(data => toCamelCase<ScenarioCompareResponse>(data)),
 }
 
 // Life Event Template endpoints
@@ -696,4 +713,38 @@ export const decisions = {
       .then(data => toCamelCase<DecisionRunResponse>(data)),
   deleteDraft: (id: string) =>
     api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
+}
+
+// Stress Tests endpoints (TASK-15)
+export const stressTests = {
+  /**
+   * List available stress test templates.
+   */
+  list: () =>
+    api.get<StressTestListResponse>('/api/v1/stress-tests/')
+      .then(data => toCamelCase<StressTestListResponse>(data)),
+
+  /**
+   * Run a single stress test.
+   * @param testKey The key of the stress test template
+   * @param inputs Custom input overrides for the test
+   * @param horizonMonths Projection horizon (default 60)
+   */
+  run: (testKey: string, inputs?: Record<string, unknown>, horizonMonths?: number) =>
+    api.post<StressTestResult>('/api/v1/stress-tests/run/', {
+      test_key: testKey,
+      inputs: inputs || {},
+      horizon_months: horizonMonths || 60,
+    }).then(data => toCamelCase<StressTestResult>(data)),
+
+  /**
+   * Run multiple stress tests in batch.
+   * @param testKeys Array of test keys to run (runs all if empty)
+   * @param horizonMonths Projection horizon (default 60)
+   */
+  batch: (testKeys?: string[], horizonMonths?: number) =>
+    api.post<StressTestBatchResponse>('/api/v1/stress-tests/batch/', {
+      test_keys: testKeys || [],
+      horizon_months: horizonMonths || 60,
+    }).then(data => toCamelCase<StressTestBatchResponse>(data)),
 }
