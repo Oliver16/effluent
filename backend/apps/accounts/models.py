@@ -342,10 +342,7 @@ class AssetDetails(TimestampedModel):
     zip_code = models.CharField(max_length=10, blank=True)
     square_footage = models.PositiveIntegerField(null=True, blank=True)
     lot_size_acres = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    year_built = models.PositiveIntegerField(
-        null=True, blank=True,
-        validators=[MinValueValidator(1800), MaxValueValidator(date.today().year + 1)]
-    )
+    year_built = models.PositiveIntegerField(null=True, blank=True)
 
     annual_property_tax = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     annual_insurance = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -364,10 +361,17 @@ class AssetDetails(TimestampedModel):
 
     def clean(self):
         super().clean()
+        errors = {}
         if self.acquisition_date and self.acquisition_date > date.today():
-            raise ValidationError({
-                'acquisition_date': 'Acquisition date cannot be in the future.'
-            })
+            errors['acquisition_date'] = 'Acquisition date cannot be in the future.'
+        if self.year_built:
+            current_year = date.today().year
+            if self.year_built < 1800:
+                errors['year_built'] = 'Year built cannot be before 1800.'
+            elif self.year_built > current_year + 1:
+                errors['year_built'] = f'Year built cannot be after {current_year + 1}.'
+        if errors:
+            raise ValidationError(errors)
 
     @property
     def monthly_carrying_cost(self) -> Decimal:
