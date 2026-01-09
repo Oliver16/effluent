@@ -109,7 +109,7 @@ export default async function DashboardPage() {
         actions={
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" asChild>
-              <Link href="/settings/goals">
+              <Link href="/goals">
                 <Target className="h-4 w-4 mr-2" />
                 Edit Goals
               </Link>

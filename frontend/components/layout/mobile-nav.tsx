@@ -14,6 +14,7 @@ import {
   Menu,
   X,
   Lightbulb,
+  Target,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -23,6 +24,7 @@ const navigation = [
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
   { name: 'Decisions', href: '/decisions', icon: Lightbulb },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
+  { name: 'Goals', href: '/goals', icon: Target },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 
