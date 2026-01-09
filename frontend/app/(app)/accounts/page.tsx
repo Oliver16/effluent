@@ -316,8 +316,8 @@ export default function AccountsPage() {
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {account.lastUpdated ? (
-                        <FreshnessIndicator lastUpdated={account.lastUpdated} />
+                      {account.updatedAt ? (
+                        <FreshnessIndicator lastUpdated={account.updatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -381,8 +381,8 @@ export default function AccountsPage() {
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {account.lastUpdated ? (
-                        <FreshnessIndicator lastUpdated={account.lastUpdated} />
+                      {account.updatedAt ? (
+                        <FreshnessIndicator lastUpdated={account.updatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

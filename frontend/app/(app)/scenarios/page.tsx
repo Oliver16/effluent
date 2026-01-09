@@ -125,7 +125,7 @@ export default function ScenariosPage() {
             description={baseline.description || 'Baseline projection from current state'}
             isBaseline
             horizonMonths={baseline.projectionMonths || 60}
-            lastRun={baseline.lastRun}
+            lastRun={baseline.lastProjectedAt ?? undefined}
             onOpen={() => router.push(`/scenarios/${baseline.id}`)}
           />
         </section>
@@ -151,7 +151,7 @@ export default function ScenariosPage() {
                 name={scenario.name}
                 description={scenario.description}
                 horizonMonths={scenario.projectionMonths || 60}
-                lastRun={scenario.lastRun}
+                lastRun={scenario.lastProjectedAt ?? undefined}
                 isSelected={selectedIds.has(scenario.id)}
                 onSelectionChange={(selected) => toggleSelection(scenario.id, selected)}
                 onOpen={() => router.push(`/scenarios/${scenario.id}`)}

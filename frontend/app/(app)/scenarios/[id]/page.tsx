@@ -204,8 +204,8 @@ export default function ScenarioDetailPage() {
                     />
                     <MetricRow
                       label="Total Debt"
-                      baseline={parseFloat(finalBaseline.totalDebt) || 0}
-                      scenario={parseFloat(finalProjection.totalDebt) || 0}
+                      baseline={parseFloat(finalBaseline.totalLiabilities) || 0}
+                      scenario={parseFloat(finalProjection.totalLiabilities) || 0}
                       format="currency"
                       goodDirection="down"
                     />
@@ -224,19 +224,24 @@ export default function ScenarioDetailPage() {
                 {scenario.changes && scenario.changes.length > 0 && (
                   <DriversBlock
                     title="What's Driving the Difference"
-                    drivers={scenario.changes.slice(0, 5).map((change) => ({
-                      label: change.description || change.changeType,
-                      impact: parseFloat(change.amount) || 0,
-                      tone:
-                        parseFloat(change.amount) >= 0
-                          ? change.category === 'expense'
-                            ? 'critical'
-                            : 'good'
-                          : change.category === 'expense'
-                          ? 'good'
-                          : 'critical',
-                      recurring: change.isRecurring,
-                    }))}
+                    drivers={scenario.changes.slice(0, 5).map((change) => {
+                      const amount = parseFloat(String(change.parameters?.amount ?? 0)) || 0;
+                      const category = String(change.parameters?.category ?? '');
+                      const isRecurring = Boolean(change.parameters?.isRecurring);
+                      return {
+                        label: change.description || change.changeType,
+                        impact: amount,
+                        tone:
+                          amount >= 0
+                            ? category === 'expense'
+                              ? 'critical'
+                              : 'good'
+                            : category === 'expense'
+                            ? 'good'
+                            : 'critical',
+                        recurring: isRecurring,
+                      };
+                    })}
                   />
                 )}
               </>
