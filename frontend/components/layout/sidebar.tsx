@@ -12,6 +12,7 @@ import {
   LogOut,
   Lightbulb,
   Target,
+  FlaskConical,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -21,6 +22,7 @@ const navigation = [
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
   { name: 'Decisions', href: '/decisions', icon: Lightbulb },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
+  { name: 'Stress Tests', href: '/stress-tests', icon: FlaskConical },
   { name: 'Goals', href: '/goals', icon: Target },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
