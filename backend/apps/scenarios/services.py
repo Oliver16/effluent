@@ -106,35 +106,75 @@ class ScenarioEngine:
         self.household = scenario.household
 
     def _get_all_changes(self) -> list[ScenarioChange]:
-        """Get all changes including inherited from parent scenarios."""
-        changes = []
+        """
+        Get all changes including inherited from parent scenarios.
+
+        Override semantics for "SET" type changes:
+        - For change types that SET values (MODIFY_401K, SET_SAVINGS_TRANSFER,
+          OVERRIDE_INFLATION, etc.), child scenario changes override parent
+          changes of the same type that affect the same resource.
+        - For "ADD/ADJUST" type changes, both parent and child apply cumulatively.
+        """
+        # Change types where child should override parent (not accumulate)
+        SET_CHANGE_TYPES = {
+            ChangeType.MODIFY_401K,
+            ChangeType.SET_SAVINGS_TRANSFER,
+            ChangeType.OVERRIDE_ASSUMPTIONS,
+            ChangeType.OVERRIDE_INFLATION,
+            ChangeType.OVERRIDE_INVESTMENT_RETURN,
+            ChangeType.OVERRIDE_SALARY_GROWTH,
+            ChangeType.MODIFY_WITHHOLDING,
+        }
+
+        # Collect this scenario's changes first (they take precedence)
+        scenario_changes = list(self.scenario.changes.filter(is_enabled=True))
+
+        # Track which SET-type changes this scenario has by type and optional source
+        scenario_override_keys = set()
+        for change in scenario_changes:
+            if change.change_type in SET_CHANGE_TYPES:
+                # Key by change_type and source_flow_id if present
+                key = (change.change_type, change.source_flow_id)
+                scenario_override_keys.add(key)
 
         # Walk up the parent chain to collect inherited changes
+        parent_changes = []
         parent = self.scenario.parent_scenario
         while parent:
-            parent_changes = list(parent.changes.filter(is_enabled=True))
-            changes.extend(parent_changes)
+            for change in parent.changes.filter(is_enabled=True):
+                # For SET-type changes, skip if child has an override
+                if change.change_type in SET_CHANGE_TYPES:
+                    key = (change.change_type, change.source_flow_id)
+                    if key in scenario_override_keys:
+                        continue  # Child overrides this
+                parent_changes.append(change)
             parent = parent.parent_scenario
 
-        # Add this scenario's changes (they take precedence)
-        changes.extend(list(self.scenario.changes.filter(is_enabled=True)))
+        # Combine parent and scenario changes
+        changes = parent_changes + scenario_changes
 
         # Sort by date
         changes.sort(key=lambda c: c.effective_date)
         return changes
 
-    def compute_projection(self, as_of_date: date | None = None) -> list[ScenarioProjection]:
+    def compute_projection(
+        self,
+        as_of_date: date | None = None,
+        in_memory: bool = False
+    ) -> list[ScenarioProjection]:
         """
-        Compute full projection and save to database.
+        Compute full projection, optionally saving to database.
 
         Args:
             as_of_date: Optional date to use for initializing state.
                        When provided (for pinned baselines), account balances
                        and flows are taken as of this date.
                        When None, uses the latest available data.
+            in_memory: If True, compute projections without DB writes.
+                       TASK-14 requirement for solver trials.
 
         Returns:
-            List of ScenarioProjection objects
+            List of ScenarioProjection objects (unsaved if in_memory=True)
         """
         # Initialize from current state (or as_of_date if pinned)
         state = self._initialize_state(as_of_date=as_of_date)
@@ -163,12 +203,25 @@ class ScenarioEngine:
             # Advance state (apply cash flow to liquid assets)
             state = self._advance_month(state)
 
-        # Save projections
-        with transaction.atomic():
-            ScenarioProjection.objects.filter(scenario=self.scenario).delete()
-            ScenarioProjection.objects.bulk_create(projections)
+        # Only save to DB if not in_memory mode
+        if not in_memory:
+            with transaction.atomic():
+                ScenarioProjection.objects.filter(scenario=self.scenario).delete()
+                ScenarioProjection.objects.bulk_create(projections)
 
         return projections
+
+    def compute_projection_to_memory(self, as_of_date: date | None = None) -> list[ScenarioProjection]:
+        """
+        Compute projection without DB writes.
+
+        Convenience wrapper for compute_projection(in_memory=True).
+        TASK-14 requirement for solver trials to avoid DB bloat.
+
+        Returns:
+            List of unsaved ScenarioProjection objects
+        """
+        return self.compute_projection(as_of_date=as_of_date, in_memory=True)
 
     def _initialize_state(self, as_of_date: date | None = None) -> MonthlyState:
         """
@@ -250,6 +303,12 @@ class ScenarioEngine:
 
         # Also include baseline flows for projection (scenario-specific flows are added via changes)
         # Use is_active_on() method to check if flow is active on the reference date
+        #
+        # IMPORTANT: Skip income flows from RecurringFlow if we already have IncomeSources
+        # to avoid double-counting. IncomeSources are the primary/authoritative source of
+        # income data; RecurringFlow income entries are legacy or supplementary.
+        has_income_sources = len(incomes) > 0
+
         for flow in RecurringFlow.objects.filter(household=self.household, is_baseline=True):
             # Skip flows that are not active on the reference date
             if not flow.is_active_on(reference_date):
@@ -265,6 +324,14 @@ class ScenarioEngine:
                 'linked_account': str(flow.linked_account_id) if flow.linked_account_id else None,
             }
             if flow.flow_type == FlowType.INCOME:
+                # Only include income flows from RecurringFlow if there are no IncomeSources
+                # This prevents double-counting salary/wages income
+                # Exception: include if category is not typical employment income (e.g., rental, passive)
+                if has_income_sources:
+                    # Skip employment-type income categories (already covered by IncomeSources)
+                    employment_categories = {'salary', 'hourly_wages', 'w2', 'w2_hourly', 'bonus', 'commission'}
+                    if flow.category in employment_categories:
+                        continue
                 incomes.append(f)
             elif flow.flow_type == FlowType.EXPENSE:
                 expenses.append(f)
@@ -626,9 +693,25 @@ class ScenarioEngine:
                     break
 
         # TASK-14: Overlay adjustments
+        # Supports both legacy (monthly_adjustment) and new schema (amount/mode)
         elif change.change_type == ChangeType.ADJUST_TOTAL_EXPENSES:
             # Apply as an overlay adjustment (not a persisted flow)
-            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            # Support both schemas: legacy (monthly_adjustment) and TASK-14 spec (amount/mode)
+            if 'amount' in params:
+                raw_amount = Decimal(str(params.get('amount', 0)))
+                mode = params.get('mode', 'absolute')
+
+                if mode == 'percent':
+                    # Percent mode: amount is a ratio (e.g., 0.10 = +10%, -0.10 = -10%)
+                    baseline_expenses = state.total_expenses
+                    adjustment = baseline_expenses * raw_amount
+                else:
+                    # Absolute mode: amount is the monthly adjustment value
+                    adjustment = raw_amount
+            else:
+                # Legacy schema: monthly_adjustment
+                adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+
             if adjustment != 0:
                 state.expenses.append({
                     'id': f'expense_adjustment_{change.id}',
@@ -641,13 +724,38 @@ class ScenarioEngine:
 
         elif change.change_type == ChangeType.ADJUST_TOTAL_INCOME:
             # Apply as an overlay adjustment with tax consideration
-            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            # Support both schemas: legacy (monthly_adjustment) and TASK-14 spec (amount/mode)
+            if 'amount' in params:
+                raw_amount = Decimal(str(params.get('amount', 0)))
+                mode = params.get('mode', 'absolute')
+
+                if mode == 'percent':
+                    # Percent mode: amount is a ratio (e.g., 0.25 = +25%)
+                    baseline_income = state.total_income
+                    adjustment = baseline_income * raw_amount
+                else:
+                    # Absolute mode: amount is the monthly adjustment value
+                    adjustment = raw_amount
+            else:
+                # Legacy schema: monthly_adjustment
+                adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+
             tax_treatment = params.get('tax_treatment', 'w2')
 
             if adjustment != 0:
-                # Apply rough tax estimate (30% for W2, 40% for 1099 including SE tax)
-                tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
-                net_adjustment = adjustment * (1 - tax_rate)
+                # Try to use TaxService for proper netting, fall back to rough estimate
+                try:
+                    from apps.taxes.services import TaxService
+                    tax_service = TaxService(self.household)
+                    # Estimate annual adjustment and compute tax
+                    annual_adjustment = adjustment * 12
+                    tax_config = {'income_type': '1099' if tax_treatment == '1099' else 'w2'}
+                    estimated_annual_tax = tax_service.estimate_marginal_tax(annual_adjustment, tax_config)
+                    net_adjustment = adjustment - (estimated_annual_tax / 12)
+                except (ImportError, AttributeError, Exception):
+                    # Fall back to rough tax estimate (30% for W2, 40% for 1099 including SE tax)
+                    tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
+                    net_adjustment = adjustment * (1 - tax_rate)
 
                 state.incomes.append({
                     'id': f'income_adjustment_{change.id}',
@@ -716,20 +824,93 @@ class ScenarioEngine:
                     'monthly': monthly_equiv,
                 })
 
+        # TASK-15: Stress test change types
+        elif change.change_type == ChangeType.ADJUST_INTEREST_RATES:
+            # Adjust interest rates on debts (for stress testing rate hikes)
+            adjustment_percent = Decimal(str(params.get('adjustment_percent', 0)))
+            applies_to = params.get('applies_to', 'all')
+
+            for lid, liab in state.liabilities.items():
+                # Apply adjustment (adjustment_percent is in percentage points, e.g., 2 means +2%)
+                if applies_to == 'all' or liab.account_type == applies_to:
+                    # Convert percentage points to decimal
+                    rate_adjustment = adjustment_percent / Decimal('100')
+                    liab.rate = liab.rate + rate_adjustment
+
+                    # Recalculate payment if we have term info
+                    if liab.term_months > 0 and liab.rate > 0:
+                        monthly_rate = liab.rate / 12
+                        # Approximate remaining balance as current balance
+                        remaining_term = max(1, liab.term_months - (state.month * 12) // 12)
+                        if monthly_rate > 0:
+                            new_payment = liab.balance * (monthly_rate * (1 + monthly_rate) ** remaining_term) / ((1 + monthly_rate) ** remaining_term - 1)
+                            liab.payment = new_payment.quantize(Decimal('0.01'))
+
+                            # Update payment expense
+                            for exp in state.expenses:
+                                if lid in exp.get('id', ''):
+                                    exp['amount'] = liab.payment
+                                    exp['monthly'] = liab.payment
+
+        elif change.change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
+            # Apply a one-time shock to investment values (for stress testing market crashes)
+            percent_change = Decimal(str(params.get('percent_change', 0)))
+            applies_to = params.get('applies_to', 'all')
+
+            change_key = f'investment_shock_{change.id}'
+            if change_key not in state.applied_changes:
+                state.applied_changes.add(change_key)
+
+                for aid, asset in state.assets.items():
+                    if asset.is_retirement or asset.account_type in ('brokerage', 'crypto'):
+                        if applies_to == 'all' or asset.account_type == applies_to:
+                            # Apply percent change (e.g., -30 means -30%)
+                            multiplier = 1 + (percent_change / Decimal('100'))
+                            asset.balance = asset.balance * multiplier
+
+        elif change.change_type == ChangeType.OVERRIDE_INFLATION:
+            # Override inflation rate for the scenario (stored in contribution_rates for access in _apply_growth)
+            new_rate = Decimal(str(params.get('rate', self.scenario.inflation_rate)))
+            state.contribution_rates['_override_inflation'] = new_rate
+
+        elif change.change_type == ChangeType.OVERRIDE_INVESTMENT_RETURN:
+            # Override investment return rate
+            new_rate = Decimal(str(params.get('rate', self.scenario.investment_return_rate)))
+            state.contribution_rates['_override_investment_return'] = new_rate
+
+        elif change.change_type == ChangeType.OVERRIDE_SALARY_GROWTH:
+            # Override salary growth rate
+            new_rate = Decimal(str(params.get('rate', self.scenario.salary_growth_rate)))
+            state.contribution_rates['_override_salary_growth'] = new_rate
+
         return state
 
     def _apply_growth(self, state: MonthlyState, month: int) -> MonthlyState:
         """Apply annual growth rates (pro-rated monthly)."""
+        # Get rates, respecting any overrides from stress tests
+        salary_growth_rate = state.contribution_rates.get(
+            '_override_salary_growth',
+            self.scenario.salary_growth_rate
+        )
+        inflation_rate = state.contribution_rates.get(
+            '_override_inflation',
+            self.scenario.inflation_rate
+        )
+        investment_return_rate = state.contribution_rates.get(
+            '_override_investment_return',
+            self.scenario.investment_return_rate
+        )
+
         if month > 0 and month % 12 == 0:
             # Annual salary growth
-            growth = 1 + float(self.scenario.salary_growth_rate)
+            growth = 1 + float(salary_growth_rate)
             for inc in state.incomes:
                 if inc['category'] in ('salary', 'hourly_wages', 'bonus', 'commission'):
                     inc['amount'] = inc['amount'] * Decimal(str(growth))
                     inc['monthly'] = inc['monthly'] * Decimal(str(growth))
 
             # Annual inflation on expenses (excluding debt payments)
-            inflation = 1 + float(self.scenario.inflation_rate)
+            inflation = 1 + float(inflation_rate)
             for exp in state.expenses:
                 # Don't inflate fixed debt payments
                 if not any(x in exp['category'] for x in ('debt', 'mortgage', 'loan')):
@@ -737,7 +918,7 @@ class ScenarioEngine:
                     exp['monthly'] = exp['monthly'] * Decimal(str(inflation))
 
         # Monthly investment returns (apply to investment and retirement accounts)
-        monthly_return = (1 + float(self.scenario.investment_return_rate)) ** (1/12) - 1
+        monthly_return = (1 + float(investment_return_rate)) ** (1/12) - 1
         for aid, asset in state.assets.items():
             # Apply returns only to investment-type accounts (not liquid cash)
             if asset.is_retirement or asset.account_type in ('brokerage', 'crypto'):

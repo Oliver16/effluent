@@ -126,16 +126,35 @@ class GoalViewSet(HouseholdScopedViewMixin, viewsets.ModelViewSet):
             solution.applied_at = timezone.now()
             solution.save()
 
-        return Response({
+        # Import serializer for proper JSON serialization
+        from apps.scenarios.serializers import ScenarioChangeSerializer
+
+        # Serialize the changes properly - they are model instances, not dicts
+        changes = result.get('changes', [])
+        if changes and hasattr(changes[0], 'id'):
+            # They're model instances, serialize them
+            changes_data = ScenarioChangeSerializer(changes, many=True).data
+        else:
+            changes_data = changes
+
+        response_data = {
             'scenario': {
                 'id': str(result['scenario'].id),
                 'name': result['scenario'].name,
                 'created_at': result['scenario'].created_at.isoformat(),
             },
-            'changes': result.get('changes', []),
+            'changes': changes_data,
             'summary': result.get('summary', {}),
             'redirect_url': f"/scenarios/{result['scenario'].id}"
-        })
+        }
+
+        # Include skipped steps and warnings if present
+        if result.get('skipped_steps'):
+            response_data['skipped_steps'] = result['skipped_steps']
+        if result.get('warnings'):
+            response_data['warnings'] = result['warnings']
+
+        return Response(response_data)
 
 
 class GoalStatusView(HouseholdScopedViewMixin, APIView):

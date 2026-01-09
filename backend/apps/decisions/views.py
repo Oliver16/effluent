@@ -151,7 +151,7 @@ class DecisionRunViewSet(ViewSet):
                 {
                     'goal_id': str(s.goal_id),
                     'goal_type': s.goal_type,
-                    'name': s.name,
+                    'goal_name': s.goal_name,  # Fixed: was 's.name' which doesn't exist on GoalStatusDTO
                     'target_value': s.target_value,
                     'current_value': s.current_value,
                     'status': s.status,
