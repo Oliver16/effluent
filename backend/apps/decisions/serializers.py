@@ -83,7 +83,7 @@ class GoalStatusComparisonSerializer(serializers.Serializer):
     """Serializer for goal status comparison."""
     goal_id = serializers.UUIDField()
     goal_type = serializers.CharField()
-    name = serializers.CharField()
+    goal_name = serializers.CharField()
     target_value = serializers.CharField()
     current_value = serializers.CharField()
     status = serializers.CharField()

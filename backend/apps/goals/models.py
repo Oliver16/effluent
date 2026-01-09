@@ -13,6 +13,7 @@ class GoalType(models.TextChoices):
     MIN_DSCR = 'min_dscr', 'Minimum DSCR'
     MIN_SAVINGS_RATE = 'min_savings_rate', 'Minimum Savings Rate'
     NET_WORTH_TARGET = 'net_worth_target', 'Net Worth Target'
+    NET_WORTH_TARGET_BY_DATE = 'net_worth_target_by_date', 'Net Worth Target by Date'
     RETIREMENT_AGE = 'retirement_age', 'Retirement Age'
     DEBT_FREE_DATE = 'debt_free_date', 'Debt-Free Date'
     CUSTOM = 'custom', 'Custom Goal'
@@ -114,6 +115,7 @@ class Goal(HouseholdOwnedModel):
                 GoalType.MIN_DSCR: 'ratio',
                 GoalType.MIN_SAVINGS_RATE: 'percent',
                 GoalType.NET_WORTH_TARGET: 'usd',
+                GoalType.NET_WORTH_TARGET_BY_DATE: 'usd',
                 GoalType.RETIREMENT_AGE: 'age',
                 GoalType.DEBT_FREE_DATE: 'date',
             }
@@ -126,6 +128,7 @@ class Goal(HouseholdOwnedModel):
                 GoalType.MIN_DSCR: 'Debt Safety Ratio',
                 GoalType.MIN_SAVINGS_RATE: 'Savings Rate',
                 GoalType.NET_WORTH_TARGET: 'Net Worth Target',
+                GoalType.NET_WORTH_TARGET_BY_DATE: 'Net Worth Target by Date',
                 GoalType.RETIREMENT_AGE: 'Retirement Age',
                 GoalType.DEBT_FREE_DATE: 'Debt Free Date',
             }

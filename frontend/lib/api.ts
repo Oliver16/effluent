@@ -272,6 +272,16 @@ export const auth = {
 
   refresh: (refreshToken: string) =>
     api.post<{ access: string }>('/api/auth/token/refresh/', { refresh: refreshToken }),
+
+  requestPasswordReset: (email: string) =>
+    api.post<{ detail: string }>('/api/auth/password-reset/', { email }),
+
+  resetPassword: (uid: string, token: string, newPassword: string) =>
+    api.post<{ detail: string }>('/api/auth/password-reset/confirm/', {
+      uid,
+      token,
+      new_password: newPassword,
+    }),
 }
 
 // Household endpoints

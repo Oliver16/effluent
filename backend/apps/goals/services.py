@@ -237,8 +237,9 @@ class GoalEvaluator:
         recommendation = ''
         if status != 'good':
             income = metrics.get('total_income', Decimal('0'))
+            # savings_gap is a ratio (e.g., 0.10 for 10%), not a percentage
             savings_gap = max(Decimal('0'), target - current)
-            required_surplus_increase = (savings_gap / Decimal('100')) * income
+            required_surplus_increase = savings_gap * income
 
             recommendation = (
                 f"Increase surplus by ${required_surplus_increase:,.0f}/mo "
