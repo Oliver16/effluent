@@ -495,20 +495,26 @@ export const selfEmploymentTax = {
 export const scenarios = {
   list: () =>
     api.get<Scenario[] | { results: Scenario[] }>('/api/v1/scenarios/')
-      .then(normalizeListResponse),
-  get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`),
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<Scenario[]>(data)),
+  get: (id: string) => api.get<Scenario>(`/api/v1/scenarios/${id}/`)
+    .then(data => toCamelCase<Scenario>(data)),
   create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   delete: (id: string) => api.delete<void>(`/api/v1/scenarios/${id}/`),
   compute: (id: string) => api.post<{ status: string; projection_count: number }>(`/api/v1/scenarios/${id}/compute/`),
-  getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`),
+  getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`)
+    .then(data => toCamelCase<ScenarioProjection[]>(data)),
   listChanges: (scenarioId: string) =>
     api.get<ScenarioChange[] | { results: ScenarioChange[] }>(`/api/v1/scenario-changes/?scenario=${scenarioId}`)
-      .then(normalizeListResponse),
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<ScenarioChange[]>(data)),
   addChange: (data: Partial<ScenarioChange>) =>
-    api.post<ScenarioChange>('/api/v1/scenario-changes/', data),
+    api.post<ScenarioChange>('/api/v1/scenario-changes/', toSnakeCase(data))
+      .then(data => toCamelCase<ScenarioChange>(data)),
   updateChange: (changeId: string, data: Partial<ScenarioChange>) =>
-    api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, data),
+    api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, toSnakeCase(data))
+      .then(data => toCamelCase<ScenarioChange>(data)),
   deleteChange: (changeId: string) => api.delete<void>(`/api/v1/scenario-changes/${changeId}/`),
   /**
    * Compare scenarios with optional driver analysis.
