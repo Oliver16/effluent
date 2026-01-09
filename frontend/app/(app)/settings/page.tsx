@@ -899,7 +899,7 @@ export default function SettingsPage() {
 
             {(incomeForm.incomeType === 'w2' || incomeForm.incomeType === 'w2_hourly') && (
               <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
-                Tax withholding (~25% effective rate) will be automatically calculated and added as an expense flow.
+                Tax withholding will be calculated using federal tax brackets, FICA, and state taxes based on your W-4 settings.
               </p>
             )}
 
