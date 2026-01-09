@@ -44,7 +44,7 @@ export default function ScenarioComparePage() {
         const label = scenario?.name || `Scenario ${scenarioIndex + 1}`;
         const projection = projections[idx];
         if (projection) {
-          row[label] = parseFloat(projection.net_worth);
+          row[label] = parseFloat(projection.netWorth);
         }
       });
       dataRows.push(row);
@@ -135,12 +135,12 @@ export default function ScenarioComparePage() {
                       <div className="space-y-2">
                         <div>
                           Final Net Worth: <span className="font-medium text-foreground">
-                            {formatCurrency(lastProjection.net_worth)}
+                            {formatCurrency(lastProjection.netWorth)}
                           </span>
                         </div>
                         <div>
                           Monthly Cash Flow: <span className="font-medium text-foreground">
-                            {formatCurrency(lastProjection.net_cash_flow)}
+                            {formatCurrency(lastProjection.netCashFlow)}
                           </span>
                         </div>
                       </div>

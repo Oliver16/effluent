@@ -51,7 +51,7 @@ export function ScenarioChanges({ scenarioId, initialChanges }: ScenarioChangesP
             <div>
               <CardTitle className="text-base">{change.name}</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {change.change_type.replace(/_/g, ' ')} • Effective {formatDate(change.effective_date)}
+                {change.changeType.replace(/_/g, ' ')} • Effective {formatDate(change.effectiveDate)}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -61,12 +61,12 @@ export function ScenarioChanges({ scenarioId, initialChanges }: ScenarioChangesP
                 onClick={() =>
                   updateMutation.mutate({
                     id: change.id,
-                    data: { is_enabled: !change.is_enabled },
+                    data: { isEnabled: !change.isEnabled },
                   })
                 }
-                aria-label={change.is_enabled ? 'Disable change' : 'Enable change'}
+                aria-label={change.isEnabled ? 'Disable change' : 'Enable change'}
               >
-                {change.is_enabled ? (
+                {change.isEnabled ? (
                   <ToggleRight className="h-4 w-4" />
                 ) : (
                   <ToggleLeft className="h-4 w-4" />

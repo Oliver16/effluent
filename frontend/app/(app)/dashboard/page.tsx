@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { metrics, accounts, insights as insightsApi, baseline, goals } from '@/lib/api';
+import { metrics, accounts, insights as insightsApi, baseline, goals, dataQuality } from '@/lib/api';
 import { DashboardHeader } from '@/components/dashboard/dashboard-header';
 import { NorthStarCards } from '@/components/dashboard/north-star-cards';
 import { ModelConfidenceCard } from '@/components/dashboard/model-confidence-card';
@@ -74,7 +74,7 @@ export default function DashboardPage() {
     isError: dataQualityError,
   } = useQuery({
     queryKey: ['metrics', 'data-quality'],
-    queryFn: () => metrics.dataQuality(),
+    queryFn: () => dataQuality.report(),
     staleTime: 60000,
     refetchOnWindowFocus: false,
   });
@@ -102,7 +102,7 @@ export default function DashboardPage() {
 
       {/* North Star Cards - Key metrics with goal status */}
       <NorthStarCards
-        metrics={metricsData}
+        metrics={metricsData ?? null}
         goalStatus={goalStatusData?.results || null}
         isLoading={isLoading}
       />
@@ -132,7 +132,7 @@ export default function DashboardPage() {
           />
 
           <ActionPanel
-            metrics={metricsData}
+            metrics={metricsData ?? null}
             goalStatus={goalStatusData?.results || null}
             isLoading={goalStatusLoading}
           />

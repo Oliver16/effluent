@@ -33,13 +33,13 @@ export function ProjectionTable({ projections }: ProjectionTableProps) {
         <TableBody>
           {projections.map((projection) => (
             <TableRow key={projection.id}>
-              <TableCell>M{projection.month_number + 1}</TableCell>
-              <TableCell>{formatCurrency(projection.net_worth)}</TableCell>
-              <TableCell>{formatCurrency(projection.total_income)}</TableCell>
-              <TableCell>{formatCurrency(projection.total_expenses)}</TableCell>
-              <TableCell>{formatCurrency(projection.net_cash_flow)}</TableCell>
+              <TableCell>M{projection.monthNumber + 1}</TableCell>
+              <TableCell>{formatCurrency(projection.netWorth)}</TableCell>
+              <TableCell>{formatCurrency(projection.totalIncome)}</TableCell>
+              <TableCell>{formatCurrency(projection.totalExpenses)}</TableCell>
+              <TableCell>{formatCurrency(projection.netCashFlow)}</TableCell>
               <TableCell>{formatDecimal(projection.dscr, 2)}</TableCell>
-              <TableCell>{formatPercent(projection.savings_rate)}</TableCell>
+              <TableCell>{formatPercent(projection.savingsRate)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

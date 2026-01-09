@@ -74,7 +74,7 @@ export function ActionsPanel({ className }: ActionsPanelProps) {
         `${actionName}: ${candidate.name}`
       )
       // Navigate to the new scenario
-      router.push(response.redirectUrl)
+      router.push(response.redirectUrl as `/scenarios/${string}`)
     } catch (err) {
       console.error('Failed to apply action:', err)
       setError('Failed to create scenario')

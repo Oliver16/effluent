@@ -44,10 +44,10 @@ function getProjectionAtMonth(projections: ScenarioProjection[], targetMonth: nu
   // Find exact match or closest month that doesn't exceed target
   let best: ScenarioProjection | null = null;
   for (const p of projections) {
-    if (p.month_number === targetMonth - 1) { // month_number is 0-indexed
+    if (p.monthNumber === targetMonth - 1) { // monthNumber is 0-indexed
       return p;
     }
-    if (p.month_number < targetMonth && (!best || p.month_number > best.month_number)) {
+    if (p.monthNumber < targetMonth && (!best || p.monthNumber > best.monthNumber)) {
       best = p;
     }
   }
@@ -137,10 +137,10 @@ export function MilestoneComparison({
   const getMetrics = (scenario: ScenarioProjection | null, baseline: ScenarioProjection | null): MetricComparison[] => {
     if (!scenario || !baseline) return [];
 
-    const scenarioIncome = scenario.income_breakdown || {};
-    const baselineIncome = baseline.income_breakdown || {};
-    const scenarioExpense = scenario.expense_breakdown || {};
-    const baselineExpense = baseline.expense_breakdown || {};
+    const scenarioIncome = scenario.incomeBreakdown || {};
+    const baselineIncome = baseline.incomeBreakdown || {};
+    const scenarioExpense = scenario.expenseBreakdown || {};
+    const baselineExpense = baseline.expenseBreakdown || {};
 
     // Helper to calculate percent change safely
     const pctChange = (newVal: number, oldVal: number) => {
@@ -165,60 +165,60 @@ export function MilestoneComparison({
       {
         label: 'Net Worth',
         icon: <TrendingUp className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.net_worth),
-        baselineValue: parseFloat(baseline.net_worth),
-        difference: parseFloat(scenario.net_worth) - parseFloat(baseline.net_worth),
-        percentChange: pctChange(parseFloat(scenario.net_worth), parseFloat(baseline.net_worth)),
+        scenarioValue: parseFloat(scenario.netWorth),
+        baselineValue: parseFloat(baseline.netWorth),
+        difference: parseFloat(scenario.netWorth) - parseFloat(baseline.netWorth),
+        percentChange: pctChange(parseFloat(scenario.netWorth), parseFloat(baseline.netWorth)),
         isPositiveGood: true,
         category: 'asset',
       },
       {
         label: 'Monthly Income',
         icon: <DollarSign className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.total_income),
-        baselineValue: parseFloat(baseline.total_income),
-        difference: parseFloat(scenario.total_income) - parseFloat(baseline.total_income),
-        percentChange: pctChange(parseFloat(scenario.total_income), parseFloat(baseline.total_income)),
+        scenarioValue: parseFloat(scenario.totalIncome),
+        baselineValue: parseFloat(baseline.totalIncome),
+        difference: parseFloat(scenario.totalIncome) - parseFloat(baseline.totalIncome),
+        percentChange: pctChange(parseFloat(scenario.totalIncome), parseFloat(baseline.totalIncome)),
         isPositiveGood: true,
         category: 'income',
       },
       {
         label: 'Monthly Expenses',
         icon: <TrendingDown className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.total_expenses),
-        baselineValue: parseFloat(baseline.total_expenses),
-        difference: parseFloat(scenario.total_expenses) - parseFloat(baseline.total_expenses),
-        percentChange: pctChange(parseFloat(scenario.total_expenses), parseFloat(baseline.total_expenses)),
+        scenarioValue: parseFloat(scenario.totalExpenses),
+        baselineValue: parseFloat(baseline.totalExpenses),
+        difference: parseFloat(scenario.totalExpenses) - parseFloat(baseline.totalExpenses),
+        percentChange: pctChange(parseFloat(scenario.totalExpenses), parseFloat(baseline.totalExpenses)),
         isPositiveGood: false,
         category: 'expense',
       },
       {
         label: 'Net Cash Flow',
         icon: <PiggyBank className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.net_cash_flow),
-        baselineValue: parseFloat(baseline.net_cash_flow),
-        difference: parseFloat(scenario.net_cash_flow) - parseFloat(baseline.net_cash_flow),
-        percentChange: pctChange(parseFloat(scenario.net_cash_flow), parseFloat(baseline.net_cash_flow)),
+        scenarioValue: parseFloat(scenario.netCashFlow),
+        baselineValue: parseFloat(baseline.netCashFlow),
+        difference: parseFloat(scenario.netCashFlow) - parseFloat(baseline.netCashFlow),
+        percentChange: pctChange(parseFloat(scenario.netCashFlow), parseFloat(baseline.netCashFlow)),
         isPositiveGood: true,
         category: 'metric',
       },
       {
         label: 'Retirement Assets',
         icon: <Briefcase className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.retirement_assets),
-        baselineValue: parseFloat(baseline.retirement_assets),
-        difference: parseFloat(scenario.retirement_assets) - parseFloat(baseline.retirement_assets),
-        percentChange: pctChange(parseFloat(scenario.retirement_assets), parseFloat(baseline.retirement_assets)),
+        scenarioValue: parseFloat(scenario.retirementAssets),
+        baselineValue: parseFloat(baseline.retirementAssets),
+        difference: parseFloat(scenario.retirementAssets) - parseFloat(baseline.retirementAssets),
+        percentChange: pctChange(parseFloat(scenario.retirementAssets), parseFloat(baseline.retirementAssets)),
         isPositiveGood: true,
         category: 'asset',
       },
       {
         label: 'Liquid Assets',
         icon: <DollarSign className="h-4 w-4" />,
-        scenarioValue: parseFloat(scenario.liquid_assets),
-        baselineValue: parseFloat(baseline.liquid_assets),
-        difference: parseFloat(scenario.liquid_assets) - parseFloat(baseline.liquid_assets),
-        percentChange: pctChange(parseFloat(scenario.liquid_assets), parseFloat(baseline.liquid_assets)),
+        scenarioValue: parseFloat(scenario.liquidAssets),
+        baselineValue: parseFloat(baseline.liquidAssets),
+        difference: parseFloat(scenario.liquidAssets) - parseFloat(baseline.liquidAssets),
+        percentChange: pctChange(parseFloat(scenario.liquidAssets), parseFloat(baseline.liquidAssets)),
         isPositiveGood: true,
         category: 'asset',
       },
@@ -319,7 +319,7 @@ export function MilestoneComparison({
         {availableMilestones.map((milestone) => {
           const metrics = getMetrics(milestone.scenario, milestone.baseline);
           const netWorthDiff = milestone.scenario && milestone.baseline
-            ? parseFloat(milestone.scenario.net_worth) - parseFloat(milestone.baseline.net_worth)
+            ? parseFloat(milestone.scenario.netWorth) - parseFloat(milestone.baseline.netWorth)
             : 0;
 
           return (
