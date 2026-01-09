@@ -54,8 +54,8 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
     const options: GoalSolveOptions = {
       allowedInterventions: selectedInterventions,
       bounds: {
-        max_reduce_expenses_monthly: maxExpenseReduction,
-        max_increase_income_monthly: maxIncomeIncrease,
+        maxReduceExpensesMonthly: maxExpenseReduction,
+        maxIncreaseIncomeMonthly: maxIncomeIncrease,
       },
       projectionMonths: parseInt(projectionMonths, 10),
     }
@@ -224,9 +224,9 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
                       <span className="text-sm">
                         {step.name || step.changeType.replace(/_/g, ' ')}
                       </span>
-                      {step.parameters.monthly_adjustment !== undefined && (
+                      {step.parameters.monthlyAdjustment !== undefined && (
                         <Badge variant="outline" className="ml-auto">
-                          ${Math.abs(parseFloat(String(step.parameters.monthly_adjustment)))}/mo
+                          ${Math.abs(parseFloat(String(step.parameters.monthlyAdjustment)))}/mo
                         </Badge>
                       )}
                     </div>
