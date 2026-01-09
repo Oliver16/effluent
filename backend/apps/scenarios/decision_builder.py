@@ -21,7 +21,8 @@ def run_decision_plan(
     scenario_name: str = "Action Plan",
     goal=None,
     parent_scenario=None,
-    start_date: date = None
+    start_date: date = None,
+    fail_on_unknown: bool = False
 ) -> dict:
     """
     Create a scenario from an action plan.
@@ -33,17 +34,23 @@ def run_decision_plan(
         goal: Optional Goal object if this is from goal solver
         parent_scenario: Optional parent scenario to inherit from
         start_date: When changes take effect (defaults to first of next month)
+        fail_on_unknown: If True, raise error on unknown change types
 
     Returns:
         dict with:
             - scenario: The created Scenario object
             - changes: List of created ScenarioChange objects
+            - skipped_steps: List of skipped steps with reasons
             - summary: Summary of the projection results
+            - warnings: List of warnings encountered
     """
     if not start_date:
         today = date.today()
         start_date = today.replace(day=1) + timedelta(days=32)
         start_date = start_date.replace(day=1)
+
+    skipped_steps = []
+    warnings = []
 
     with transaction.atomic():
         # Create the scenario
@@ -63,24 +70,66 @@ def run_decision_plan(
             params = step.get('parameters', {})
 
             # Validate change type
-            if not change_type or not hasattr(ChangeType, change_type.upper()):
-                # Try as lowercase
-                change_type_enum = None
-                for ct in ChangeType:
-                    if ct.value == change_type.lower():
-                        change_type_enum = ct
-                        break
-                if not change_type_enum:
-                    continue
-            else:
-                change_type_enum = ChangeType[change_type.upper()]
+            change_type_enum = None
+            if change_type:
+                # Try uppercase attribute access first
+                if hasattr(ChangeType, change_type.upper()):
+                    change_type_enum = ChangeType[change_type.upper()]
+                else:
+                    # Try as lowercase value
+                    for ct in ChangeType:
+                        if ct.value == change_type.lower():
+                            change_type_enum = ct
+                            break
+
+            if not change_type_enum:
+                skip_reason = f"Unknown change_type: '{change_type}'"
+                skipped_steps.append({
+                    'step_index': idx,
+                    'step_name': step.get('name', f"Step {idx + 1}"),
+                    'change_type': change_type,
+                    'reason': skip_reason,
+                })
+                if fail_on_unknown:
+                    raise ValueError(f"Step {idx}: {skip_reason}")
+                warnings.append(f"Step {idx} skipped: {skip_reason}")
+                continue
+
+            # Use step-level dates if provided, otherwise fall back to plan start_date
+            # TASK-14: Support per-step effective_date and end_date
+            step_effective_date = None
+            if 'start_date' in params:
+                try:
+                    step_effective_date = date.fromisoformat(str(params['start_date']))
+                except (ValueError, TypeError):
+                    pass
+            if 'effective_date' in step:
+                try:
+                    step_effective_date = date.fromisoformat(str(step['effective_date']))
+                except (ValueError, TypeError):
+                    pass
+            if not step_effective_date:
+                step_effective_date = start_date
+
+            step_end_date = None
+            if 'end_date' in params:
+                try:
+                    step_end_date = date.fromisoformat(str(params['end_date']))
+                except (ValueError, TypeError):
+                    pass
+            if 'end_date' in step:
+                try:
+                    step_end_date = date.fromisoformat(str(step['end_date']))
+                except (ValueError, TypeError):
+                    pass
 
             change = ScenarioChange.objects.create(
                 scenario=scenario,
                 change_type=change_type_enum,
                 name=step.get('name', f"Step {idx + 1}"),
                 description=params.get('description', ''),
-                effective_date=start_date,
+                effective_date=step_effective_date,
+                end_date=step_end_date,
                 parameters=params,
                 display_order=idx,
                 is_enabled=True,
@@ -92,17 +141,31 @@ def run_decision_plan(
         projections = engine.compute_projection()
 
         # Generate summary
-        summary = _generate_projection_summary(projections)
+        summary = _generate_projection_summary(projections, household, goal)
 
-        return {
+        result = {
             'scenario': scenario,
             'changes': created_changes,
             'summary': summary,
         }
 
+        if skipped_steps:
+            result['skipped_steps'] = skipped_steps
+        if warnings:
+            result['warnings'] = warnings
 
-def _generate_projection_summary(projections: list) -> dict:
-    """Generate summary statistics from projections."""
+        return result
+
+
+def _generate_projection_summary(projections: list, household=None, goal=None) -> dict:
+    """
+    Generate summary statistics from projections.
+
+    Args:
+        projections: List of ScenarioProjection objects
+        household: Optional Household for looking up goal targets
+        goal: Optional specific Goal for context
+    """
     if not projections:
         return {}
 
@@ -112,10 +175,28 @@ def _generate_projection_summary(projections: list) -> dict:
     # Find worst DSCR month
     worst_dscr = min(projections, key=lambda p: p.dscr)
 
-    # Find when liquidity target (6 months) is reached
+    # Find worst liquidity month
+    worst_liquidity = min(projections, key=lambda p: p.liquidity_months)
+
+    # Get liquidity target from goals or use default
+    liquidity_target = Decimal('6')  # Default fallback
+    if household:
+        try:
+            from apps.goals.models import Goal, GoalType
+            emergency_fund_goal = Goal.objects.filter(
+                household=household,
+                goal_type=GoalType.EMERGENCY_FUND_MONTHS,
+                is_active=True
+            ).first()
+            if emergency_fund_goal:
+                liquidity_target = emergency_fund_goal.target_value
+        except Exception:
+            pass  # Use default
+
+    # Find when liquidity target is reached
     liquidity_target_month = None
     for proj in projections:
-        if proj.liquidity_months >= 6:
+        if proj.liquidity_months >= liquidity_target:
             liquidity_target_month = proj.month_number
             break
 
@@ -141,6 +222,9 @@ def _generate_projection_summary(projections: list) -> dict:
         'milestones': {
             'worst_dscr_month': worst_dscr.month_number,
             'worst_dscr_value': str(worst_dscr.dscr),
+            'worst_liquidity_month': worst_liquidity.month_number,
+            'worst_liquidity_value': str(worst_liquidity.liquidity_months),
+            'liquidity_target': str(liquidity_target),
             'liquidity_target_reached_month': liquidity_target_month,
         },
         'projection_count': len(projections),

@@ -105,23 +105,50 @@ class GoalEvaluator:
         }
 
     def _get_scenario_metrics(self, scenario_id: str) -> Optional[dict]:
-        """Get latest projection metrics for scenario evaluation."""
-        projection = ScenarioProjection.objects.filter(
-            scenario_id=scenario_id
-        ).order_by('-month_number').first()
+        """
+        Get projection metrics for scenario evaluation.
 
-        if not projection:
+        Uses min/worst values for DSCR and liquidity goals as per TASK-13 spec.
+        Returns latest month values for net worth and savings rate.
+        """
+        projections = list(ScenarioProjection.objects.filter(
+            scenario_id=scenario_id
+        ).order_by('month_number'))
+
+        if not projections:
             return None
 
+        latest = projections[-1]
+
+        # For DSCR and liquidity, use WORST month (min value) per TASK-13 spec
+        min_dscr = min(p.dscr for p in projections)
+        min_liquidity = min(p.liquidity_months for p in projections)
+
+        # Calculate debt service from expense breakdown
+        # Sum up categories that are typically debt payments
+        debt_categories = ('debt', 'mortgage', 'loan', 'credit_card', 'heloc', 'other_debt')
+        total_debt_service = Decimal('0')
+        for p in projections[-1:]:  # Use latest month's breakdown
+            expense_breakdown = p.expense_breakdown or {}
+            for category, amount in expense_breakdown.items():
+                if any(dc in category.lower() for dc in debt_categories):
+                    try:
+                        total_debt_service += Decimal(str(amount))
+                    except (ValueError, TypeError):
+                        pass
+
         return {
-            'liquidity_months': projection.liquidity_months,
-            'dscr': projection.dscr,
-            'savings_rate': projection.savings_rate,
-            'net_worth': projection.net_worth,
-            'monthly_surplus': projection.net_cash_flow,
-            'total_expenses': projection.total_expenses,
-            'total_income': projection.total_income,
-            'total_debt_service': Decimal('0'),
+            'liquidity_months': min_liquidity,  # Worst month
+            'dscr': min_dscr,  # Worst month
+            'savings_rate': latest.savings_rate,
+            'net_worth': latest.net_worth,
+            'monthly_surplus': latest.net_cash_flow,
+            'total_expenses': latest.total_expenses,
+            'total_income': latest.total_income,
+            'total_debt_service': total_debt_service,
+            # Additional context for goal evaluation
+            'worst_liquidity_month': min((p for p in projections), key=lambda x: x.liquidity_months).month_number,
+            'worst_dscr_month': min((p for p in projections), key=lambda x: x.dscr).month_number,
         }
 
     def _evaluate_goal(self, goal: Goal, metrics: dict) -> GoalStatusDTO:
