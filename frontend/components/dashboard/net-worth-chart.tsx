@@ -1,19 +1,33 @@
 'use client';
 
+import { useMemo } from 'react';
 import { InstrumentPanel } from '@/components/ui/InstrumentPanel';
 import { ChartSkeleton } from '@/components/ui/Skeletons';
-import { AreaChart } from '@tremor/react';
 import { MetricSnapshot } from '@/lib/types';
-import { formatCurrencyCompact } from '@/lib/format';
 import { Button } from '@/components/ui/button';
 import { Rocket, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { TYPOGRAPHY } from '@/lib/design-tokens';
+import { LightweightChart } from '@/components/charts/lightweight';
+import type { ChartDataPoint, SeriesConfig } from '@/components/charts/lightweight';
+import { formatCurrencyCompact, formatMonthYear } from '@/lib/format';
 
 interface NetWorthChartProps {
   history: MetricSnapshot[];
   isLoading?: boolean;
 }
+
+// Chart color constants
+const CHART_SERIES_COLORS = {
+  blue: {
+    line: 'rgb(59, 130, 246)', // blue-500
+    fill: 'rgba(59, 130, 246, 0.15)',
+  },
+  emerald: {
+    line: 'rgb(16, 185, 129)', // emerald-500
+    fill: 'rgba(16, 185, 129, 0.1)',
+  },
+} as const;
 
 export function NetWorthChart({ history, isLoading }: NetWorthChartProps) {
   if (isLoading) {
@@ -22,10 +36,7 @@ export function NetWorthChart({ history, isLoading }: NetWorthChartProps) {
 
   if (!history || history.length === 0) {
     return (
-      <InstrumentPanel
-        title="Net Worth Trajectory"
-        subtitle="Track your wealth over time"
-      >
+      <InstrumentPanel title="Net Worth Trajectory" subtitle="Track your wealth over time">
         <div className="flex flex-col items-center justify-center py-12 text-center">
           <div className="p-4 rounded-full bg-primary/10 mb-4">
             <Rocket className="h-8 w-8 text-primary" />
@@ -53,13 +64,42 @@ export function NetWorthChart({ history, isLoading }: NetWorthChartProps) {
     );
   }
 
-  const data = history
-    .map((h) => ({
-      date: h.asOfDate,
-      'Market Value': parseFloat(h.netWorthMarket) || 0,
-      'Cost Basis': parseFloat(h.netWorthCost) || 0,
-    }))
-    .reverse();
+  // Transform history data to chart format
+  // History is in reverse chronological order, so we reverse it
+  const chartData: Array<ChartDataPoint & { marketValue: number; costBasis: number }> =
+    useMemo(() => {
+      return [...history].reverse().map((h) => ({
+        time: h.asOfDate,
+        value: parseFloat(h.netWorthMarket) || 0,
+        marketValue: parseFloat(h.netWorthMarket) || 0,
+        costBasis: parseFloat(h.netWorthCost) || 0,
+      }));
+    }, [history]);
+
+  // Series configuration
+  const series: SeriesConfig[] = useMemo(
+    () => [
+      {
+        id: 'marketValue',
+        name: 'Market Value',
+        type: 'area',
+        dataKey: 'marketValue',
+        color: CHART_SERIES_COLORS.blue.line,
+        fillColor: CHART_SERIES_COLORS.blue.fill,
+        lineWidth: 2,
+      },
+      {
+        id: 'costBasis',
+        name: 'Cost Basis',
+        type: 'area',
+        dataKey: 'costBasis',
+        color: CHART_SERIES_COLORS.emerald.line,
+        fillColor: CHART_SERIES_COLORS.emerald.fill,
+        lineWidth: 2,
+      },
+    ],
+    []
+  );
 
   return (
     <InstrumentPanel
@@ -78,16 +118,14 @@ export function NetWorthChart({ history, isLoading }: NetWorthChartProps) {
         </div>
       }
     >
-      <AreaChart
-        className="h-72"
-        data={data}
-        index="date"
-        categories={['Market Value', 'Cost Basis']}
-        colors={['blue', 'emerald']}
-        valueFormatter={(v) => formatCurrencyCompact(v)}
-        showAnimation
-        showLegend={false}
-        showGridLines={false}
+      <LightweightChart
+        data={chartData}
+        series={series}
+        height={288}
+        formatValue={formatCurrencyCompact}
+        formatTime={formatMonthYear}
+        enableCrosshair
+        enableZoom
       />
     </InstrumentPanel>
   );
