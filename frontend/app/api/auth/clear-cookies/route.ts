@@ -29,6 +29,15 @@ export async function POST() {
       maxAge: 0,
     });
 
+    // Clear refreshToken cookie
+    cookieStore.set('refreshToken', '', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+      maxAge: 0,
+    });
+
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error clearing auth cookies:', error);

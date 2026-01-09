@@ -36,8 +36,8 @@ export function LoginForm({ onSuccess }: LoginFormProps) {
         localStorage.setItem('householdId', householdId)
       }
 
-      // Set cookies for SSR authentication
-      await setAuthCookies(response.access, householdId)
+      // Set cookies for SSR authentication (including refresh token for server-side refresh)
+      await setAuthCookies(response.access, householdId, response.refresh)
 
       onSuccess()
     } catch (err) {

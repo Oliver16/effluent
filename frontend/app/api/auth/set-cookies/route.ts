@@ -9,12 +9,13 @@ import { NextRequest, NextResponse } from 'next/server';
  *
  * Request body:
  * - token: The access token
+ * - refreshToken: The refresh token (for server-side token refresh)
  * - householdId: The household ID (optional, can be set later)
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { token, householdId } = body;
+    const { token, refreshToken, householdId } = body;
 
     if (!token) {
       return NextResponse.json(
@@ -34,9 +35,22 @@ export async function POST(request: NextRequest) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
-      // 7 days - should match your JWT expiration or be shorter
-      maxAge: 60 * 60 * 24 * 7,
+      // 2 hours - slightly longer than JWT access token lifetime (1 hour)
+      // This allows some buffer but ensures expired tokens are cleared
+      maxAge: 60 * 60 * 2,
     });
+
+    // Set refresh token cookie if provided (for server-side token refresh)
+    if (refreshToken) {
+      cookieStore.set('refreshToken', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        // 7 days - matches JWT refresh token lifetime
+        maxAge: 60 * 60 * 24 * 7,
+      });
+    }
 
     // Set householdId cookie if provided
     if (householdId) {
