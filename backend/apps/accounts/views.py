@@ -11,6 +11,7 @@ from .serializers import (
     AccountSerializer, AccountDetailSerializer,
     BalanceSnapshotSerializer, AssetGroupSerializer
 )
+from apps.scenarios.reality_events import emit_accounts_changed
 
 
 class AccountViewSet(viewsets.ModelViewSet):
@@ -41,6 +42,20 @@ class AccountViewSet(viewsets.ModelViewSet):
                 as_of_date=date.today(),
                 balance=Decimal(str(balance))
             )
+        # Emit reality change event
+        emit_accounts_changed(self.request.household, str(account.id))
+
+    def perform_update(self, serializer):
+        account = serializer.save()
+        # Emit reality change event
+        emit_accounts_changed(self.request.household, str(account.id))
+
+    def perform_destroy(self, instance):
+        household = instance.household
+        account_id = str(instance.id)
+        instance.delete()
+        # Emit reality change event
+        emit_accounts_changed(household, account_id)
 
     @action(detail=True, methods=['post'])
     def balance(self, request, pk=None):
@@ -49,6 +64,8 @@ class AccountViewSet(viewsets.ModelViewSet):
         serializer = BalanceSnapshotSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         serializer.save(account=account)
+        # Emit reality change event
+        emit_accounts_changed(request.household, str(account.id))
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'])

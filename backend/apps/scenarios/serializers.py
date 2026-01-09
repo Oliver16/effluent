@@ -67,3 +67,21 @@ class LifeEventTemplateSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'category', 'category_display',
             'icon', 'suggested_changes', 'display_order', 'is_active'
         ]
+
+
+class BaselineScenarioSerializer(serializers.ModelSerializer):
+    """Serializer for baseline scenario with additional baseline-specific fields."""
+    changes = ScenarioChangeSerializer(many=True, read_only=True)
+    projections = ScenarioProjectionSerializer(many=True, read_only=True)
+    baseline_mode_display = serializers.CharField(source='get_baseline_mode_display', read_only=True)
+
+    class Meta:
+        model = Scenario
+        fields = [
+            'id', 'name', 'description', 'is_baseline', 'parent_scenario',
+            'baseline_mode', 'baseline_mode_display', 'baseline_pinned_at',
+            'baseline_pinned_as_of_date', 'last_projected_at',
+            'projection_months', 'start_date', 'inflation_rate',
+            'investment_return_rate', 'salary_growth_rate', 'is_active',
+            'is_archived', 'changes', 'projections', 'created_at', 'updated_at'
+        ]
