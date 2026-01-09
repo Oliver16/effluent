@@ -32,7 +32,7 @@ class ScenarioSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'is_baseline', 'parent_scenario',
             'projection_months', 'start_date', 'inflation_rate',
             'investment_return_rate', 'salary_growth_rate', 'is_active',
-            'is_archived', 'created_at'
+            'is_archived', 'is_stress_test', 'created_at'
         ]
 
 
@@ -46,7 +46,7 @@ class ScenarioDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'is_baseline', 'parent_scenario',
             'projection_months', 'start_date', 'inflation_rate',
             'investment_return_rate', 'salary_growth_rate', 'is_active',
-            'is_archived', 'changes', 'projections', 'created_at', 'updated_at'
+            'is_archived', 'is_stress_test', 'changes', 'projections', 'created_at', 'updated_at'
         ]
 
 
@@ -83,5 +83,5 @@ class BaselineScenarioSerializer(serializers.ModelSerializer):
             'baseline_pinned_as_of_date', 'last_projected_at',
             'projection_months', 'start_date', 'inflation_rate',
             'investment_return_rate', 'salary_growth_rate', 'is_active',
-            'is_archived', 'changes', 'projections', 'created_at', 'updated_at'
+            'is_archived', 'is_stress_test', 'changes', 'projections', 'created_at', 'updated_at'
         ]

@@ -24,6 +24,9 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         qs = Scenario.objects.filter(household=self.request.household)
         if self.request.query_params.get('active_only', 'true').lower() == 'true':
             qs = qs.filter(is_active=True, is_archived=False)
+        # Exclude stress test scenarios by default (they're accessed via stress-tests endpoint)
+        if self.request.query_params.get('include_stress_tests', 'false').lower() != 'true':
+            qs = qs.filter(is_stress_test=False)
         return qs
 
     def get_serializer_class(self):
@@ -33,6 +36,14 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(household=self.request.household)
+
+    def perform_destroy(self, instance):
+        """Delete a scenario with validation."""
+        if instance.is_baseline:
+            from rest_framework.exceptions import ValidationError
+            raise ValidationError("Cannot delete the baseline scenario")
+        # Related ScenarioChange and ScenarioProjection records are deleted via CASCADE
+        instance.delete()
 
     @action(detail=True, methods=['post'])
     def compute(self, request, pk=None):
