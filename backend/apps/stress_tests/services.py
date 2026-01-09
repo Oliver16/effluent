@@ -207,7 +207,7 @@ class StressTestService:
             }
         elif change_type == ChangeType.OVERRIDE_INFLATION:
             return {
-                'rate': inputs.get('inflation_rate', '0.03'),
+                'inflation_rate': inputs.get('inflation_rate', '0.03'),
                 'duration_months': inputs.get('duration_months', 12),
             }
         else:

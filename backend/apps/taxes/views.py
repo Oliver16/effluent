@@ -5,10 +5,10 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.views import APIView
 
-from .models import IncomeSource, PreTaxDeduction, PostTaxDeduction, SelfEmploymentTax
+from .models import IncomeSource, W2Withholding, PreTaxDeduction, PostTaxDeduction, SelfEmploymentTax
 from .serializers import (
     IncomeSourceSerializer, IncomeSourceDetailSerializer,
-    PreTaxDeductionSerializer, PostTaxDeductionSerializer, SelfEmploymentTaxSerializer
+    W2WithholdingSerializer, PreTaxDeductionSerializer, PostTaxDeductionSerializer, SelfEmploymentTaxSerializer
 )
 from .services import PaycheckCalculator
 from apps.scenarios.reality_events import emit_taxes_changed
@@ -61,6 +61,43 @@ class IncomeSourceViewSet(viewsets.ModelViewSet):
             'employer_match': str(breakdown.employer_match),
             'effective_tax_rate': str(breakdown.effective_tax_rate),
         })
+
+
+class W2WithholdingViewSet(viewsets.ModelViewSet):
+    """ViewSet for managing W2 withholding configurations."""
+    permission_classes = [IsAuthenticated]
+    serializer_class = W2WithholdingSerializer
+
+    def get_queryset(self):
+        return W2Withholding.objects.filter(
+            income_source__household=self.request.household
+        )
+
+    def perform_create(self, serializer):
+        # Validate that income_source belongs to the user's household
+        income_source_id = self.request.data.get('income_source')
+        if income_source_id:
+            income_source = IncomeSource.objects.filter(
+                id=income_source_id,
+                household=self.request.household
+            ).first()
+            if not income_source:
+                from rest_framework.exceptions import ValidationError
+                raise ValidationError({'income_source': 'Invalid income source for this household.'})
+        serializer.save()
+        # Emit reality change event
+        emit_taxes_changed(self.request.household)
+
+    def perform_update(self, serializer):
+        serializer.save()
+        # Emit reality change event
+        emit_taxes_changed(self.request.household)
+
+    def perform_destroy(self, instance):
+        household = instance.income_source.household
+        instance.delete()
+        # Emit reality change event
+        emit_taxes_changed(household)
 
 
 class PreTaxDeductionViewSet(viewsets.ModelViewSet):

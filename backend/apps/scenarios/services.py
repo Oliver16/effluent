@@ -628,7 +628,17 @@ class ScenarioEngine:
         # TASK-14: Overlay adjustments
         elif change.change_type == ChangeType.ADJUST_TOTAL_EXPENSES:
             # Apply as an overlay adjustment (not a persisted flow)
-            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            # Support both TASK-14 format (monthly_adjustment) and TASK-15 stress test format (amount + mode)
+            mode = params.get('mode', 'absolute')
+            if 'monthly_adjustment' in params:
+                adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            elif mode == 'percent':
+                # Calculate as percentage of current expenses
+                percent = Decimal(str(params.get('amount', 0)))
+                adjustment = state.total_expenses * percent
+            else:
+                adjustment = Decimal(str(params.get('amount', 0)))
+
             if adjustment != 0:
                 state.expenses.append({
                     'id': f'expense_adjustment_{change.id}',
@@ -641,13 +651,28 @@ class ScenarioEngine:
 
         elif change.change_type == ChangeType.ADJUST_TOTAL_INCOME:
             # Apply as an overlay adjustment with tax consideration
-            adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            # Support both TASK-14 format (monthly_adjustment) and TASK-15 stress test format (amount + mode)
+            mode = params.get('mode', 'absolute')
             tax_treatment = params.get('tax_treatment', 'w2')
 
+            if 'monthly_adjustment' in params:
+                adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
+            elif mode == 'percent':
+                # Calculate as percentage of current income
+                percent = Decimal(str(params.get('amount', 0)))
+                adjustment = state.total_income * percent
+            else:
+                adjustment = Decimal(str(params.get('amount', 0)))
+
             if adjustment != 0:
-                # Apply rough tax estimate (30% for W2, 40% for 1099 including SE tax)
-                tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
-                net_adjustment = adjustment * (1 - tax_rate)
+                # For percent mode from stress tests, apply as gross (already a reduction)
+                # For absolute mode, apply tax estimate
+                if mode == 'percent':
+                    net_adjustment = adjustment
+                else:
+                    # Apply rough tax estimate (30% for W2, 40% for 1099 including SE tax)
+                    tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
+                    net_adjustment = adjustment * (1 - tax_rate)
 
                 state.incomes.append({
                     'id': f'income_adjustment_{change.id}',
@@ -715,6 +740,71 @@ class ScenarioEngine:
                     'frequency': 'monthly',
                     'monthly': monthly_equiv,
                 })
+
+        # TASK-15: Stress test change types
+        elif change.change_type == ChangeType.ADJUST_INTEREST_RATES:
+            # Increase interest rates on variable-rate debts
+            adjustment = Decimal(str(params.get('adjustment_percent', 0))) / 100
+            applies_to = params.get('applies_to', 'variable')
+
+            for lid, liab in state.liabilities.items():
+                # Apply to variable-rate debts (rough heuristic: credit cards, HELOCs, ARMs)
+                variable_types = ('credit_card', 'heloc', 'variable_mortgage', 'personal_loan')
+                if applies_to == 'all' or liab.account_type in variable_types:
+                    old_rate = liab.rate
+                    liab.rate = old_rate + adjustment
+
+                    # Recalculate payment if term-based
+                    if liab.term_months > 0 and liab.balance > 0:
+                        monthly_rate = liab.rate / 12
+                        if monthly_rate > 0:
+                            new_payment = liab.balance * (monthly_rate * (1 + monthly_rate) ** liab.term_months) / ((1 + monthly_rate) ** liab.term_months - 1)
+                            liab.payment = new_payment.quantize(Decimal('0.01'))
+
+                            # Update payment expense
+                            for exp in state.expenses:
+                                if lid in exp.get('id', ''):
+                                    exp['amount'] = liab.payment
+                                    exp['monthly'] = liab.payment
+                                    break
+
+        elif change.change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
+            # Apply market drop to investment accounts
+            percent_change = Decimal(str(params.get('percent_change', 0)))
+            applies_to = params.get('applies_to', 'all')
+
+            # Apply one-time adjustment (already tracked via applied_changes)
+            if change_key not in state.applied_changes:
+                state.applied_changes.add(change_key)
+
+                for aid, asset in state.assets.items():
+                    should_apply = False
+                    if applies_to == 'all':
+                        should_apply = asset.is_retirement or asset.account_type in ('brokerage', 'crypto')
+                    elif applies_to == 'retirement':
+                        should_apply = asset.is_retirement
+                    elif applies_to == 'brokerage':
+                        should_apply = asset.account_type == 'brokerage'
+
+                    if should_apply:
+                        adjustment_factor = 1 + percent_change
+                        asset.balance = asset.balance * adjustment_factor
+
+        elif change.change_type == ChangeType.OVERRIDE_INFLATION:
+            # Override inflation rate for the scenario
+            # This modifies the scenario object's rate for subsequent calculations
+            new_rate = Decimal(str(params.get('inflation_rate', self.scenario.inflation_rate)))
+            self.scenario.inflation_rate = new_rate
+
+        elif change.change_type == ChangeType.OVERRIDE_INVESTMENT_RETURN:
+            # Override investment return rate
+            new_rate = Decimal(str(params.get('investment_return_rate', self.scenario.investment_return_rate)))
+            self.scenario.investment_return_rate = new_rate
+
+        elif change.change_type == ChangeType.OVERRIDE_SALARY_GROWTH:
+            # Override salary growth rate
+            new_rate = Decimal(str(params.get('salary_growth_rate', self.scenario.salary_growth_rate)))
+            self.scenario.salary_growth_rate = new_rate
 
         return state
 
