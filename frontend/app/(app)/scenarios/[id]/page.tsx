@@ -5,8 +5,12 @@ import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { scenarios } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Button } from '@/components/ui/button';
-import { Play, Plus, Sparkles } from 'lucide-react';
+import { ScenarioContextBar } from '@/components/layout/ScenarioContextBar';
+import { CockpitLayout } from '@/components/layout/CockpitLayout';
+import { InstrumentPanel } from '@/components/ui/InstrumentPanel';
+import { SystemAlert } from '@/components/ui/SystemAlert';
+import { MetricRow, MetricRowHeader } from '@/components/ui/MetricRow';
+import { DriversBlock } from '@/components/ui/DriversBlock';
 import { ScenarioChanges } from '@/components/scenarios/scenario-changes';
 import { ProjectionChart } from '@/components/scenarios/projection-chart';
 import { ProjectionTable } from '@/components/scenarios/projection-table';
@@ -14,6 +18,10 @@ import { AddChangeDialog } from '@/components/scenarios/add-change-dialog';
 import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
 import { MilestoneComparison } from '@/components/scenarios/milestone-comparison';
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { Loader2, Rocket } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Scenario, ScenarioProjection } from '@/lib/types';
 
 function isBaselineScenario(scenario: Scenario) {
@@ -25,6 +33,7 @@ export default function ScenarioDetailPage() {
   const queryClient = useQueryClient();
   const [showAddChange, setShowAddChange] = useState(false);
   const [showLifeEvents, setShowLifeEvents] = useState(false);
+  const [horizon, setHorizon] = useState<'12' | '24' | '60' | '120' | '360'>('60');
 
   const scenarioId = id as string;
 
@@ -33,7 +42,7 @@ export default function ScenarioDetailPage() {
     queryFn: () => scenarios.get(scenarioId),
   });
 
-  const { data: projectionsData } = useQuery({
+  const { data: projectionsData, error: projectionsError } = useQuery({
     queryKey: ['scenarios', scenarioId, 'projections'],
     queryFn: () => scenarios.getProjections(scenarioId),
     enabled: !!scenario,
@@ -61,90 +70,201 @@ export default function ScenarioDetailPage() {
     },
   });
 
-  if (isLoading) return <div>Loading...</div>;
-  if (!scenario) return <div>Scenario not found.</div>;
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!scenario) {
+    return (
+      <div className={cn(SPACING.pageGutter)}>
+        <SystemAlert tone="critical" title="Scenario not found" description="The requested scenario does not exist or you don't have access to it." />
+      </div>
+    );
+  }
 
   const projections = (projectionsData || []) as ScenarioProjection[];
   const hasProjections = projections.length > 0;
+  const isBaseline = isBaselineScenario(scenario);
+
+  // Get final milestone data for compare view
+  const finalProjection = projections[projections.length - 1];
+  const finalBaseline = baselineProjections?.[baselineProjections.length - 1];
+
+  // Context bar element
+  const contextBar = (
+    <ScenarioContextBar
+      scenarioName={scenario.name}
+      baselineName={isBaseline ? undefined : baselineScenario?.name}
+      status={
+        hasProjections
+          ? { tone: 'good', label: 'Computed' }
+          : { tone: 'warning', label: 'Not Run' }
+      }
+      horizon={String(scenario.projectionMonths || 60) as typeof horizon}
+      onHorizonChange={(h) => setHorizon(h as typeof horizon)}
+      onAddChange={() => setShowAddChange(true)}
+      onLifeEvent={() => setShowLifeEvents(true)}
+      onRunProjection={() => computeMutation.mutate()}
+      isRunning={computeMutation.isPending}
+    />
+  );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">{scenario.name}</h1>
-          <p className="text-muted-foreground">{scenario.description}</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setShowLifeEvents(true)} variant="outline">
-            <Sparkles className="h-4 w-4 mr-2" />
-            Life Event
-          </Button>
-          <Button onClick={() => setShowAddChange(true)} variant="outline">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Change
-          </Button>
-          <Button onClick={() => computeMutation.mutate()} disabled={computeMutation.isPending}>
-            <Play className="h-4 w-4 mr-2" />
-            {computeMutation.isPending ? 'Computing...' : 'Run Projection'}
-          </Button>
-        </div>
+    <CockpitLayout contextBar={contextBar}>
+      <div className={cn(SPACING.sectionGap)}>
+        {/* Projection Error */}
+        {projectionsError && (
+          <SystemAlert
+            tone="critical"
+            title="Error loading projections"
+            description="There was an error loading the projection data. Try running the projection again."
+            dismissible
+          />
+        )}
+
+        <Tabs defaultValue="projection">
+          <TabsList>
+            <TabsTrigger value="projection">Projection</TabsTrigger>
+            <TabsTrigger value="compare">Compare</TabsTrigger>
+            <TabsTrigger value="changes">
+              Changes ({scenario.changes?.length || 0})
+            </TabsTrigger>
+            <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="projection" className="space-y-6 mt-6">
+            {hasProjections ? (
+              <>
+                <InstrumentPanel title="Net Worth Trajectory" subtitle={`${projections.length} month projection`}>
+                  <ProjectionChart
+                    projections={projections}
+                    compareProjections={baselineProjections as ScenarioProjection[]}
+                    compareLabel={baselineScenario?.name || 'Baseline'}
+                    scenarioLabel={scenario.name}
+                  />
+                </InstrumentPanel>
+
+                <InstrumentPanel title="Monthly Breakdown">
+                  <ProjectionTable projections={projections} />
+                </InstrumentPanel>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="p-4 rounded-full bg-primary/10 mb-4">
+                  <Rocket className="h-8 w-8 text-primary" />
+                </div>
+                <h3 className={TYPOGRAPHY.sectionTitle}>Ready to project</h3>
+                <p className="text-muted-foreground mt-2 max-w-md">
+                  {scenario.changes?.length
+                    ? 'You have changes configured. Run the projection to see how they impact your financial future.'
+                    : 'Add some changes or life events, then run the projection to see how they impact your finances.'}
+                </p>
+                <Button
+                  className="mt-6"
+                  onClick={() => computeMutation.mutate()}
+                  disabled={computeMutation.isPending}
+                >
+                  {computeMutation.isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Computing...
+                    </>
+                  ) : (
+                    'Run Projection'
+                  )}
+                </Button>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="compare" className="space-y-6 mt-6">
+            {hasProjections && baselineProjections && baselineProjections.length > 0 ? (
+              <>
+                {/* Delta-first comparison metrics */}
+                {finalProjection && finalBaseline && (
+                  <InstrumentPanel title="Impact at End of Horizon" subtitle={`Month ${projections.length}`}>
+                    <MetricRowHeader />
+                    <MetricRow
+                      label="Net Worth"
+                      baseline={parseFloat(finalBaseline.netWorth) || 0}
+                      scenario={parseFloat(finalProjection.netWorth) || 0}
+                      format="currency"
+                      goodDirection="up"
+                    />
+                    <MetricRow
+                      label="Liquid Assets"
+                      baseline={parseFloat(finalBaseline.liquidAssets) || 0}
+                      scenario={parseFloat(finalProjection.liquidAssets) || 0}
+                      format="currency"
+                      goodDirection="up"
+                    />
+                    <MetricRow
+                      label="Total Debt"
+                      baseline={parseFloat(finalBaseline.totalDebt) || 0}
+                      scenario={parseFloat(finalProjection.totalDebt) || 0}
+                      format="currency"
+                      goodDirection="down"
+                    />
+                  </InstrumentPanel>
+                )}
+
+                {/* Milestone comparison */}
+                <MilestoneComparison
+                  scenarioProjections={projections}
+                  baselineProjections={baselineProjections as ScenarioProjection[]}
+                  scenarioName={scenario.name}
+                  baselineName={baselineScenario?.name || 'Baseline'}
+                />
+
+                {/* Drivers explanation */}
+                {scenario.changes && scenario.changes.length > 0 && (
+                  <DriversBlock
+                    title="What's Driving the Difference"
+                    drivers={scenario.changes.slice(0, 5).map((change) => ({
+                      label: change.description || change.changeType,
+                      impact: parseFloat(change.amount) || 0,
+                      tone:
+                        parseFloat(change.amount) >= 0
+                          ? change.category === 'expense'
+                            ? 'critical'
+                            : 'good'
+                          : change.category === 'expense'
+                          ? 'good'
+                          : 'critical',
+                      recurring: change.isRecurring,
+                    }))}
+                  />
+                )}
+              </>
+            ) : (
+              <div className="text-center py-16 text-muted-foreground">
+                {!hasProjections ? (
+                  <>Run projections for this scenario to see milestone comparisons.</>
+                ) : !baselineProjections || baselineProjections.length === 0 ? (
+                  <>
+                    Run projections for both this scenario and your baseline scenario to see
+                    comparisons.
+                  </>
+                ) : (
+                  <>No baseline scenario to compare against.</>
+                )}
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="changes" className="mt-6">
+            <ScenarioChanges scenarioId={scenarioId} initialChanges={scenario.changes || []} />
+          </TabsContent>
+
+          <TabsContent value="assumptions" className="mt-6">
+            <AssumptionsForm scenario={scenario} />
+          </TabsContent>
+        </Tabs>
       </div>
-
-      <Tabs defaultValue="projection">
-        <TabsList>
-          <TabsTrigger value="projection">Projection</TabsTrigger>
-          <TabsTrigger value="compare">Compare</TabsTrigger>
-          <TabsTrigger value="changes">Changes ({scenario.changes?.length || 0})</TabsTrigger>
-          <TabsTrigger value="assumptions">Assumptions</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="projection" className="space-y-6">
-          {hasProjections ? (
-            <>
-              <ProjectionChart
-                projections={projections}
-                compareProjections={baselineProjections as ScenarioProjection[]}
-                compareLabel={baselineScenario?.name || 'Baseline'}
-                scenarioLabel={scenario.name}
-              />
-              <ProjectionTable projections={projections} />
-            </>
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              No projections yet. Add changes and click "Run Projection" to compute.
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="compare" className="space-y-6">
-          {hasProjections && baselineProjections && baselineProjections.length > 0 ? (
-            <MilestoneComparison
-              scenarioProjections={projections}
-              baselineProjections={baselineProjections as ScenarioProjection[]}
-              scenarioName={scenario.name}
-              baselineName={baselineScenario?.name || 'Baseline'}
-            />
-          ) : (
-            <div className="text-center py-12 text-muted-foreground">
-              {!hasProjections ? (
-                <>Run projections for this scenario to see milestone comparisons.</>
-              ) : !baselineProjections || baselineProjections.length === 0 ? (
-                <>Run projections for both this scenario and your baseline scenario to see comparisons.</>
-              ) : (
-                <>No baseline scenario to compare against.</>
-              )}
-            </div>
-          )}
-        </TabsContent>
-
-        <TabsContent value="changes">
-          <ScenarioChanges scenarioId={scenarioId} initialChanges={scenario.changes || []} />
-        </TabsContent>
-
-        <TabsContent value="assumptions">
-          <AssumptionsForm scenario={scenario} />
-        </TabsContent>
-      </Tabs>
 
       <AddChangeDialog
         open={showAddChange}
@@ -157,6 +277,6 @@ export default function ScenarioDetailPage() {
         onOpenChange={setShowLifeEvents}
         scenarioId={scenarioId}
       />
-    </div>
+    </CockpitLayout>
   );
 }

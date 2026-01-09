@@ -376,9 +376,7 @@ export default function AccountsPage() {
                     <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
                       {ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}>
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
@@ -388,9 +386,7 @@ export default function AccountsPage() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}>
                       {formatCurrency(parseFloat(account.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
@@ -445,9 +441,7 @@ export default function AccountsPage() {
                     <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
                       {ACCOUNT_TYPE_LABELS[asset.accountType] || asset.accountType}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}>
                       {asset.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
@@ -457,9 +451,7 @@ export default function AccountsPage() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}>
                       {formatCurrency(parseFloat(asset.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
@@ -514,9 +506,7 @@ export default function AccountsPage() {
                     <TableCell className={cn(densityStyles.cell, densityStyles.text)}>
                       {ACCOUNT_TYPE_LABELS[account.accountType] || account.accountType}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, densityStyles.text, 'text-muted-foreground')}>
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
@@ -526,9 +516,7 @@ export default function AccountsPage() {
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
-                    <TableCell
-                      className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}
-                    >
+                    <TableCell className={cn(densityStyles.cell, 'text-right font-semibold tabular-nums')}>
                       {formatCurrency(Math.abs(parseFloat(account.currentBalance) || 0))}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>

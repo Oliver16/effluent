@@ -3,8 +3,11 @@
 import { useQuery } from '@tanstack/react-query'
 import { useRouter } from 'next/navigation'
 import { decisions } from '@/lib/api'
+import { ControlListLayout } from '@/components/layout/ControlListLayout'
 import { Card } from '@/components/ui/card'
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { SystemAlert } from '@/components/ui/SystemAlert'
+import { TYPOGRAPHY, SURFACE } from '@/lib/design-tokens'
+import { cn } from '@/lib/utils'
 import {
   TrendingUp,
   MinusCircle,
@@ -54,36 +57,39 @@ export default function DecisionsPage() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading templates...</div>
-      </div>
+      <ControlListLayout
+        title="Decisions"
+        subtitle="Model financial decisions and see how they impact your future"
+      >
+        <div className="flex items-center justify-center h-64">
+          <div className="text-muted-foreground">Loading templates...</div>
+        </div>
+      </ControlListLayout>
     )
   }
 
   if (isError) {
     return (
-      <div className="space-y-6">
-        <h1 className="text-2xl font-bold">Decisions</h1>
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error loading templates</AlertTitle>
-          <AlertDescription>
-            Unable to load decision templates. Please try again later.
-          </AlertDescription>
-        </Alert>
-      </div>
+      <ControlListLayout
+        title="Decisions"
+        subtitle="Model financial decisions and see how they impact your future"
+      >
+        <SystemAlert
+          tone="critical"
+          title="Error loading templates"
+          icon={AlertCircle}
+        >
+          Unable to load decision templates. Please try again later.
+        </SystemAlert>
+      </ControlListLayout>
     )
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Decisions</h1>
-        <p className="text-muted-foreground mt-1">
-          Model financial decisions and see how they impact your future.
-        </p>
-      </div>
-
+    <ControlListLayout
+      title="Decisions"
+      subtitle="Model financial decisions and see how they impact your future"
+    >
       <div className="space-y-8">
         {data?.results?.map((group) => (
           <div key={group.category}>
@@ -91,18 +97,25 @@ export default function DecisionsPage() {
               <span className="text-primary">
                 {categoryIcons[group.category] || <Calculator className="h-5 w-5" />}
               </span>
-              <h2 className="font-semibold text-lg">{group.categoryDisplay}</h2>
+              <h2 className={TYPOGRAPHY.sectionTitle}>{group.categoryDisplay}</h2>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {group.templates.map((template) => (
                 <Card
                   key={template.key}
-                  className="p-5 cursor-pointer hover:border-primary hover:bg-accent/50 transition-colors"
+                  className={cn(
+                    SURFACE.card,
+                    'p-5 cursor-pointer hover:border-primary hover:bg-accent/50 transition-colors',
+                    'focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+                  )}
+                  role="button"
+                  tabIndex={0}
                   onClick={() => handleSelectTemplate(template.key)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSelectTemplate(template.key)}
                 >
                   <div className="flex items-start gap-4">
-                    <div className="text-primary p-2 bg-primary/10 rounded-lg">
+                    <div className="text-primary p-2 bg-primary/10 rounded-lg shrink-0">
                       {templateIcons[template.icon] || <Calculator className="h-5 w-5" />}
                     </div>
                     <div className="flex-1 min-w-0">
@@ -118,6 +131,6 @@ export default function DecisionsPage() {
           </div>
         ))}
       </div>
-    </div>
+    </ControlListLayout>
   )
 }

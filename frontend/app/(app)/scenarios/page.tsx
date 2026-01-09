@@ -1,16 +1,20 @@
 'use client';
 
+import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { scenarios } from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, ArrowRight } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { ScenarioTile } from '@/components/scenarios/ScenarioTile';
+import { CompareSelectionBar } from '@/components/scenarios/CompareSelectionBar';
+import { PageHeader } from '@/components/layout/PageHeader';
+import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { Plus, GitCompare, Loader2 } from 'lucide-react';
 import { Scenario } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 function isBaseline(scenario: Scenario) {
-  // Handle both camelCase (from type) and snake_case (from API before conversion)
   return scenario.isBaseline === true;
 }
 
@@ -19,7 +23,9 @@ function todayString() {
 }
 
 export default function ScenariosPage() {
+  const router = useRouter();
   const queryClient = useQueryClient();
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const { data: scenarioList = [], isLoading } = useQuery({
     queryKey: ['scenarios'],
@@ -41,104 +47,149 @@ export default function ScenariosPage() {
     });
   };
 
-  if (isLoading) return <div>Loading...</div>;
+  const toggleSelection = (id: string, selected: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (selected) {
+        next.add(id);
+      } else {
+        next.delete(id);
+      }
+      return next;
+    });
+  };
+
+  const handleCompare = () => {
+    const ids = Array.from(selectedIds).join(',');
+    router.push(`/scenarios/compare?ids=${ids}`);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedIds(new Set());
+  };
+
+  if (isLoading) {
+    return (
+      <div className={cn(SPACING.pageGutter, 'flex items-center justify-center py-20')}>
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   const baseline = scenarioList.find(isBaseline);
   const others = scenarioList.filter((scenario) => !isBaseline(scenario));
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Scenarios</h1>
-          <p className="text-sm text-muted-foreground">
-            Model financial what-if scenarios and compare outcomes.
-          </p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {!baseline && (
-            <Button onClick={createBaseline}>
-              <Plus className="h-4 w-4 mr-2" />
-              Create Baseline
-            </Button>
-          )}
-          <Button variant="outline" asChild>
-            <Link href="/scenarios/new">
-              <Plus className="h-4 w-4 mr-2" />
-              New Scenario
-            </Link>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/scenarios/compare">
-              Compare Scenarios
-              <ArrowRight className="h-4 w-4 ml-2" />
-            </Link>
-          </Button>
-        </div>
-      </div>
-
-      {baseline && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>{baseline.name} (Baseline)</span>
-              <Button size="sm" asChild>
-                <Link href={`/scenarios/${baseline.id}`}>View</Link>
+    <div className={cn(SPACING.pageGutter, SPACING.sectionGap)}>
+      {/* Page Header */}
+      <PageHeader
+        title="Scenarios"
+        subtitle="Model financial what-if scenarios and compare outcomes"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            {!baseline && (
+              <Button onClick={createBaseline} disabled={createMutation.isPending}>
+                {createMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Create Baseline
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="text-sm text-muted-foreground">
-            <p>{baseline.description || 'Baseline scenario for comparison.'}</p>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <div>
-                <span className="text-muted-foreground">Projection:</span>
-                <span className="ml-2 font-medium">{baseline.projectionMonths || 60} months</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Start Date:</span>
-                <span className="ml-2 font-medium">{formatDate(baseline.startDate)}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Created:</span>
-                <span className="ml-2 font-medium">{formatDate(baseline.createdAt)}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            )}
+            <Button variant="outline" asChild>
+              <Link href="/scenarios/new">
+                <Plus className="h-4 w-4 mr-2" />
+                New Scenario
+              </Link>
+            </Button>
+            {scenarioList.length >= 2 && (
+              <Button variant="ghost" asChild>
+                <Link href="/scenarios/compare">
+                  <GitCompare className="h-4 w-4 mr-2" />
+                  Compare All
+                </Link>
+              </Button>
+            )}
+          </div>
+        }
+      />
+
+      {/* Baseline Section */}
+      {baseline && (
+        <section>
+          <h2 className={cn(TYPOGRAPHY.sectionTitle, 'mb-3')}>Baseline</h2>
+          <ScenarioTile
+            id={baseline.id}
+            name={baseline.name}
+            description={baseline.description || 'Baseline projection from current state'}
+            isBaseline
+            horizonMonths={baseline.projectionMonths || 60}
+            lastRun={baseline.lastRun}
+            onOpen={() => router.push(`/scenarios/${baseline.id}`)}
+          />
+        </section>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {others.map((scenario) => (
-          <ScenarioCard key={scenario.id} scenario={scenario} />
-        ))}
-      </div>
-    </div>
-  );
-}
+      {/* Scenarios Grid */}
+      {others.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className={TYPOGRAPHY.sectionTitle}>What-If Scenarios</h2>
+            <span className="text-sm text-muted-foreground">
+              {selectedIds.size > 0
+                ? `${selectedIds.size} selected`
+                : `${others.length} scenario${others.length !== 1 ? 's' : ''}`}
+            </span>
+          </div>
 
-function ScenarioCard({ scenario }: { scenario: Scenario }) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-lg">{scenario.name}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 text-sm">
-        <p className="text-muted-foreground line-clamp-2">
-          {scenario.description || 'No description provided.'}
-        </p>
-        <div>
-          <span className="text-muted-foreground">Projection:</span>
-          <span className="ml-2 font-medium">{scenario.projectionMonths || 60} months</span>
-        </div>
-        <div>
-          <span className="text-muted-foreground">Start Date:</span>
-          <span className="ml-2 font-medium">{formatDate(scenario.startDate)}</span>
-        </div>
-        <div className="flex justify-end">
-          <Button size="sm" asChild>
-            <Link href={`/scenarios/${scenario.id}`}>Open</Link>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {others.map((scenario) => (
+              <ScenarioTile
+                key={scenario.id}
+                id={scenario.id}
+                name={scenario.name}
+                description={scenario.description}
+                horizonMonths={scenario.projectionMonths || 60}
+                lastRun={scenario.lastRun}
+                isSelected={selectedIds.has(scenario.id)}
+                onSelectionChange={(selected) => toggleSelection(scenario.id, selected)}
+                onOpen={() => router.push(`/scenarios/${scenario.id}`)}
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Empty State */}
+      {!baseline && others.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-16 text-center">
+          <div className="p-4 rounded-full bg-primary/10 mb-4">
+            <GitCompare className="h-8 w-8 text-primary" />
+          </div>
+          <h3 className={TYPOGRAPHY.sectionTitle}>No scenarios yet</h3>
+          <p className="text-muted-foreground mt-2 max-w-md">
+            Create a baseline to project your current financial trajectory, then add what-if
+            scenarios to explore different decisions.
+          </p>
+          <Button className="mt-6" onClick={createBaseline} disabled={createMutation.isPending}>
+            {createMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Plus className="h-4 w-4 mr-2" />
+            )}
+            Create Baseline
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      )}
+
+      {/* Comparison Selection Bar */}
+      <CompareSelectionBar
+        selectedCount={selectedIds.size}
+        onCompare={handleCompare}
+        onClear={handleClearSelection}
+        visible={selectedIds.size > 0}
+      />
+    </div>
   );
 }
