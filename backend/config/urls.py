@@ -70,4 +70,7 @@ urlpatterns = [
     path('api/v1/onboarding/complete/', onboarding_views.complete_step, name='onboarding-complete'),
     path('api/v1/onboarding/skip/', onboarding_views.skip_step, name='onboarding-skip'),
     path('api/v1/onboarding/back/', onboarding_views.go_back, name='onboarding-back'),
+
+    # Decision Templates endpoints
+    path('api/v1/decisions/', include('apps.decisions.urls')),
 ]

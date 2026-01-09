@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { metrics, accounts, insights as insightsApi } from '@/lib/api';
 import { MetricCards } from '@/components/dashboard/metric-cards';
@@ -7,10 +8,13 @@ import { NetWorthChart } from '@/components/dashboard/net-worth-chart';
 import { AccountsList } from '@/components/dashboard/accounts-list';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
 import { CashFlowSummary } from '@/components/dashboard/cash-flow-summary';
+import { DecisionPicker } from '@/components/decisions/decision-picker';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { AlertCircle, Plus } from 'lucide-react';
 
 export default function DashboardPage() {
+  const [decisionPickerOpen, setDecisionPickerOpen] = useState(false);
   const { data: metricsData, isLoading, isError: metricsError } = useQuery({
     queryKey: ['metrics', 'current'],
     queryFn: () => metrics.current(),
@@ -43,7 +47,15 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <Button onClick={() => setDecisionPickerOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          New Decision
+        </Button>
+      </div>
+
+      <DecisionPicker open={decisionPickerOpen} onOpenChange={setDecisionPickerOpen} />
 
       {hasError && (
         <Alert variant="destructive">

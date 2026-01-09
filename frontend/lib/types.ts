@@ -357,3 +357,92 @@ export interface LifeEventCategoryGroup {
   category_display: string
   templates: LifeEventTemplate[]
 }
+
+// Decision Templates
+export type DecisionCategory =
+  | 'income'
+  | 'expenses'
+  | 'debt'
+  | 'housing'
+  | 'retirement'
+  | 'savings'
+
+export type DecisionFieldType =
+  | 'currency'
+  | 'percent'
+  | 'integer'
+  | 'select'
+  | 'date'
+  | 'toggle'
+  | 'text'
+
+export interface DecisionFieldOption {
+  value: string
+  label: string
+}
+
+export interface DecisionField {
+  key: string
+  type: DecisionFieldType
+  label: string
+  required?: boolean
+  default?: unknown
+  placeholder?: string
+  helperText?: string
+  options?: DecisionFieldOption[]
+  showIf?: string
+  min?: number
+  max?: number
+}
+
+export interface DecisionStep {
+  id: string
+  title: string
+  description?: string
+  fields: DecisionField[]
+}
+
+export interface DecisionUISchema {
+  steps: DecisionStep[]
+}
+
+export interface DecisionTemplate {
+  key: string
+  name: string
+  description: string
+  category: DecisionCategory
+  icon: string
+  uiSchema: DecisionUISchema
+  sortOrder?: number
+}
+
+export interface DecisionCategoryGroup {
+  category: DecisionCategory
+  categoryDisplay: string
+  templates: DecisionTemplate[]
+}
+
+export interface DecisionRunResponse {
+  scenarioId: string
+  scenarioName: string
+  decisionRunId: string
+  changesCreated: number
+  projections: {
+    now?: ScenarioProjection
+    year_1?: ScenarioProjection
+    year_3?: ScenarioProjection
+    year_5?: ScenarioProjection
+  }
+}
+
+export interface DecisionRun {
+  id: string
+  templateKey: string
+  templateName: string
+  inputs: Record<string, unknown>
+  createdScenario?: string
+  scenarioNameOverride?: string
+  isDraft: boolean
+  completedAt?: string
+  createdAt: string
+}

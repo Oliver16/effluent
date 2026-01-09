@@ -19,6 +19,10 @@ import type {
   SelfEmploymentTax,
   LifeEventTemplate,
   LifeEventCategoryGroup,
+  DecisionCategoryGroup,
+  DecisionTemplate,
+  DecisionRunResponse,
+  DecisionRun,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -501,4 +505,38 @@ export const lifeEventTemplates = {
       changes_created: number;
       changes: ScenarioChange[];
     }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
+}
+
+// Decision Template endpoints
+export const decisions = {
+  listTemplates: () =>
+    api.get<{ results: DecisionCategoryGroup[]; count: number }>('/api/v1/decisions/templates/')
+      .then(data => ({
+        results: toCamelCase<DecisionCategoryGroup[]>(data.results || []),
+        count: data.count,
+      })),
+  getTemplate: (key: string) =>
+    api.get<DecisionTemplate>(`/api/v1/decisions/templates/${key}/`)
+      .then(data => toCamelCase<DecisionTemplate>(data)),
+  categories: () =>
+    api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/decisions/templates/categories/'),
+  run: (data: { template_key: string; inputs: Record<string, unknown>; scenario_name_override?: string }) =>
+    api.post<DecisionRunResponse>('/api/v1/decisions/run/', data)
+      .then(data => toCamelCase<DecisionRunResponse>(data)),
+  saveDraft: (data: { template_key: string; inputs: Record<string, unknown> }) =>
+    api.post<{ id: string; saved: boolean; created: boolean }>('/api/v1/decisions/draft/', data),
+  listRuns: () =>
+    api.get<{ results: DecisionRun[]; count: number }>('/api/v1/decisions/runs/')
+      .then(data => ({
+        results: toCamelCase<DecisionRun[]>(data.results || []),
+        count: data.count,
+      })),
+  getRun: (id: string) =>
+    api.get<DecisionRun>(`/api/v1/decisions/runs/${id}/`)
+      .then(data => toCamelCase<DecisionRun>(data)),
+  completeDraft: (id: string, data?: { inputs?: Record<string, unknown>; scenario_name_override?: string }) =>
+    api.post<DecisionRunResponse>(`/api/v1/decisions/runs/${id}/complete/`, data || {})
+      .then(data => toCamelCase<DecisionRunResponse>(data)),
+  deleteDraft: (id: string) =>
+    api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
 }

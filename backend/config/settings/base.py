@@ -31,6 +31,7 @@ INSTALLED_APPS = [
     'apps.metrics',
     'apps.onboarding',
     'apps.scenarios',
+    'apps.decisions',
 ]
 
 MIDDLEWARE = [
