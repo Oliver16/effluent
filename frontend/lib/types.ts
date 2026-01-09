@@ -171,6 +171,8 @@ export interface RecurringFlow {
   isBaseline: boolean
   notes?: string
   createdAt?: string
+  isSystemGenerated?: boolean
+  systemFlowKind?: string
 }
 
 export interface MetricSnapshot {

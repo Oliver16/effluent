@@ -381,6 +381,8 @@ export const flows = {
     const payload = toSnakeCase(data)
     return api.patch<RecurringFlow>(`/api/v1/flows/${id}/`, payload).then(data => toCamelCase<RecurringFlow>(data))
   },
+  regenerateSystemFlows: () =>
+    api.post<{ status: string; message: string }>('/api/v1/flows/regenerate_system_flows/'),
 }
 
 // Metrics endpoints
@@ -433,6 +435,13 @@ export const incomeSources = {
   get: (id: string) =>
     api.get<IncomeSourceDetail>(`/api/v1/income-sources/${id}/`)
       .then(data => toCamelCase<IncomeSourceDetail>(data)),
+  create: (data: Partial<IncomeSourceDetail>) =>
+    api.post<IncomeSourceDetail>('/api/v1/income-sources/', toSnakeCase(data))
+      .then(data => toCamelCase<IncomeSourceDetail>(data)),
+  update: (id: string, data: Partial<IncomeSourceDetail>) =>
+    api.patch<IncomeSourceDetail>(`/api/v1/income-sources/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<IncomeSourceDetail>(data)),
+  delete: (id: string) => api.delete<void>(`/api/v1/income-sources/${id}/`),
   paycheck: (id: string) =>
     api.get<Record<string, string>>(`/api/v1/income-sources/${id}/paycheck/`)
       .then(data => toCamelCase<Record<string, string>>(data)),
@@ -534,6 +543,24 @@ export const scenarios = {
         include_drivers: options?.includeDrivers ?? true,
       }
     ).then(data => toCamelCase<ScenarioCompareResponse>(data)),
+  /**
+   * Adopt a scenario: persist its overlay changes as real data.
+   * Converts scenario changes into actual RecurringFlows,
+   * making the scenario's projections the new baseline reality.
+   * The scenario is archived after adoption.
+   */
+  adopt: (id: string) =>
+    api.post<{
+      status: string;
+      adoptedChanges: Array<{ changeId: string; type: string; flowId: string }>;
+      skippedChanges: Array<{ changeId: string; type: string; reason: string }>;
+      scenarioArchived: boolean;
+    }>(`/api/v1/scenarios/${id}/adopt/`).then(data => toCamelCase<{
+      status: string;
+      adoptedChanges: Array<{ changeId: string; type: string; flowId: string }>;
+      skippedChanges: Array<{ changeId: string; type: string; reason: string }>;
+      scenarioArchived: boolean;
+    }>(data)),
 }
 
 // Life Event Template endpoints

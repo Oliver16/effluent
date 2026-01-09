@@ -2,14 +2,22 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { households, profile as profileApi, settings as settingsApi } from '@/lib/api'
-import { Household, UserProfile, UserSettings, UserSession } from '@/lib/types'
+import { households, profile as profileApi, settings as settingsApi, incomeSources } from '@/lib/api'
+import { Household, UserProfile, UserSettings, UserSession, IncomeSourceDetail } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { User, Home, Bell, Shield } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import { User, Home, Bell, Shield, DollarSign, Pencil, Trash2, Plus } from 'lucide-react'
+import { formatCurrency } from '@/lib/utils'
 
 const TAX_FILING_STATUS: Record<string, string> = {
   single: 'Single',
@@ -33,6 +41,24 @@ const US_STATES: Record<string, string> = {
   DC: 'District of Columbia',
 }
 
+const INCOME_TYPES: Record<string, string> = {
+  w2: 'W-2 Salary',
+  w2_hourly: 'W-2 Hourly',
+  self_employed: 'Self-Employed',
+  rental: 'Rental Income',
+  investment: 'Investment Income',
+  retirement: 'Retirement Income',
+  social_security: 'Social Security',
+  other: 'Other Income',
+}
+
+const PAY_FREQUENCIES: Record<string, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Every 2 Weeks',
+  semimonthly: 'Twice Monthly',
+  monthly: 'Monthly',
+}
+
 export default function SettingsPage() {
   const [householdData, setHouseholdData] = useState<Partial<Household>>({})
   const [profileData, setProfileData] = useState<Partial<UserProfile>>({})
@@ -43,6 +69,16 @@ export default function SettingsPage() {
   const [isProfileSaved, setIsProfileSaved] = useState(false)
   const [isPasswordUpdated, setIsPasswordUpdated] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+
+  // Income editing state
+  const [incomeModalOpen, setIncomeModalOpen] = useState(false)
+  const [editingIncome, setEditingIncome] = useState<IncomeSourceDetail | null>(null)
+  const [incomeForm, setIncomeForm] = useState({
+    name: '',
+    incomeType: 'w2',
+    grossAnnual: '',
+    payFrequency: 'biweekly',
+  })
 
   const queryClient = useQueryClient()
 
@@ -64,6 +100,11 @@ export default function SettingsPage() {
   const { data: sessionsData, refetch: refetchSessions } = useQuery({
     queryKey: ['sessions'],
     queryFn: () => settingsApi.sessions(),
+  })
+
+  const { data: incomeSourcesList, isLoading: isIncomeLoading } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: () => incomeSources.list(),
   })
 
   const household = householdList?.[0]
@@ -121,6 +162,81 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     updateHouseholdMutation.mutate(householdData)
+  }
+
+  // Income source mutations
+  const createIncomeMutation = useMutation({
+    mutationFn: (data: Partial<IncomeSourceDetail>) => incomeSources.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+      setIncomeModalOpen(false)
+      resetIncomeForm()
+    },
+  })
+
+  const updateIncomeMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<IncomeSourceDetail> }) =>
+      incomeSources.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+      setIncomeModalOpen(false)
+      setEditingIncome(null)
+      resetIncomeForm()
+    },
+  })
+
+  const deleteIncomeMutation = useMutation({
+    mutationFn: (id: string) => incomeSources.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+    },
+  })
+
+  const resetIncomeForm = () => {
+    setIncomeForm({
+      name: '',
+      incomeType: 'w2',
+      grossAnnual: '',
+      payFrequency: 'biweekly',
+    })
+  }
+
+  const openIncomeModal = (income?: IncomeSourceDetail) => {
+    if (income) {
+      setEditingIncome(income)
+      setIncomeForm({
+        name: income.name || '',
+        incomeType: income.incomeType || 'w2',
+        grossAnnual: income.grossAnnual || '',
+        payFrequency: income.payFrequency || 'biweekly',
+      })
+    } else {
+      setEditingIncome(null)
+      resetIncomeForm()
+    }
+    setIncomeModalOpen(true)
+  }
+
+  const handleIncomeSave = () => {
+    const data = {
+      name: incomeForm.name,
+      incomeType: incomeForm.incomeType,
+      grossAnnual: incomeForm.grossAnnual,
+      payFrequency: incomeForm.payFrequency,
+      isActive: true,
+    }
+
+    if (editingIncome) {
+      updateIncomeMutation.mutate({ id: editingIncome.id, data })
+    } else {
+      createIncomeMutation.mutate(data)
+    }
   }
 
   const updateNotificationsMutation = useMutation({
@@ -235,6 +351,10 @@ export default function SettingsPage() {
             <Home className="h-4 w-4" />
             Household
           </TabsTrigger>
+          <TabsTrigger value="income" className="flex items-center gap-2">
+            <DollarSign className="h-4 w-4" />
+            Income
+          </TabsTrigger>
           <TabsTrigger value="account" className="flex items-center gap-2">
             <User className="h-4 w-4" />
             Account
@@ -327,6 +447,83 @@ export default function SettingsPage() {
                   <span className="text-sm text-green-600">Changes saved successfully!</span>
                 )}
               </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="income" className="space-y-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Income Sources</span>
+                <Button onClick={() => openIncomeModal()} size="sm">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Income
+                </Button>
+              </CardTitle>
+              <CardDescription>
+                Manage your income sources. Changes automatically update your tax withholding calculations.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isIncomeLoading ? (
+                <p className="text-muted-foreground">Loading income sources...</p>
+              ) : !incomeSourcesList?.length ? (
+                <p className="text-muted-foreground py-4 text-center">
+                  No income sources configured. Add your first income source to see tax calculations.
+                </p>
+              ) : (
+                <div className="space-y-4">
+                  {incomeSourcesList.map((income) => (
+                    <div
+                      key={income.id}
+                      className="flex items-center justify-between p-4 border rounded-lg"
+                    >
+                      <div className="space-y-1">
+                        <p className="font-medium">{income.name}</p>
+                        <div className="flex gap-4 text-sm text-muted-foreground">
+                          <span>{INCOME_TYPES[income.incomeType] || income.incomeType}</span>
+                          <span>{PAY_FREQUENCIES[income.payFrequency] || income.payFrequency}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="font-semibold text-green-600">
+                            {formatCurrency(parseFloat(income.grossAnnual || '0'))}/year
+                          </p>
+                          <p className="text-sm text-muted-foreground">
+                            ~{formatCurrency(parseFloat(income.grossAnnual || '0') / 12)}/month
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openIncomeModal(income)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              if (confirm('Delete this income source?')) {
+                                deleteIncomeMutation.mutate(income.id)
+                              }
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4 text-red-500" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-4">
+                Tax withholding flows are automatically calculated based on your income sources.
+                Visit the Cash Flows page to see your tax expense breakdown.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
@@ -626,6 +823,109 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Income Edit Modal */}
+      <Dialog open={incomeModalOpen} onOpenChange={setIncomeModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingIncome ? 'Edit Income Source' : 'Add Income Source'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingIncome
+                ? 'Update your income details. Tax flows will be recalculated automatically.'
+                : 'Add a new income source. Tax withholding will be calculated automatically for W-2 income.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="incomeName">Name</Label>
+              <Input
+                id="incomeName"
+                value={incomeForm.name}
+                onChange={(e) => setIncomeForm({ ...incomeForm, name: e.target.value })}
+                placeholder="e.g., Main Job, Freelance Work"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="incomeType">Income Type</Label>
+                <select
+                  id="incomeType"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={incomeForm.incomeType}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, incomeType: e.target.value })}
+                >
+                  {Object.entries(INCOME_TYPES).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="payFrequency">Pay Frequency</Label>
+                <select
+                  id="payFrequency"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={incomeForm.payFrequency}
+                  onChange={(e) => setIncomeForm({ ...incomeForm, payFrequency: e.target.value })}
+                >
+                  {Object.entries(PAY_FREQUENCIES).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="grossAnnual">Annual Gross Income</Label>
+              <Input
+                id="grossAnnual"
+                type="number"
+                step="0.01"
+                value={incomeForm.grossAnnual}
+                onChange={(e) => setIncomeForm({ ...incomeForm, grossAnnual: e.target.value })}
+                placeholder="e.g., 75000"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter your total annual gross income before taxes and deductions
+              </p>
+            </div>
+
+            {(incomeForm.incomeType === 'w2' || incomeForm.incomeType === 'w2_hourly') && (
+              <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
+                Tax withholding (~25% effective rate) will be automatically calculated and added as an expense flow.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setIncomeModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleIncomeSave}
+                disabled={
+                  createIncomeMutation.isPending ||
+                  updateIncomeMutation.isPending ||
+                  !incomeForm.name ||
+                  !incomeForm.grossAnnual
+                }
+              >
+                {(createIncomeMutation.isPending || updateIncomeMutation.isPending)
+                  ? 'Saving...'
+                  : editingIncome
+                  ? 'Save Changes'
+                  : 'Add Income'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

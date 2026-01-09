@@ -25,7 +25,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil } from 'lucide-react'
+import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, RefreshCw, Cpu } from 'lucide-react'
 
 const INCOME_CATEGORIES: Record<string, string> = {
   // Employment
@@ -424,10 +424,19 @@ export default function FlowsPage() {
     },
   })
 
+  const regenerateFlowsMutation = useMutation({
+    mutationFn: () => flowsApi.regenerateSystemFlows(),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+    },
+  })
+
   const flows = flowsData || []
   const incomeFlows = flows.filter(f => f.flowType === 'income')
   const expenseFlows = flows.filter(f => f.flowType === 'expense')
   const transferFlows = flows.filter(f => f.flowType === 'transfer')
+  const systemFlowCount = flows.filter(f => f.isSystemGenerated).length
 
   const totalMonthlyIncome = incomeFlows
     .filter(f => f.isActive)
@@ -509,6 +518,14 @@ export default function FlowsPage() {
             Manage your recurring income and expenses
           </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={() => regenerateFlowsMutation.mutate()}
+          disabled={regenerateFlowsMutation.isPending}
+        >
+          <RefreshCw className={`h-4 w-4 mr-2 ${regenerateFlowsMutation.isPending ? 'animate-spin' : ''}`} />
+          {regenerateFlowsMutation.isPending ? 'Regenerating...' : 'Sync Tax Flows'}
+        </Button>
       </div>
 
       {/* Summary Cards */}
@@ -582,7 +599,16 @@ export default function FlowsPage() {
                   <TableBody>
                     {incomeFlows.map((flow) => (
                       <TableRow key={flow.id} className={!flow.isActive ? 'opacity-50' : ''}>
-                        <TableCell className="font-medium">{flow.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <span className="flex items-center gap-2">
+                            {flow.name}
+                            {flow.isSystemGenerated && (
+                              <span title="Auto-generated from income source" className="text-muted-foreground">
+                                <Cpu className="h-3 w-3" />
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell>{INCOME_CATEGORIES[flow.incomeCategory || ''] || flow.incomeCategory}</TableCell>
                         <TableCell>{formatCurrency(flow.amount)}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
@@ -637,7 +663,16 @@ export default function FlowsPage() {
                   <TableBody>
                     {expenseFlows.map((flow) => (
                       <TableRow key={flow.id} className={!flow.isActive ? 'opacity-50' : ''}>
-                        <TableCell className="font-medium">{flow.name}</TableCell>
+                        <TableCell className="font-medium">
+                          <span className="flex items-center gap-2">
+                            {flow.name}
+                            {flow.isSystemGenerated && (
+                              <span title="Auto-generated from income source" className="text-muted-foreground">
+                                <Cpu className="h-3 w-3" />
+                              </span>
+                            )}
+                          </span>
+                        </TableCell>
                         <TableCell>{EXPENSE_CATEGORIES[flow.expenseCategory || ''] || flow.expenseCategory}</TableCell>
                         <TableCell>{formatCurrency(flow.amount)}</TableCell>
                         <TableCell>{FREQUENCY_LABELS[flow.frequency] || flow.frequency}</TableCell>
