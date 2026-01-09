@@ -2,7 +2,7 @@ import uuid
 from decimal import Decimal
 from django.db import models
 from django.contrib.postgres.fields import ArrayField
-from apps.core.models import HouseholdOwnedModel
+from apps.core.models import HouseholdOwnedModel, TimestampedModel
 
 
 class Scenario(HouseholdOwnedModel):
@@ -67,7 +67,7 @@ class ChangeType(models.TextChoices):
     MODIFY_HSA = 'modify_hsa', 'Change HSA Contribution'
 
 
-class ScenarioChange(models.Model):
+class ScenarioChange(TimestampedModel):
     """A single change within a scenario."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name='changes')
@@ -104,7 +104,7 @@ class ScenarioChange(models.Model):
         return f"{self.scenario.name} - {self.name}"
 
 
-class ScenarioProjection(models.Model):
+class ScenarioProjection(TimestampedModel):
     """Computed projection results for a scenario."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     scenario = models.ForeignKey(Scenario, on_delete=models.CASCADE, related_name='projections')

@@ -133,9 +133,9 @@ export default function RegisterPage() {
         </p>
         <p className="text-xs text-muted-foreground text-center">
           By creating an account, you agree to our{' '}
-          <Link href="#" className="underline">Terms of Service</Link>
+          <Link href="/terms" className="underline">Terms of Service</Link>
           {' '}and{' '}
-          <Link href="#" className="underline">Privacy Policy</Link>
+          <Link href="/privacy" className="underline">Privacy Policy</Link>
         </p>
       </CardFooter>
     </Card>

@@ -1,7 +1,7 @@
 import uuid
 from decimal import Decimal
 from django.db import models
-from apps.core.models import HouseholdOwnedModel, HouseholdMember
+from apps.core.models import HouseholdOwnedModel, HouseholdMember, TimestampedModel
 
 
 class PayFrequency(models.TextChoices):
@@ -71,7 +71,7 @@ class IncomeSource(HouseholdOwnedModel):
         return annual / periods
 
 
-class W2Withholding(models.Model):
+class W2Withholding(TimestampedModel):
     """W-4 based withholding configuration."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     income_source = models.OneToOneField(
@@ -111,10 +111,12 @@ class W2Withholding(models.Model):
 
     @property
     def dependent_credit_amount(self) -> Decimal:
-        return Decimal(self.child_tax_credit_dependents * 2000 + self.other_dependents * 500)
+        from .constants import CHILD_TAX_CREDIT, OTHER_DEPENDENT_CREDIT
+        return (Decimal(self.child_tax_credit_dependents) * CHILD_TAX_CREDIT +
+                Decimal(self.other_dependents) * OTHER_DEPENDENT_CREDIT)
 
 
-class PreTaxDeduction(models.Model):
+class PreTaxDeduction(TimestampedModel):
     """Pre-tax deductions from gross pay."""
 
     class DeductionType(models.TextChoices):
@@ -176,7 +178,7 @@ class PreTaxDeduction(models.Model):
         return gross_per_period * self.amount
 
 
-class PostTaxDeduction(models.Model):
+class PostTaxDeduction(TimestampedModel):
     """Post-tax deductions from net pay."""
 
     class DeductionType(models.TextChoices):

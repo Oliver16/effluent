@@ -55,7 +55,13 @@ class AccountViewSet(viewsets.ModelViewSet):
     def history(self, request, pk=None):
         """Get balance history for account."""
         account = self.get_object()
-        snapshots = account.snapshots.all()[:30]
+        snapshots = account.snapshots.all()
+
+        page = self.paginate_queryset(snapshots)
+        if page is not None:
+            serializer = BalanceSnapshotSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
         serializer = BalanceSnapshotSerializer(snapshots, many=True)
         return Response(serializer.data)
 
