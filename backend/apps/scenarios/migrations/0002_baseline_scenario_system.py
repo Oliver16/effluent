@@ -12,6 +12,7 @@ class Migration(migrations.Migration):
         ('scenarios', '0001_initial'),
         ('core', '0001_initial'),
         ('metrics', '0001_initial'),
+        ('scenarios', '0001_initial'),
     ]
 
     operations = [
