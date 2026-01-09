@@ -28,6 +28,17 @@ const LINE_STYLE_MAP: Record<string, LineStyle> = {
   dotted: LineStyle.Dotted,
 };
 
+// Convert any color to fully transparent version
+function makeTransparent(color: string): string {
+  // Handle rgba() format
+  const rgbaMatch = color.match(/^rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+  if (rgbaMatch) {
+    return `rgba(${rgbaMatch[1]}, ${rgbaMatch[2]}, ${rgbaMatch[3]}, 0)`;
+  }
+  // Handle hex format - append 00 for alpha
+  return `${color}00`;
+}
+
 export function LightweightChart({
   data,
   series,
@@ -122,7 +133,7 @@ export function LightweightChart({
             seriesApi = chart.addSeries(AreaSeries, {
               lineColor: config.color,
               topColor: config.fillColor ?? `${config.color}40`,
-              bottomColor: config.fillColor ? `${config.fillColor}00` : `${config.color}00`,
+              bottomColor: makeTransparent(config.fillColor ?? config.color),
               lineWidth: (config.lineWidth ?? 2) as LineWidth,
               lineStyle: LINE_STYLE_MAP[config.lineStyle ?? 'solid'],
               priceScaleId: config.priceScaleId ?? 'right',
