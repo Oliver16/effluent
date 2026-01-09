@@ -21,8 +21,11 @@ from apps.metrics.views import (
     InsightViewSet, MetricThresholdViewSet, DataQualityView
 )
 from apps.onboarding.views import (
-    OnboardingCurrentView, OnboardingSaveView, OnboardingCompleteView,
-    OnboardingSkipView, OnboardingBackView
+    get_current_step as onboarding_current,
+    save_draft as onboarding_save,
+    complete_step as onboarding_complete,
+    skip_step as onboarding_skip,
+    go_back as onboarding_back
 )
 from apps.scenarios.views import (
     ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet
@@ -78,11 +81,11 @@ urlpatterns = [
     path('api/v1/metrics/data-quality/', DataQualityView.as_view(), name='data-quality'),
 
     # Onboarding
-    path('api/v1/onboarding/current/', OnboardingCurrentView.as_view(), name='onboarding-current'),
-    path('api/v1/onboarding/save/', OnboardingSaveView.as_view(), name='onboarding-save'),
-    path('api/v1/onboarding/complete/', OnboardingCompleteView.as_view(), name='onboarding-complete'),
-    path('api/v1/onboarding/skip/', OnboardingSkipView.as_view(), name='onboarding-skip'),
-    path('api/v1/onboarding/back/', OnboardingBackView.as_view(), name='onboarding-back'),
+    path('api/v1/onboarding/current/', onboarding_current, name='onboarding-current'),
+    path('api/v1/onboarding/save/', onboarding_save, name='onboarding-save'),
+    path('api/v1/onboarding/complete/', onboarding_complete, name='onboarding-complete'),
+    path('api/v1/onboarding/skip/', onboarding_skip, name='onboarding-skip'),
+    path('api/v1/onboarding/back/', onboarding_back, name='onboarding-back'),
 
     # Decisions
     path('api/v1/decisions/', include(decision_router.urls)),
