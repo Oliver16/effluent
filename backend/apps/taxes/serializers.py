@@ -6,10 +6,11 @@ class PreTaxDeductionSerializer(serializers.ModelSerializer):
     class Meta:
         model = PreTaxDeduction
         fields = [
-            'id', 'deduction_type', 'name', 'amount_type', 'amount',
+            'id', 'income_source', 'deduction_type', 'name', 'amount_type', 'amount',
             'employer_match_percentage', 'employer_match_limit_percentage',
             'employer_match_limit_annual', 'target_account', 'is_active'
         ]
+        read_only_fields = ['id']
 
 
 class W2WithholdingSerializer(serializers.ModelSerializer):

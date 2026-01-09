@@ -33,10 +33,16 @@ export interface Household {
   id: string
   name: string
   slug: string
+  plan?: string
+  subscriptionStatus?: string
   currency: string
+  fiscalYearStartMonth?: number
   taxFilingStatus: string
   stateOfResidence: string
   onboardingCompleted: boolean
+  onboardingCurrentStep?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface HouseholdMember {
@@ -46,6 +52,14 @@ export interface HouseholdMember {
   dateOfBirth?: string
   isPrimary: boolean
   employmentStatus: string
+  createdAt?: string
+}
+
+export interface HouseholdMembership {
+  id: string
+  role: string
+  isDefault: boolean
+  createdAt: string
 }
 
 export interface AssetDetails {
@@ -109,16 +123,31 @@ export interface Account {
   currentCostBasis?: string
   assetDetails?: AssetDetails
   liabilityDetails?: LiabilityDetails
+  latestBalance?: BalanceSnapshot
+  snapshots?: BalanceSnapshot[]
   createdAt?: string
+  updatedAt?: string
 }
 
 export interface BalanceSnapshot {
   id: string
-  accountId: string
   asOfDate: string
   balance: string
   costBasis?: string
   marketValue?: string
+  notes?: string
+  recordedAt?: string
+}
+
+export interface AssetGroup {
+  id: string
+  name: string
+  description?: string
+  accounts?: Account[]
+  totalMarketValue?: string
+  totalDebt?: string
+  equityAtMarket?: string
+  createdAt?: string
 }
 
 export interface RecurringFlow {
@@ -130,6 +159,9 @@ export interface RecurringFlow {
   expenseCategory?: string
   amount: string
   frequency: string
+  monthlyAmount: string
+  annualAmount?: string
+  category?: string
   startDate: string
   endDate?: string
   linkedAccount?: string
@@ -138,7 +170,7 @@ export interface RecurringFlow {
   isActive: boolean
   isBaseline: boolean
   notes?: string
-  monthlyAmount: string
+  createdAt?: string
 }
 
 export interface MetricSnapshot {
@@ -168,6 +200,7 @@ export interface MetricSnapshot {
   totalDebtService: string
   totalLiquidAssets: string
   weightedAvgInterestRate: string
+  createdAt?: string
 }
 
 export interface Insight {
@@ -177,7 +210,10 @@ export interface Insight {
   title: string
   description: string
   recommendation?: string
+  metricName?: string
+  metricValue?: string
   isDismissed: boolean
+  createdAt?: string
 }
 
 export interface OnboardingProgress {
@@ -330,6 +366,8 @@ export interface IncomeSourceDetail {
   isActive: boolean
   startDate?: string
   endDate?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export type LifeEventCategory =
@@ -453,13 +491,17 @@ export interface DecisionUISchema {
 }
 
 export interface DecisionTemplate {
+  id?: string
   key: string
   name: string
   description: string
   category: DecisionCategory
   icon: string
   uiSchema: DecisionUISchema
+  changePlan?: Record<string, unknown>
   sortOrder?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface DecisionCategoryGroup {
