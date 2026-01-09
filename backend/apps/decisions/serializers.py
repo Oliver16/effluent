@@ -70,6 +70,34 @@ class ProjectionSummarySerializer(serializers.ModelSerializer):
         ]
 
 
+class MetricComparisonSerializer(serializers.Serializer):
+    """Serializer for metric comparison between baseline and scenario."""
+    net_worth = serializers.CharField()
+    liquidity_months = serializers.CharField()
+    dscr = serializers.CharField()
+    savings_rate = serializers.CharField()
+    monthly_surplus = serializers.CharField()
+
+
+class GoalStatusComparisonSerializer(serializers.Serializer):
+    """Serializer for goal status comparison."""
+    goal_id = serializers.UUIDField()
+    goal_type = serializers.CharField()
+    name = serializers.CharField()
+    target_value = serializers.CharField()
+    current_value = serializers.CharField()
+    status = serializers.CharField()
+    delta_to_target = serializers.CharField()
+
+
+class DecisionSummarySerializer(serializers.Serializer):
+    """Serializer for decision comparison summary."""
+    baseline = MetricComparisonSerializer()
+    scenario = MetricComparisonSerializer()
+    goal_status = serializers.DictField(child=serializers.ListField())
+    takeaways = serializers.ListField(child=serializers.CharField())
+
+
 class DecisionRunResponseSerializer(serializers.Serializer):
     """Serializer for decision run response."""
     scenario_id = serializers.UUIDField()
@@ -77,6 +105,7 @@ class DecisionRunResponseSerializer(serializers.Serializer):
     decision_run_id = serializers.UUIDField()
     changes_created = serializers.IntegerField()
     projections = serializers.SerializerMethodField()
+    summary = serializers.SerializerMethodField()
 
     def get_projections(self, obj):
         """Get key projection milestones."""
@@ -99,6 +128,13 @@ class DecisionRunResponseSerializer(serializers.Serializer):
                 milestones['year_5'] = ProjectionSummarySerializer(proj).data
 
         return milestones
+
+    def get_summary(self, obj):
+        """Get baseline vs scenario comparison summary."""
+        summary = obj.get('summary')
+        if not summary:
+            return None
+        return summary
 
 
 class DecisionRunSerializer(serializers.ModelSerializer):

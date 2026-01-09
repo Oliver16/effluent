@@ -1,72 +1,94 @@
 'use client';
 
-import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { metrics, accounts, insights as insightsApi, baseline } from '@/lib/api';
-import { MetricCards } from '@/components/dashboard/metric-cards';
+import { metrics, accounts, insights as insightsApi, baseline, goals } from '@/lib/api';
+import { DashboardHeader } from '@/components/dashboard/dashboard-header';
+import { NorthStarCards } from '@/components/dashboard/north-star-cards';
+import { ModelConfidenceCard } from '@/components/dashboard/model-confidence-card';
+import { ActionPanel } from '@/components/dashboard/action-panel';
 import { NetWorthChart } from '@/components/dashboard/net-worth-chart';
 import { AccountsList } from '@/components/dashboard/accounts-list';
 import { InsightsPanel } from '@/components/dashboard/insights-panel';
-import { CashFlowSummary } from '@/components/dashboard/cash-flow-summary';
-import { DecisionPicker } from '@/components/decisions/decision-picker';
-import { BaselineHealthTiles, BaselineStatus, BaselineProjectionCharts } from '@/components/baseline';
+import { BaselineProjectionCharts } from '@/components/baseline';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Button } from '@/components/ui/button';
-import { AlertCircle, Plus } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 
 export default function DashboardPage() {
-  const [decisionPickerOpen, setDecisionPickerOpen] = useState(false);
-  const { data: metricsData, isLoading, isError: metricsError } = useQuery({
+  const {
+    data: metricsData,
+    isLoading: metricsLoading,
+    isError: metricsError,
+  } = useQuery({
     queryKey: ['metrics', 'current'],
     queryFn: () => metrics.current(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: history, isError: historyError } = useQuery({
     queryKey: ['metrics', 'history'],
     queryFn: () => metrics.history(90),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: accountsData, isError: accountsError } = useQuery({
     queryKey: ['accounts'],
     queryFn: () => accounts.list(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
   });
 
   const { data: insightsData, isError: insightsError } = useQuery({
     queryKey: ['insights'],
     queryFn: () => insightsApi.insights(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
   });
 
   const {
     data: baselineData,
     isLoading: baselineLoading,
     isError: baselineError,
-    refetch: refetchBaseline,
   } = useQuery({
     queryKey: ['baseline'],
     queryFn: () => baseline.get(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
   });
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="text-muted-foreground">Loading dashboard...</div>
-      </div>
-    );
-  }
+  const {
+    data: goalStatusData,
+    isLoading: goalStatusLoading,
+    isError: goalStatusError,
+  } = useQuery({
+    queryKey: ['goals', 'status'],
+    queryFn: () => goals.status(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
+  });
 
-  const hasError = metricsError || historyError || accountsError || insightsError || baselineError;
+  const {
+    data: dataQualityData,
+    isLoading: dataQualityLoading,
+    isError: dataQualityError,
+  } = useQuery({
+    queryKey: ['metrics', 'data-quality'],
+    queryFn: () => metrics.dataQuality(),
+    staleTime: 60000,
+    refetchOnWindowFocus: false,
+  });
+
+  const isLoading = metricsLoading || baselineLoading || goalStatusLoading;
+  const hasError = metricsError || historyError || accountsError || insightsError || baselineError || goalStatusError;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
-        <Button onClick={() => setDecisionPickerOpen(true)}>
-          <Plus className="h-4 w-4 mr-2" />
-          New Decision
-        </Button>
-      </div>
-
-      <DecisionPicker open={decisionPickerOpen} onOpenChange={setDecisionPickerOpen} />
+      {/* Dashboard Header with goal status summary and action buttons */}
+      <DashboardHeader
+        goalStatus={goalStatusData?.results || null}
+        isLoading={goalStatusLoading}
+      />
 
       {hasError && (
         <Alert variant="destructive">
@@ -78,33 +100,46 @@ export default function DashboardPage() {
         </Alert>
       )}
 
-      {/* Baseline Health Section */}
-      <BaselineHealthTiles
-        metrics={baselineData?.health?.metrics || null}
-        isLoading={baselineLoading}
+      {/* North Star Cards - Key metrics with goal status */}
+      <NorthStarCards
+        metrics={metricsData}
+        goalStatus={goalStatusData?.results || null}
+        isLoading={isLoading}
       />
 
-      {/* Baseline Projection Charts */}
-      {baselineData?.baseline?.projections && baselineData.baseline.projections.length > 0 && (
-        <BaselineProjectionCharts
-          projections={baselineData.baseline.projections}
-          months={12}
-        />
-      )}
+      {/* Main content area with sidebar */}
+      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+        {/* Main area - charts and accounts */}
+        <div className="xl:col-span-2 space-y-6">
+          <NetWorthChart history={history?.results || []} />
 
-      {/* Baseline Status */}
-      <BaselineStatus
-        health={baselineData?.health || null}
-        onRefresh={() => refetchBaseline()}
-      />
+          {/* Baseline Projection Charts if available */}
+          {baselineData?.baseline?.projections && baselineData.baseline.projections.length > 0 && (
+            <BaselineProjectionCharts
+              projections={baselineData.baseline.projections}
+              months={12}
+            />
+          )}
 
-      <MetricCards metrics={metricsData} />
-      <InsightsPanel insights={insightsData?.results || []} />
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <NetWorthChart history={history?.results || []} />
-        <CashFlowSummary metrics={metricsData} />
+          <AccountsList accounts={accountsData?.results || []} />
+        </div>
+
+        {/* Sidebar - confidence, actions, insights */}
+        <div className="space-y-6">
+          <ModelConfidenceCard
+            report={dataQualityData || null}
+            isLoading={dataQualityLoading}
+          />
+
+          <ActionPanel
+            metrics={metricsData}
+            goalStatus={goalStatusData?.results || null}
+            isLoading={goalStatusLoading}
+          />
+
+          <InsightsPanel insights={insightsData?.results || []} />
+        </div>
       </div>
-      <AccountsList accounts={accountsData?.results || []} />
     </div>
   );
 }

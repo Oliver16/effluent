@@ -468,6 +468,34 @@ export interface DecisionCategoryGroup {
   templates: DecisionTemplate[]
 }
 
+export interface DecisionMetricComparison {
+  net_worth: string
+  liquidity_months: string
+  dscr: string
+  savings_rate: string
+  monthly_surplus: string
+}
+
+export interface DecisionGoalStatusComparison {
+  goal_id: string
+  goal_type: string
+  name: string
+  target_value: string
+  current_value: string
+  status: string
+  delta_to_target: string
+}
+
+export interface DecisionSummary {
+  baseline: DecisionMetricComparison
+  scenario: DecisionMetricComparison
+  goal_status: {
+    baseline: DecisionGoalStatusComparison[]
+    scenario: DecisionGoalStatusComparison[]
+  }
+  takeaways: string[]
+}
+
 export interface DecisionRunResponse {
   scenarioId: string
   scenarioName: string
@@ -479,6 +507,7 @@ export interface DecisionRunResponse {
     year_3?: ScenarioProjection
     year_5?: ScenarioProjection
   }
+  summary?: DecisionSummary
 }
 
 export interface DecisionRun {

@@ -21,7 +21,7 @@ from apps.taxes.views import (
 )
 from apps.metrics.views import (
     MetricSnapshotViewSet, CurrentMetricsView, MetricsHistoryView,
-    InsightViewSet, MetricThresholdViewSet
+    InsightViewSet, MetricThresholdViewSet, DataQualityView
 )
 from apps.onboarding import views as onboarding_views
 from apps.scenarios.views import ScenarioViewSet, ScenarioChangeViewSet, ScenarioComparisonViewSet, LifeEventTemplateViewSet, BaselineView
@@ -63,6 +63,7 @@ urlpatterns = [
     # Metrics endpoints
     path('api/v1/metrics/current/', CurrentMetricsView.as_view(), name='metrics-current'),
     path('api/v1/metrics/history/', MetricsHistoryView.as_view(), name='metrics-history'),
+    path('api/v1/metrics/data-quality/', DataQualityView.as_view(), name='data-quality'),
 
     # Onboarding endpoints
     path('api/v1/onboarding/current/', onboarding_views.get_current_step, name='onboarding-current'),
@@ -76,4 +77,7 @@ urlpatterns = [
 
     # Decision Templates endpoints
     path('api/v1/decisions/', include('apps.decisions.urls')),
+
+    # Goals endpoints
+    path('api/v1/goals/', include('apps.goals.urls')),
 ]

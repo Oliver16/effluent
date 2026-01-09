@@ -1,3 +1,4 @@
+from decimal import Decimal
 from rest_framework import status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,6 +16,8 @@ from .serializers import (
     DecisionRunResponseSerializer,
 )
 from .compiler import compile_decision, DecisionCompilerError
+from apps.scenarios.models import Scenario, ScenarioProjection
+from apps.goals.services import GoalEvaluationService
 
 
 class DecisionTemplateViewSet(ViewSet):
@@ -104,6 +107,108 @@ class DecisionRunViewSet(ViewSet):
         """Get the household from the request."""
         return getattr(request, 'household', None)
 
+    def _build_comparison_summary(self, household, scenario):
+        """Build baseline vs scenario comparison summary."""
+        # Get baseline scenario
+        baseline = Scenario.objects.filter(
+            household=household,
+            is_baseline=True
+        ).first()
+
+        if not baseline:
+            return None
+
+        # Get last projection from both scenarios
+        baseline_proj = ScenarioProjection.objects.filter(
+            scenario=baseline
+        ).order_by('-month_number').first()
+
+        scenario_proj = ScenarioProjection.objects.filter(
+            scenario=scenario
+        ).order_by('-month_number').first()
+
+        if not baseline_proj or not scenario_proj:
+            return None
+
+        # Build metric comparison
+        def get_metrics(proj):
+            return {
+                'net_worth': str(proj.net_worth),
+                'liquidity_months': str(proj.liquidity_months),
+                'dscr': str(proj.dscr),
+                'savings_rate': str(proj.savings_rate),
+                'monthly_surplus': str(proj.net_cash_flow),
+            }
+
+        # Get goal status for both
+        goal_service = GoalEvaluationService(household)
+        baseline_goals = goal_service.evaluate_goals()
+        scenario_goals = goal_service.evaluate_goals(scenario_id=str(scenario.id))
+
+        # Convert to serializable format
+        def serialize_goal_status(statuses):
+            return [
+                {
+                    'goal_id': str(s.goal_id),
+                    'goal_type': s.goal_type,
+                    'name': s.name,
+                    'target_value': s.target_value,
+                    'current_value': s.current_value,
+                    'status': s.status,
+                    'delta_to_target': s.delta_to_target,
+                }
+                for s in statuses
+            ]
+
+        # Generate takeaways
+        takeaways = self._generate_takeaways(baseline_proj, scenario_proj)
+
+        return {
+            'baseline': get_metrics(baseline_proj),
+            'scenario': get_metrics(scenario_proj),
+            'goal_status': {
+                'baseline': serialize_goal_status(baseline_goals),
+                'scenario': serialize_goal_status(scenario_goals),
+            },
+            'takeaways': takeaways,
+        }
+
+    def _generate_takeaways(self, baseline_proj, scenario_proj):
+        """Generate human-readable takeaways from comparison."""
+        takeaways = []
+
+        # Net worth comparison
+        baseline_nw = Decimal(str(baseline_proj.net_worth))
+        scenario_nw = Decimal(str(scenario_proj.net_worth))
+        nw_diff = scenario_nw - baseline_nw
+
+        if nw_diff > 0:
+            takeaways.append(f"Net worth +${nw_diff:,.0f} by month {scenario_proj.month_number}")
+        elif nw_diff < 0:
+            takeaways.append(f"Net worth ${nw_diff:,.0f} by month {scenario_proj.month_number}")
+
+        # Savings rate comparison
+        baseline_sr = Decimal(str(baseline_proj.savings_rate))
+        scenario_sr = Decimal(str(scenario_proj.savings_rate))
+        sr_diff = scenario_sr - baseline_sr
+
+        if sr_diff > 1:
+            takeaways.append(f"Savings rate improves by {sr_diff:.1f}%")
+        elif sr_diff < -1:
+            takeaways.append(f"Savings rate decreases by {abs(sr_diff):.1f}%")
+
+        # Cash flow comparison
+        baseline_cf = Decimal(str(baseline_proj.net_cash_flow))
+        scenario_cf = Decimal(str(scenario_proj.net_cash_flow))
+        cf_diff = scenario_cf - baseline_cf
+
+        if cf_diff > 100:
+            takeaways.append(f"Monthly cash flow +${cf_diff:,.0f}")
+        elif cf_diff < -100:
+            takeaways.append(f"Monthly cash flow ${cf_diff:,.0f}")
+
+        return takeaways[:3]  # Return max 3 takeaways
+
     @action(detail=False, methods=['post'], url_path='run')
     def run_decision(self, request):
         """Execute a decision template and create a scenario."""
@@ -151,6 +256,9 @@ class DecisionRunViewSet(ViewSet):
                 completed_at=timezone.now(),
             )
 
+            # Build comparison summary
+            summary = self._build_comparison_summary(household, scenario)
+
             # Build response
             response_data = {
                 'scenario_id': scenario.id,
@@ -158,6 +266,7 @@ class DecisionRunViewSet(ViewSet):
                 'decision_run_id': run.id,
                 'changes_created': len(changes),
                 'scenario': scenario,  # For projections serializer
+                'summary': summary,
             }
 
             response_serializer = DecisionRunResponseSerializer(response_data)

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -8,11 +8,12 @@ import { z } from 'zod'
 import { useMutation } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { decisions } from '@/lib/api'
-import { DecisionTemplate, DecisionStep, DecisionField } from '@/lib/types'
+import { DecisionTemplate, DecisionStep, DecisionField, DecisionRunResponse } from '@/lib/types'
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { WizardField } from './wizard-field'
+import { DecisionResults } from './decision-results'
 import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -86,6 +87,7 @@ function buildDefaults(steps: DecisionStep[]): Record<string, unknown> {
 export function DecisionWizard({ template }: DecisionWizardProps) {
   const router = useRouter()
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
+  const [result, setResult] = useState<DecisionRunResponse | null>(null)
   const steps = template.uiSchema?.steps || []
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
@@ -106,10 +108,10 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
     mutationFn: (inputs: Record<string, unknown>) =>
       decisions.run({ template_key: template.key, inputs }),
     onSuccess: (data) => {
+      setResult(data)
       toast.success('Scenario created!', {
-        description: `"${data.scenarioName}" has been created with ${data.changesCreated} change(s).`,
+        description: `"${data.scenarioName}" has been created.`,
       })
-      router.push(`/scenarios/${data.scenarioId}`)
     },
     onError: (error: Error) => {
       toast.error('Failed to create scenario', {
@@ -149,6 +151,22 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
     }
   }
 
+  const handleStartAnother = () => {
+    setResult(null)
+    setCurrentStepIndex(0)
+    form.reset(defaults)
+  }
+
+  // Show results if we have them
+  if (result) {
+    return (
+      <DecisionResults
+        result={result}
+        onStartAnother={handleStartAnother}
+      />
+    )
+  }
+
   return (
     <div className="flex flex-col lg:flex-row gap-6">
       {/* Stepper sidebar */}
@@ -162,7 +180,7 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
               <button
                 key={step.id}
                 onClick={() => index <= currentStepIndex && setCurrentStepIndex(index)}
-                disabled={index > currentStepIndex}
+                disabled={index > currentStepIndex || runMutation.isPending}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors',
                   isCurrent && 'bg-primary/10 text-primary',
@@ -217,7 +235,7 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
           <Button
             variant="outline"
             onClick={handleBack}
-            disabled={isFirstStep}
+            disabled={isFirstStep || runMutation.isPending}
           >
             <ChevronLeft className="h-4 w-4 mr-2" />
             Back
@@ -231,14 +249,14 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
               {runMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
+                  Creating scenario...
                 </>
               ) : (
                 'Create Scenario'
               )}
             </Button>
           ) : (
-            <Button onClick={handleNext}>
+            <Button onClick={handleNext} disabled={runMutation.isPending}>
               Next
               <ChevronRight className="h-4 w-4 ml-2" />
             </Button>

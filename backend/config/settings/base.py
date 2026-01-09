@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'apps.onboarding',
     'apps.scenarios',
     'apps.decisions',
+    'apps.goals',
 ]
 
 MIDDLEWARE = [
