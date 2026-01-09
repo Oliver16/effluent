@@ -109,7 +109,7 @@ class DataQualityService:
 
     def _check_accounts(self) -> dict:
         """Check if household has any accounts."""
-        from apps.accounts.models import Account
+        from apps.accounts.models import Account, LIQUID_TYPES
 
         has_accounts = Account.objects.filter(
             household=self.household,
@@ -128,11 +128,10 @@ class DataQualityService:
             }
 
         # Check for liquid assets specifically
-        liquid_asset_groups = ['cash', 'checking', 'savings', 'money_market', 'brokerage']
         has_liquid = Account.objects.filter(
             household=self.household,
             is_active=True,
-            asset_group__in=liquid_asset_groups
+            account_type__in=LIQUID_TYPES
         ).exists()
 
         if not has_liquid:
@@ -220,15 +219,14 @@ class DataQualityService:
 
     def _check_debt_payments(self) -> dict:
         """Check if debt accounts have associated payment flows."""
-        from apps.accounts.models import Account
+        from apps.accounts.models import Account, LIABILITY_TYPES
         from apps.flows.models import RecurringFlow
 
         # Check if household has liability accounts
-        liability_groups = ['mortgage', 'auto_loan', 'student_loan', 'credit_card', 'personal_loan', 'heloc']
         liability_accounts = Account.objects.filter(
             household=self.household,
             is_active=True,
-            asset_group__in=liability_groups
+            account_type__in=LIABILITY_TYPES
         )
 
         if not liability_accounts.exists():
