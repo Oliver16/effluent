@@ -29,8 +29,7 @@ export function NewMenu({ showStressTests = false }: NewMenuProps) {
         <DropdownMenuLabel>Create</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Link href={"/scenarios/new/decision-builder" as any} className="flex items-center gap-2">
+          <Link href="/decisions" className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
             Model a Decision
           </Link>

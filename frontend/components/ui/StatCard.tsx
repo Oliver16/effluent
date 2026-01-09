@@ -1,3 +1,5 @@
+'use client';
+
 import { SectionCard } from '@/components/layout/SectionCard';
 import { StatusBadge, Status } from './StatusBadge';
 import { MetricValue } from './MetricValue';

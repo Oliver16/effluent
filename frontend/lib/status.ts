@@ -6,7 +6,7 @@ import type { Status } from '@/components/ui/StatusBadge';
 
 export interface StatusResult {
   status: Status;
-  statusLabel: string;  // NOTE: "statusLabel" not "label" — matches StatusBadge prop
+  statusLabel: string; // NOTE: "statusLabel" not "label" — matches StatusBadge prop
 }
 
 export interface ThresholdConfig {
@@ -106,13 +106,13 @@ export function computeNetWorthStatus(
  * @param defaultValue - Fallback if goal not found
  */
 export function getGoalTarget(
-  goalStatus: Array<{ goal_type: string; target_value: string }> | undefined,
+  goalStatus: Array<{ goalType: string; targetValue: string }> | undefined,
   goalType: string,
   defaultValue?: number
 ): number | null {
-  const goal = goalStatus?.find((g) => g.goal_type === goalType);
+  const goal = goalStatus?.find((g) => g.goalType === goalType);
   if (goal) {
-    const parsed = parseFloat(goal.target_value);
+    const parsed = parseFloat(goal.targetValue);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return defaultValue ?? null;
@@ -150,4 +150,21 @@ export function isValidStatus(value: unknown): value is Status {
 export function toStatus(value: string | undefined): Status {
   if (isValidStatus(value)) return value;
   return 'neutral';
+}
+
+/**
+ * Convert goal status from API to our Status type
+ */
+export function goalStatusToStatus(goalStatus: string): Status {
+  switch (goalStatus) {
+    case 'good':
+    case 'achieved':
+      return 'good';
+    case 'warning':
+      return 'warning';
+    case 'critical':
+      return 'critical';
+    default:
+      return 'neutral';
+  }
 }

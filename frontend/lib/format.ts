@@ -34,7 +34,7 @@ export function parseBalance(value: string | number | null | undefined): number 
  * Format a number as USD currency (smart decimals: 0 for large values)
  * Use for: net worth, debt totals, large amounts
  */
-export function formatCurrency(value: number): string {
+export function formatCurrencyValue(value: number): string {
   const absValue = Math.abs(value);
   const decimals = absValue >= 1000 ? 0 : 2;
 
@@ -45,6 +45,9 @@ export function formatCurrency(value: number): string {
     maximumFractionDigits: decimals,
   }).format(value);
 }
+
+// Alias for backwards compatibility
+export const formatCurrency = formatCurrencyValue;
 
 /**
  * Format a number as USD currency with 2 decimal places
@@ -79,23 +82,29 @@ export function formatCurrencyCompact(value: number): string {
 /**
  * Format a number with optional decimal places
  */
-export function formatNumber(value: number, maxDecimals = 2): string {
+export function formatNumberValue(value: number, maxDecimals = 2): string {
   return new Intl.NumberFormat('en-US', {
     maximumFractionDigits: maxDecimals,
   }).format(value);
 }
 
+// Alias for backwards compatibility
+export const formatNumber = formatNumberValue;
+
 /**
  * Format a decimal as a percentage
  * @param value - Decimal value (0.15 = 15%)
  */
-export function formatPercent(value: number, maxDecimals = 1): string {
+export function formatPercentValue(value: number, maxDecimals = 1): string {
   return new Intl.NumberFormat('en-US', {
     style: 'percent',
     minimumFractionDigits: 0,
     maximumFractionDigits: maxDecimals,
   }).format(value);
 }
+
+// Alias for backwards compatibility
+export const formatPercent = formatPercentValue;
 
 /**
  * Format a ratio (e.g., DSCR of 1.25)
@@ -114,7 +123,7 @@ export function formatRatio(value: number, decimals = 2): string {
 /**
  * Format a date for display
  */
-export function formatDate(
+export function formatDateValue(
   date: string | Date | null | undefined,
   style: 'short' | 'medium' | 'long' = 'medium'
 ): string {
@@ -126,18 +135,20 @@ export function formatDate(
     // Check for invalid date
     if (isNaN(d.getTime())) return '—';
 
-    const optionsMap: Record<string, Intl.DateTimeFormatOptions> = {
+    const styleOptions: Record<'short' | 'medium' | 'long', Intl.DateTimeFormatOptions> = {
       short: { month: 'numeric', day: 'numeric' },
       medium: { month: 'short', day: 'numeric', year: 'numeric' },
       long: { month: 'long', day: 'numeric', year: 'numeric' },
     };
-    const options = optionsMap[style] ?? optionsMap.medium;
 
-    return new Intl.DateTimeFormat('en-US', options).format(d);
+    return new Intl.DateTimeFormat('en-US', styleOptions[style]).format(d);
   } catch {
     return '—';
   }
 }
+
+// Alias for backwards compatibility
+export const formatDate = formatDateValue;
 
 /**
  * Format a relative time (e.g., "2 days ago")
@@ -157,7 +168,7 @@ export function formatRelativeTime(date: string | Date | null | undefined): stri
     if (diffDays === 1) return 'Yesterday';
     if (diffDays < 7) return `${diffDays} days ago`;
     if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
-    return formatDate(d, 'short');
+    return formatDateValue(d, 'short');
   } catch {
     return '—';
   }

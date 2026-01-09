@@ -38,14 +38,14 @@ const navigationItems: CommandPaletteItem[] = [
   { name: 'Flows', href: '/flows', icon: ArrowRightLeft, keywords: ['income', 'expense', 'recurring'] },
   { name: 'Scenarios', href: '/scenarios', icon: GitBranch, keywords: ['what-if', 'projection'] },
   { name: 'Goals', href: '/settings/goals', icon: Target, keywords: ['target', 'objective'] },
-  { name: 'Stress Tests', href: '/stress-tests', icon: Zap, keywords: ['risk', 'simulation'] },
+  { name: 'Stress Tests', href: '/scenarios/compare', icon: Zap, keywords: ['risk', 'simulation'] },
   { name: 'Settings', href: '/settings', icon: Settings, keywords: ['preferences', 'config'] },
 ];
 
 const actionItems: CommandPaletteItem[] = [
-  { name: 'Model a Decision', href: '/scenarios/new/decision-builder', icon: Plus, keywords: ['new', 'create', 'scenario'] },
-  { name: 'Update Account Balance', href: '/accounts?action=update', icon: RefreshCw, keywords: ['balance', 'refresh'] },
-  { name: 'Help & Documentation', href: '/help', icon: HelpCircle, keywords: ['support', 'docs'] },
+  { name: 'Model a Decision', href: '/decisions', icon: Plus, keywords: ['new', 'create', 'scenario'] },
+  { name: 'Update Account Balance', href: '/accounts', icon: RefreshCw, keywords: ['balance', 'refresh'] },
+  { name: 'Help & Documentation', href: '/settings', icon: HelpCircle, keywords: ['support', 'docs'] },
 ];
 
 export function CommandPalette() {
