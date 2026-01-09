@@ -20,7 +20,9 @@ const nextConfig: NextConfig = {
     }
     return [
       {
-        source: '/api/:path*',
+        // Proxy all /api/* requests to the Django backend EXCEPT for
+        // Next.js internal API routes (set-cookies, clear-cookies)
+        source: '/api/:path((?!auth/set-cookies|auth/clear-cookies).*)',
         destination: `${apiUrl}/api/:path*`,
       },
     ]
