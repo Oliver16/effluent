@@ -21,6 +21,13 @@ import type {
   LifeEventCategoryGroup,
   BaselineResponse,
   BaselineActionResponse,
+  DecisionCategoryGroup,
+  DecisionTemplate,
+  DecisionRunResponse,
+  DecisionRun,
+  Goal,
+  GoalStatusDTO,
+  DataQualityReport,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -354,6 +361,9 @@ export const metrics = {
   current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/').then(data => toCamelCase<MetricSnapshot>(data)),
   history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`)
     .then(data => ({ results: toCamelCase<MetricSnapshot[]>(data.results || []) })),
+  dataQuality: () =>
+    api.get<DataQualityReport>('/api/v1/metrics/data-quality/')
+      .then(data => toCamelCase<DataQualityReport>(data)),
 }
 
 // Insights endpoints
@@ -538,4 +548,59 @@ export const baseline = {
   unpin: () =>
     api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'unpin' })
       .then(data => toCamelCase<BaselineActionResponse>(data)),
+}
+
+// Decision Template endpoints
+export const decisions = {
+  listTemplates: () =>
+    api.get<{ results: DecisionCategoryGroup[]; count: number }>('/api/v1/decisions/templates/')
+      .then(data => ({
+        results: toCamelCase<DecisionCategoryGroup[]>(data.results || []),
+        count: data.count,
+      })),
+  getTemplate: (key: string) =>
+    api.get<DecisionTemplate>(`/api/v1/decisions/templates/${key}/`)
+      .then(data => toCamelCase<DecisionTemplate>(data)),
+  categories: () =>
+    api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/decisions/templates/categories/'),
+  run: (data: { template_key: string; inputs: Record<string, unknown>; scenario_name_override?: string }) =>
+    api.post<DecisionRunResponse>('/api/v1/decisions/run/', data)
+      .then(data => toCamelCase<DecisionRunResponse>(data)),
+  saveDraft: (data: { template_key: string; inputs: Record<string, unknown> }) =>
+    api.post<{ id: string; saved: boolean; created: boolean }>('/api/v1/decisions/draft/', data),
+  listRuns: () =>
+    api.get<{ results: DecisionRun[]; count: number }>('/api/v1/decisions/runs/')
+      .then(data => ({
+        results: toCamelCase<DecisionRun[]>(data.results || []),
+        count: data.count,
+      })),
+  getRun: (id: string) =>
+    api.get<DecisionRun>(`/api/v1/decisions/runs/${id}/`)
+      .then(data => toCamelCase<DecisionRun>(data)),
+  completeDraft: (id: string, data?: { inputs?: Record<string, unknown>; scenario_name_override?: string }) =>
+    api.post<DecisionRunResponse>(`/api/v1/decisions/runs/${id}/complete/`, data || {})
+      .then(data => toCamelCase<DecisionRunResponse>(data)),
+  deleteDraft: (id: string) =>
+    api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
+}
+
+// Goals endpoints (TASK-13)
+export const goals = {
+  list: () =>
+    api.get<{ results: Goal[] }>('/api/v1/goals/')
+      .then(data => ({ results: toCamelCase<Goal[]>(data.results || []) })),
+  create: (data: Partial<Goal>) =>
+    api.post<Goal>('/api/v1/goals/', toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+  update: (id: string, data: Partial<Goal>) =>
+    api.patch<Goal>(`/api/v1/goals/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+  remove: (id: string) =>
+    api.delete<void>(`/api/v1/goals/${id}/`),
+  status: (scenarioId?: string) =>
+    api.get<{ results: GoalStatusDTO[] }>(
+      scenarioId
+        ? `/api/v1/goals/status/?scenario_id=${scenarioId}`
+        : '/api/v1/goals/status/'
+    ).then(data => ({ results: toCamelCase<GoalStatusDTO[]>(data.results || []) })),
 }

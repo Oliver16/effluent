@@ -403,3 +403,177 @@ export interface BaselineActionResponse {
   baseline_pinned_at?: string | null
   baseline_pinned_as_of_date?: string | null
 }
+
+// Decision Templates
+export type DecisionCategory =
+  | 'income'
+  | 'expenses'
+  | 'debt'
+  | 'housing'
+  | 'retirement'
+  | 'savings'
+
+export type DecisionFieldType =
+  | 'currency'
+  | 'percent'
+  | 'integer'
+  | 'select'
+  | 'date'
+  | 'toggle'
+  | 'text'
+
+export interface DecisionFieldOption {
+  value: string
+  label: string
+}
+
+export interface DecisionField {
+  key: string
+  type: DecisionFieldType
+  label: string
+  required?: boolean
+  default?: unknown
+  placeholder?: string
+  helperText?: string
+  options?: DecisionFieldOption[]
+  showIf?: string
+  min?: number
+  max?: number
+}
+
+export interface DecisionStep {
+  id: string
+  title: string
+  description?: string
+  fields: DecisionField[]
+}
+
+export interface DecisionUISchema {
+  steps: DecisionStep[]
+}
+
+export interface DecisionTemplate {
+  key: string
+  name: string
+  description: string
+  category: DecisionCategory
+  icon: string
+  uiSchema: DecisionUISchema
+  sortOrder?: number
+}
+
+export interface DecisionCategoryGroup {
+  category: DecisionCategory
+  categoryDisplay: string
+  templates: DecisionTemplate[]
+}
+
+export interface DecisionMetricComparison {
+  net_worth: string
+  liquidity_months: string
+  dscr: string
+  savings_rate: string
+  monthly_surplus: string
+}
+
+export interface DecisionGoalStatusComparison {
+  goal_id: string
+  goal_type: string
+  name: string
+  target_value: string
+  current_value: string
+  status: string
+  delta_to_target: string
+}
+
+export interface DecisionSummary {
+  baseline: DecisionMetricComparison
+  scenario: DecisionMetricComparison
+  goal_status: {
+    baseline: DecisionGoalStatusComparison[]
+    scenario: DecisionGoalStatusComparison[]
+  }
+  takeaways: string[]
+}
+
+export interface DecisionRunResponse {
+  scenarioId: string
+  scenarioName: string
+  decisionRunId: string
+  changesCreated: number
+  projections: {
+    now?: ScenarioProjection
+    year_1?: ScenarioProjection
+    year_3?: ScenarioProjection
+    year_5?: ScenarioProjection
+  }
+  summary?: DecisionSummary
+}
+
+export interface DecisionRun {
+  id: string
+  templateKey: string
+  templateName: string
+  inputs: Record<string, unknown>
+  createdScenario?: string
+  scenarioNameOverride?: string
+  isDraft: boolean
+  completedAt?: string
+  createdAt: string
+}
+
+// Goals (TASK-13)
+export type GoalType =
+  | 'emergency_fund_months'
+  | 'min_dscr'
+  | 'min_savings_rate'
+  | 'net_worth_target_by_date'
+  | 'retirement_age'
+
+export type GoalStatus = 'good' | 'warning' | 'critical'
+
+export interface Goal {
+  id: string
+  name: string
+  goalType: GoalType
+  targetValue: string
+  targetUnit: string
+  targetDate?: string
+  targetMeta?: Record<string, unknown>
+  isPrimary: boolean
+  isActive: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface GoalStatusDTO {
+  goalId: string
+  goalType: GoalType
+  name: string
+  targetValue: string
+  currentValue: string
+  status: GoalStatus
+  deltaToTarget: string
+  recommendation: string
+}
+
+// Data Quality (TASK-13)
+export type ConfidenceLevel = 'high' | 'medium' | 'low'
+
+export interface DataQualityItem {
+  key: string
+  severity: 'critical' | 'warning'
+  title: string
+  description: string
+  cta: {
+    label: string
+    route: string
+  }
+}
+
+export interface DataQualityReport {
+  confidenceLevel: ConfidenceLevel
+  confidenceScore: number
+  missing: DataQualityItem[]
+  warnings: DataQualityItem[]
+}

@@ -8,6 +8,7 @@ from datetime import date, timedelta
 from .models import MetricSnapshot, MetricThreshold, Insight
 from .serializers import MetricSnapshotSerializer, MetricThresholdSerializer, InsightSerializer
 from .services import MetricsCalculator, InsightGenerator
+from .data_quality import DataQualityService
 
 
 class MetricSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
@@ -89,3 +90,43 @@ class MetricThresholdViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(household=self.request.household)
+
+
+class DataQualityView(APIView):
+    """
+    API endpoint for data quality and model confidence assessment.
+
+    Returns a report indicating data completeness and confidence level.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """Get data quality report for the household."""
+        household = request.household
+        service = DataQualityService(household)
+        report = service.build_report()
+
+        return Response({
+            'confidence_level': report.confidence_level,
+            'confidence_score': report.confidence_score,
+            'missing': [
+                {
+                    'key': item.key,
+                    'severity': item.severity,
+                    'title': item.title,
+                    'description': item.description,
+                    'cta': item.cta,
+                }
+                for item in report.missing
+            ],
+            'warnings': [
+                {
+                    'key': item.key,
+                    'severity': item.severity,
+                    'title': item.title,
+                    'description': item.description,
+                    'cta': item.cta,
+                }
+                for item in report.warnings
+            ],
+        })
