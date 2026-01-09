@@ -46,6 +46,9 @@ export function formatCurrencyValue(value: number): string {
   }).format(value);
 }
 
+// Alias for backwards compatibility
+export const formatCurrency = formatCurrencyValue;
+
 /**
  * Format a number as USD currency with 2 decimal places
  * Use for: monthly surplus, income, expenses
@@ -85,6 +88,9 @@ export function formatNumberValue(value: number, maxDecimals = 2): string {
   }).format(value);
 }
 
+// Alias for backwards compatibility
+export const formatNumber = formatNumberValue;
+
 /**
  * Format a decimal as a percentage
  * @param value - Decimal value (0.15 = 15%)
@@ -96,6 +102,9 @@ export function formatPercentValue(value: number, maxDecimals = 1): string {
     maximumFractionDigits: maxDecimals,
   }).format(value);
 }
+
+// Alias for backwards compatibility
+export const formatPercent = formatPercentValue;
 
 /**
  * Format a ratio (e.g., DSCR of 1.25)
@@ -137,6 +146,9 @@ export function formatDateValue(
     return '—';
   }
 }
+
+// Alias for backwards compatibility
+export const formatDate = formatDateValue;
 
 /**
  * Format a relative time (e.g., "2 days ago")

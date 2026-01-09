@@ -35,14 +35,16 @@ export function NewMenu({ showStressTests = false }: NewMenuProps) {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link href={"/scenarios/new" as '/scenarios'} className="flex items-center gap-2">
+          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+          <Link href={"/scenarios/new" as any} className="flex items-center gap-2">
             <GitBranch className="h-4 w-4" />
             Create Scenario
           </Link>
         </DropdownMenuItem>
         {showStressTests ? (
           <DropdownMenuItem asChild>
-            <Link href={"/stress-tests/new" as '/scenarios'} className="flex items-center gap-2">
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <Link href={"/stress-tests/new" as any} className="flex items-center gap-2">
               <Zap className="h-4 w-4" />
               Run Stress Test
             </Link>

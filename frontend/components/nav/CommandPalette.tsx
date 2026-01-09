@@ -92,7 +92,8 @@ export function CommandPalette() {
               <CommandItem
                 key={item.href}
                 value={`${item.name} ${item.keywords?.join(' ') || ''}`}
-                onSelect={() => runCommand(() => router.push(item.href as '/dashboard'))}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onSelect={() => runCommand(() => router.push(item.href as any))}
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.name}
@@ -107,7 +108,8 @@ export function CommandPalette() {
               <CommandItem
                 key={item.href}
                 value={`${item.name} ${item.keywords?.join(' ') || ''}`}
-                onSelect={() => runCommand(() => router.push(item.href as '/decisions'))}
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                onSelect={() => runCommand(() => router.push(item.href as any))}
               >
                 <item.icon className="mr-2 h-4 w-4" />
                 {item.name}
