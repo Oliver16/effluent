@@ -44,7 +44,8 @@ services:
       - "traefik.http.routers.effluent-api.entrypoints=web"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
       # Same-origin API via app host (/api/* on app.effluent.io -> Django)
-      - "traefik.http.routers.effluent-api-app.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`) && PathPrefix(`/api`)"
+      # Exclude Next.js internal routes (set-cookies, clear-cookies) which must be handled by Next.js
+      - "traefik.http.routers.effluent-api-app.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`) && PathPrefix(`/api`) && !PathPrefix(`/api/auth/set-cookies`) && !PathPrefix(`/api/auth/clear-cookies`)"
       - "traefik.http.routers.effluent-api-app.entrypoints=web"
       - "traefik.http.routers.effluent-api-app.priority=200"
       - "traefik.http.routers.effluent-api-app.service=effluent-api"
