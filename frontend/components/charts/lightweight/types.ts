@@ -235,3 +235,289 @@ export interface CashFlowChartProps {
   /** Additional class name */
   className?: string;
 }
+
+// =============================================================================
+// CHART INSTRUMENT SPEC — HMI Contract for Chart Components
+// =============================================================================
+
+import type { StatusTone } from '@/lib/design-tokens';
+import type { LucideIcon } from 'lucide-react';
+
+/**
+ * Primary metric displayed above the chart
+ */
+export interface ChartPrimaryMetric {
+  /** Metric label */
+  label: string;
+  /** Current value (numeric) */
+  value: number;
+  /** Formatted value for display */
+  valueFormatted: string;
+  /** Status tone */
+  tone: StatusTone;
+  /** Status label */
+  statusLabel?: string;
+  /** Delta from baseline/previous */
+  delta?: {
+    value: number;
+    formatted: string;
+    direction: 'up' | 'down' | 'flat';
+    tone: StatusTone;
+    basis?: string;
+  };
+}
+
+/**
+ * Goal line configuration for charts
+ */
+export interface ChartGoalLine {
+  /** Unique identifier */
+  id: string;
+  /** Display label */
+  label: string;
+  /** Value on Y-axis */
+  value: number;
+  /** Line color (derived from tone if not specified) */
+  color?: string;
+  /** Status tone (determines color if color not specified) */
+  tone?: StatusTone;
+  /** Line style */
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  /** Show label on axis */
+  axisLabelVisible?: boolean;
+}
+
+/**
+ * Annotation band for warning/critical zones
+ */
+export interface ChartAnnotationBand {
+  /** Unique identifier */
+  id: string;
+  /** Band label (for legend) */
+  label: string;
+  /** Band type */
+  type: 'warning' | 'critical' | 'good' | 'neutral';
+  /** Y-axis range */
+  range: {
+    from: number;
+    to: number;
+  };
+  /** Opacity (0-1) */
+  opacity?: number;
+}
+
+/**
+ * Chart action (contextual lever)
+ */
+export interface ChartAction {
+  /** Unique identifier */
+  id: string;
+  /** Action label */
+  label: string;
+  /** Action icon */
+  icon?: LucideIcon;
+  /** Click handler */
+  handler: () => void;
+  /** Intent/style */
+  intent: 'primary' | 'secondary' | 'neutral';
+  /** Disabled state */
+  disabled?: boolean;
+}
+
+/**
+ * Chart Instrument Specification
+ *
+ * A higher-level contract that makes charts behave like cockpit instruments.
+ * Every chart can render:
+ * - The chart visualization
+ * - A "metric header" (MetricCard-like) above it
+ * - Contextual actions beside it
+ * - Goal/threshold lines and annotation bands
+ *
+ * This is what makes the chart feel like part of an HMI, not "a chart sitting in a UI."
+ *
+ * @example
+ * ```ts
+ * const netWorthChartSpec: ChartInstrumentSpec = {
+ *   id: 'net-worth-projection',
+ *   title: 'Net Worth Projection',
+ *   primaryMetric: {
+ *     label: 'Projected Net Worth',
+ *     value: 2500000,
+ *     valueFormatted: '$2.5M',
+ *     tone: 'good',
+ *     statusLabel: 'On Track',
+ *     delta: {
+ *       value: 150000,
+ *       formatted: '+$150K',
+ *       direction: 'up',
+ *       tone: 'good',
+ *       basis: 'vs baseline',
+ *     },
+ *   },
+ *   goalLines: [
+ *     { id: 'retirement-goal', label: 'Retirement Goal', value: 2000000, tone: 'good' },
+ *   ],
+ *   annotationBands: [
+ *     { id: 'target-zone', label: 'Target Zone', type: 'good', range: { from: 2000000, to: 3000000 } },
+ *   ],
+ *   actions: [
+ *     { id: 'adjust-savings', label: 'Adjust Savings Rate', intent: 'primary', handler: () => {} },
+ *   ],
+ * };
+ * ```
+ */
+export interface ChartInstrumentSpec {
+  // ---------------------------------------------------------------------------
+  // Identity
+  // ---------------------------------------------------------------------------
+  /** Unique identifier */
+  id: string;
+  /** Chart title */
+  title: string;
+  /** Chart subtitle/description */
+  subtitle?: string;
+
+  // ---------------------------------------------------------------------------
+  // Primary Metric (Header)
+  // ---------------------------------------------------------------------------
+  /** Primary metric displayed above the chart */
+  primaryMetric?: ChartPrimaryMetric;
+
+  // ---------------------------------------------------------------------------
+  // Goal Lines
+  // ---------------------------------------------------------------------------
+  /** Goal/threshold lines (mapped from thresholds/goals) */
+  goalLines?: ChartGoalLine[];
+
+  // ---------------------------------------------------------------------------
+  // Annotation Bands
+  // ---------------------------------------------------------------------------
+  /** Warning/critical zone bands */
+  annotationBands?: ChartAnnotationBand[];
+
+  // ---------------------------------------------------------------------------
+  // Actions
+  // ---------------------------------------------------------------------------
+  /** Contextual actions (scenario tweak, drill-down) */
+  actions?: ChartAction[];
+
+  // ---------------------------------------------------------------------------
+  // Data Source
+  // ---------------------------------------------------------------------------
+  /** Data freshness timestamp */
+  lastUpdated?: Date | string;
+  /** Data source label */
+  dataSource?: string;
+}
+
+/**
+ * Convert ChartGoalLine to PriceLineConfig
+ */
+export function goalLineToPriceLine(
+  goalLine: ChartGoalLine,
+  statusColors: Record<StatusTone, string>
+): PriceLineConfig {
+  const color = goalLine.color ?? statusColors[goalLine.tone ?? 'neutral'];
+
+  return {
+    id: goalLine.id,
+    label: goalLine.label,
+    value: goalLine.value,
+    color,
+    lineStyle: goalLine.lineStyle ?? 'dashed',
+    lineWidth: 1,
+    axisLabelVisible: goalLine.axisLabelVisible ?? true,
+  };
+}
+
+/**
+ * Convert InstrumentSpec thresholds to ChartGoalLines
+ */
+export function thresholdsToGoalLines(
+  thresholds: { warning: number; critical: number },
+  options?: {
+    warningLabel?: string;
+    criticalLabel?: string;
+    direction?: 'higher-is-better' | 'lower-is-better';
+  }
+): ChartGoalLine[] {
+  const { warningLabel = 'Warning', criticalLabel = 'Critical' } = options ?? {};
+
+  return [
+    {
+      id: 'threshold-warning',
+      label: warningLabel,
+      value: thresholds.warning,
+      tone: 'warning',
+      lineStyle: 'dashed',
+    },
+    {
+      id: 'threshold-critical',
+      label: criticalLabel,
+      value: thresholds.critical,
+      tone: 'critical',
+      lineStyle: 'dashed',
+    },
+  ];
+}
+
+/**
+ * Create annotation bands from thresholds
+ */
+export function thresholdsToAnnotationBands(
+  thresholds: { warning: number; critical: number },
+  direction: 'higher-is-better' | 'lower-is-better',
+  maxValue: number,
+  minValue: number = 0
+): ChartAnnotationBand[] {
+  if (direction === 'higher-is-better') {
+    return [
+      {
+        id: 'band-critical',
+        label: 'Critical Zone',
+        type: 'critical',
+        range: { from: minValue, to: thresholds.critical },
+        opacity: 0.1,
+      },
+      {
+        id: 'band-warning',
+        label: 'Warning Zone',
+        type: 'warning',
+        range: { from: thresholds.critical, to: thresholds.warning },
+        opacity: 0.1,
+      },
+      {
+        id: 'band-good',
+        label: 'Target Zone',
+        type: 'good',
+        range: { from: thresholds.warning, to: maxValue },
+        opacity: 0.05,
+      },
+    ];
+  } else {
+    return [
+      {
+        id: 'band-good',
+        label: 'Target Zone',
+        type: 'good',
+        range: { from: minValue, to: thresholds.warning },
+        opacity: 0.05,
+      },
+      {
+        id: 'band-warning',
+        label: 'Warning Zone',
+        type: 'warning',
+        range: { from: thresholds.warning, to: thresholds.critical },
+        opacity: 0.1,
+      },
+      {
+        id: 'band-critical',
+        label: 'Critical Zone',
+        type: 'critical',
+        range: { from: thresholds.critical, to: maxValue },
+        opacity: 0.1,
+      },
+    ];
+  }
+}
