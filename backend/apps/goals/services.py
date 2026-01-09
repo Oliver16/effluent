@@ -486,8 +486,7 @@ class GoalSeekSolver:
                 'change_type': 'ADJUST_TOTAL_EXPENSES',
                 'name': 'Expense reduction target',
                 'parameters': {
-                    'amount': str(-reduction_amount),
-                    'mode': 'absolute',
+                    'monthly_adjustment': str(-reduction_amount),
                     'description': 'Expense reduction target'
                 }
             },
@@ -532,8 +531,7 @@ class GoalSeekSolver:
                 'change_type': 'ADJUST_TOTAL_INCOME',
                 'name': 'Income increase target',
                 'parameters': {
-                    'amount': str(increase_amount),
-                    'mode': 'absolute',
+                    'monthly_adjustment': str(increase_amount),
                     'description': 'Income increase target'
                 }
             },

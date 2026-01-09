@@ -26,15 +26,15 @@ function getHealthStatus(metricName: string, value: string): 'ok' | 'warn' | 'cr
       if (numValue >= 1.5) return 'ok';
       if (numValue >= 1.0) return 'warn';
       return 'critical';
-    case 'liquidity_months':
+    case 'liquidityMonths':
       if (numValue >= 3) return 'ok';
       if (numValue >= 1) return 'warn';
       return 'critical';
-    case 'savings_rate':
+    case 'savingsRate':
       if (numValue >= 0.1) return 'ok';
       if (numValue >= 0) return 'warn';
       return 'critical';
-    case 'monthly_surplus':
+    case 'monthlySurplus':
       if (numValue > 0) return 'ok';
       if (numValue === 0) return 'warn';
       return 'critical';
@@ -87,31 +87,31 @@ export function BaselineHealthTiles({ metrics, isLoading }: BaselineHealthTilesP
 
   const tiles = [
     {
-      key: 'net_worth',
+      key: 'netWorth',
       title: 'Net Worth',
-      value: formatCurrency(metrics.net_worth.value),
-      metric: metrics.net_worth,
+      value: formatCurrency(metrics.netWorth.value),
+      metric: metrics.netWorth,
       icon: Wallet,
     },
     {
-      key: 'monthly_surplus',
+      key: 'monthlySurplus',
       title: 'Monthly Surplus',
-      value: formatCurrency(metrics.monthly_surplus.value),
-      metric: metrics.monthly_surplus,
+      value: formatCurrency(metrics.monthlySurplus.value),
+      metric: metrics.monthlySurplus,
       icon: TrendingUp,
     },
     {
-      key: 'liquidity_months',
+      key: 'liquidityMonths',
       title: 'Liquidity',
-      value: `${formatDecimal(metrics.liquidity_months.value, 1)} months`,
-      metric: metrics.liquidity_months,
+      value: `${formatDecimal(metrics.liquidityMonths.value, 1)} months`,
+      metric: metrics.liquidityMonths,
       icon: PiggyBank,
     },
     {
-      key: 'savings_rate',
+      key: 'savingsRate',
       title: 'Savings Rate',
-      value: formatPercent(metrics.savings_rate.value),
-      metric: metrics.savings_rate,
+      value: formatPercent(metrics.savingsRate.value),
+      metric: metrics.savingsRate,
       icon: TrendingUp,
     },
     {
@@ -127,7 +127,7 @@ export function BaselineHealthTiles({ metrics, isLoading }: BaselineHealthTilesP
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Baseline Health</h2>
-        <p className="text-sm text-muted-foreground">as of {metrics.as_of_date}</p>
+        <p className="text-sm text-muted-foreground">as of {metrics.asOfDate}</p>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {tiles.map((tile) => {

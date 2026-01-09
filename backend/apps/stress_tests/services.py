@@ -190,8 +190,7 @@ class StressTestService:
 
         if change_type in [ChangeType.ADJUST_TOTAL_INCOME, ChangeType.ADJUST_TOTAL_EXPENSES]:
             return {
-                'amount': inputs.get('amount', '0'),
-                'mode': inputs.get('mode', 'absolute'),
+                'monthly_adjustment': inputs.get('monthly_adjustment', inputs.get('amount', '0')),
                 'description': template['description'],
             }
         elif change_type == ChangeType.ADJUST_INTEREST_RATES:

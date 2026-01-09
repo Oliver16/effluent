@@ -374,20 +374,20 @@ export interface MetricValue {
 }
 
 export interface BaselineHealthMetrics {
-  as_of_date: string
-  net_worth: MetricValue
-  monthly_surplus: MetricValue
-  liquidity_months: MetricValue
-  savings_rate: MetricValue
+  asOfDate: string
+  netWorth: MetricValue
+  monthlySurplus: MetricValue
+  liquidityMonths: MetricValue
+  savingsRate: MetricValue
   dscr: MetricValue
 }
 
 export interface BaselineHealth {
-  baseline_id: string
-  baseline_mode: BaselineMode
-  baseline_pinned_at: string | null
-  baseline_pinned_as_of_date: string | null
-  last_projected_at: string | null
+  baselineId: string
+  baselineMode: BaselineMode
+  baselinePinnedAt: string | null
+  baselinePinnedAsOfDate: string | null
+  lastProjectedAt: string | null
   metrics: BaselineHealthMetrics | null
 }
 
@@ -399,9 +399,9 @@ export interface BaselineResponse {
 export interface BaselineActionResponse {
   status: string
   baseline: Scenario
-  last_projected_at?: string | null
-  baseline_pinned_at?: string | null
-  baseline_pinned_as_of_date?: string | null
+  lastProjectedAt?: string | null
+  baselinePinnedAt?: string | null
+  baselinePinnedAsOfDate?: string | null
 }
 
 // Decision Templates (TASK-13)
@@ -469,27 +469,27 @@ export interface DecisionCategoryGroup {
 }
 
 export interface DecisionMetricComparison {
-  net_worth: string
-  liquidity_months: string
+  netWorth: string
+  liquidityMonths: string
   dscr: string
-  savings_rate: string
-  monthly_surplus: string
+  savingsRate: string
+  monthlySurplus: string
 }
 
 export interface DecisionGoalStatusComparison {
-  goal_id: string
-  goal_type: string
-  name: string
-  target_value: string
-  current_value: string
+  goalId: string
+  goalType: string
+  goalName: string
+  targetValue: string
+  currentValue: string
   status: string
-  delta_to_target: string
+  deltaToTarget: string
 }
 
 export interface DecisionSummary {
   baseline: DecisionMetricComparison
   scenario: DecisionMetricComparison
-  goal_status: {
+  goalStatus: {
     baseline: DecisionGoalStatusComparison[]
     scenario: DecisionGoalStatusComparison[]
   }
