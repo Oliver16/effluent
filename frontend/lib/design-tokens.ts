@@ -181,6 +181,67 @@ export const CHART_COLORS = {
 } as const;
 
 // -----------------------------------------------------------------------------
+// Lightweight Charts Colors (RGB format for canvas rendering)
+// -----------------------------------------------------------------------------
+export const LW_CHART_COLORS = {
+  // Series colors
+  primary: {
+    line: 'rgb(139, 92, 246)', // violet-500
+    fill: 'rgba(139, 92, 246, 0.15)',
+    fillTop: 'rgba(139, 92, 246, 0.4)',
+    fillBottom: 'rgba(139, 92, 246, 0)',
+  },
+  secondary: {
+    line: 'rgb(156, 163, 175)', // gray-400
+    fill: 'rgba(156, 163, 175, 0.1)',
+    fillTop: 'rgba(156, 163, 175, 0.3)',
+    fillBottom: 'rgba(156, 163, 175, 0)',
+  },
+  tertiary: {
+    line: 'rgb(59, 130, 246)', // blue-500
+    fill: 'rgba(59, 130, 246, 0.15)',
+    fillTop: 'rgba(59, 130, 246, 0.4)',
+    fillBottom: 'rgba(59, 130, 246, 0)',
+  },
+
+  // Status colors for price lines
+  good: 'rgb(16, 185, 129)', // emerald-500
+  warning: 'rgb(245, 158, 11)', // amber-500
+  critical: 'rgb(239, 68, 68)', // red-500
+  neutral: 'rgb(107, 114, 128)', // gray-500
+
+  // Positive/Negative for cash flow
+  positive: 'rgb(16, 185, 129)',
+  negative: 'rgb(239, 68, 68)',
+
+  // Chart chrome
+  grid: {
+    light: 'rgba(209, 213, 219, 0.5)', // gray-300/50
+    dark: 'rgba(75, 85, 99, 0.3)', // gray-600/30
+  },
+  border: {
+    light: 'rgb(229, 231, 235)', // gray-200
+    dark: 'rgb(55, 65, 81)', // gray-700
+  },
+  text: {
+    light: 'rgb(107, 114, 128)', // gray-500
+    dark: 'rgb(156, 163, 175)', // gray-400
+  },
+  crosshair: {
+    light: 'rgb(107, 114, 128)',
+    dark: 'rgb(156, 163, 175)',
+  },
+} as const;
+
+// Chart sizing constants
+export const CHART_SIZES = {
+  default: 300,
+  compact: 200,
+  large: 400,
+  full: 500,
+} as const;
+
+// -----------------------------------------------------------------------------
 // Z-Index Scale
 // -----------------------------------------------------------------------------
 export const Z_INDEX = {

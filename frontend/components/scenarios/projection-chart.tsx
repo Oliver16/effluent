@@ -1,16 +1,39 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { AreaChart } from '@tremor/react';
 import { ScenarioProjection } from '@/lib/types';
-import { formatCurrency } from '@/lib/utils';
+import { ProjectionChart as LWProjectionChart } from '@/components/charts/lightweight';
+import type { ChartDataPoint, PriceLineConfig } from '@/components/charts/lightweight';
 
 interface ProjectionChartProps {
   projections: ScenarioProjection[];
   compareProjections?: ScenarioProjection[];
   compareLabel?: string;
   scenarioLabel?: string;
+  goals?: Array<{
+    id: string;
+    label: string;
+    value: number;
+    color?: string;
+  }>;
+}
+
+/**
+ * Converts ScenarioProjection[] to ChartDataPoint[]
+ */
+function projectionsToChartData(projections: ScenarioProjection[]): ChartDataPoint[] {
+  // Use today as start date
+  const start = new Date();
+
+  return projections.map((projection) => {
+    const date = new Date(start);
+    date.setMonth(date.getMonth() + projection.monthNumber);
+
+    return {
+      time: date.toISOString().split('T')[0], // YYYY-MM-DD format
+      value: parseFloat(projection.netWorth) || 0,
+    };
+  });
 }
 
 export function ProjectionChart({
@@ -18,80 +41,51 @@ export function ProjectionChart({
   compareProjections,
   compareLabel = 'Baseline',
   scenarioLabel = 'Scenario',
+  goals = [],
 }: ProjectionChartProps) {
-  const hasComparison = compareProjections && compareProjections.length > 0;
+  // Convert projections to chart data format
+  const chartData = useMemo(() => {
+    return projectionsToChartData(projections);
+  }, [projections]);
 
-  // Build chart data by aligning both projections by month number
-  const data = useMemo(() => {
-    // Create a map of month -> data for both projections
-    const projectionsByMonth = new Map<number, { scenario?: number; baseline?: number }>();
+  // Convert baseline projections if provided
+  const baselineData = useMemo(() => {
+    if (!compareProjections || compareProjections.length === 0) return undefined;
+    return projectionsToChartData(compareProjections);
+  }, [compareProjections]);
 
-    // Add scenario projections
-    projections.forEach((projection) => {
-      const monthNum = projection.monthNumber;
-      const existing = projectionsByMonth.get(monthNum) || {};
-      projectionsByMonth.set(monthNum, {
-        ...existing,
-        scenario: parseFloat(projection.netWorth),
-      });
-    });
+  // Convert goals to price line format
+  const priceLines = useMemo<PriceLineConfig[]>(() => {
+    return goals.map((goal) => ({
+      id: goal.id,
+      label: goal.label,
+      value: goal.value,
+      color: goal.color ?? 'rgb(16, 185, 129)', // emerald-500
+      lineStyle: 'dashed',
+      lineWidth: 1,
+      axisLabelVisible: true,
+    }));
+  }, [goals]);
 
-    // Add comparison projections (baseline)
-    if (hasComparison) {
-      compareProjections.forEach((projection) => {
-        const monthNum = projection.monthNumber;
-        const existing = projectionsByMonth.get(monthNum) || {};
-        projectionsByMonth.set(monthNum, {
-          ...existing,
-          baseline: parseFloat(projection.netWorth),
-        });
-      });
-    }
-
-    // Convert to sorted array
-    const sortedMonths = Array.from(projectionsByMonth.keys()).sort((a, b) => a - b);
-
-    return sortedMonths.map((monthNum) => {
-      const values = projectionsByMonth.get(monthNum)!;
-      const row: Record<string, number | string> = {
-        month: `M${monthNum + 1}`,
-      };
-
-      if (values.scenario !== undefined) {
-        row[scenarioLabel] = values.scenario;
-      }
-      if (hasComparison && values.baseline !== undefined) {
-        row[compareLabel] = values.baseline;
-      }
-
-      return row;
-    });
-  }, [projections, compareProjections, hasComparison, scenarioLabel, compareLabel]);
-
-  const categories = useMemo(() => {
-    const cats = [scenarioLabel];
-    if (hasComparison) {
-      cats.push(compareLabel);
-    }
-    return cats;
-  }, [scenarioLabel, compareLabel, hasComparison]);
+  // If no projections, show empty state
+  if (projections.length === 0) {
+    return (
+      <div className="h-80 flex items-center justify-center text-muted-foreground">
+        No projection data available. Run the projection to see results.
+      </div>
+    );
+  }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Net Worth Projection</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <AreaChart
-          className="h-80"
-          data={data}
-          index="month"
-          categories={categories}
-          colors={hasComparison ? ['blue', 'emerald'] : ['blue']}
-          valueFormatter={(value) => formatCurrency(value)}
-          showLegend={true}
-        />
-      </CardContent>
-    </Card>
+    <LWProjectionChart
+      data={chartData}
+      baselineData={baselineData}
+      scenarioName={scenarioLabel}
+      baselineName={compareLabel}
+      goals={priceLines}
+      height={320}
+      initialRange="5Y"
+      showControls={true}
+    />
   );
 }
