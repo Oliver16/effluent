@@ -302,7 +302,7 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
             'title': 'Maximize 401(k) Contributions',
             'description': f'You have ${room:,.0f} remaining 401(k) contribution room.',
             'potential_savings': str((room * Decimal('0.22')).quantize(Decimal('0.01'))),  # Rough 22% bracket
-            'action_template': 'modify_401k',
+            'action_template': 'change_401k',
         })
 
     # Check HSA contribution
@@ -324,7 +324,7 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
             'title': 'Maximize HSA Contributions',
             'description': f'You have ${room:,.0f} remaining HSA contribution room.',
             'potential_savings': str((room * Decimal('0.30')).quantize(Decimal('0.01'))),  # Triple tax benefit
-            'action_template': 'modify_hsa',
+            'action_template': 'change_hsa',
         })
 
     # Check for self-employment without quarterly estimates

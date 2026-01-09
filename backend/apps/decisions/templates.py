@@ -649,6 +649,56 @@ def get_default_templates():
         },
 
         # ===================
+        # TAX TEMPLATES
+        # ===================
+        {
+            'key': 'set_quarterly_estimates',
+            'name': 'Set Quarterly Estimated Taxes',
+            'description': 'Set up quarterly estimated tax payments for self-employment or other income.',
+            'category': DecisionCategory.EXPENSES,
+            'icon': 'calendar',
+            'sort_order': 3,
+            'ui_schema': {
+                'steps': [
+                    {
+                        'id': 'estimate_details',
+                        'title': 'Quarterly Estimate',
+                        'description': 'Set up your quarterly estimated tax payments',
+                        'fields': [
+                            {
+                                'key': 'quarterly_amount',
+                                'type': CURRENCY,
+                                'label': 'Quarterly payment amount',
+                                'required': True,
+                                'helperText': 'Amount to pay each quarter (4 times per year)',
+                            },
+                            {
+                                'key': 'start_date',
+                                'type': DATE,
+                                'label': 'Start date',
+                                'required': True,
+                                'helperText': 'When to begin quarterly payments',
+                            },
+                        ],
+                    },
+                ],
+            },
+            'change_plan': {
+                'changes': [
+                    {
+                        'change_type': ChangeType.SET_QUARTERLY_ESTIMATES,
+                        'name_template': 'Quarterly Estimated Taxes',
+                        'description_template': 'Quarterly tax payments of {quarterly_amount}',
+                        'effective_date_field': 'start_date',
+                        'parameters': {
+                            'quarterly_amount': '{quarterly_amount}',
+                        },
+                    },
+                ],
+            },
+        },
+
+        # ===================
         # SAVINGS TEMPLATES
         # ===================
         {

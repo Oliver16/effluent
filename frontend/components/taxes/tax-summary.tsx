@@ -156,7 +156,7 @@ export function TaxSummary({ className, showStrategies = true }: TaxSummaryProps
                     <div>
                       <p className="font-medium">{source.sourceName}</p>
                       <p className="text-sm text-muted-foreground">
-                        {source.incomeType} | {source.effectiveRate}% effective
+                        {source.incomeType} | {(parseFloat(source.effectiveRate) * 100).toFixed(1)}% effective
                       </p>
                     </div>
                     <div className="text-right">
@@ -197,6 +197,11 @@ export function TaxSummary({ className, showStrategies = true }: TaxSummaryProps
 }
 
 function TaxStrategyCard({ strategy }: { strategy: TaxStrategy }) {
+  // Check if potentialSavings is a numeric value to determine formatting
+  const savings = strategy.potentialSavings
+  const isNumeric = !isNaN(parseFloat(savings)) && isFinite(parseFloat(savings))
+  const formattedSavings = isNumeric ? `$${parseFloat(savings).toLocaleString()}` : savings
+
   return (
     <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg border border-yellow-200">
       <div className="space-y-1">
@@ -206,7 +211,7 @@ function TaxStrategyCard({ strategy }: { strategy: TaxStrategy }) {
         </div>
         <p className="text-sm text-muted-foreground">{strategy.description}</p>
         <p className="text-sm">
-          Potential savings: <strong className="text-green-600">${strategy.potentialSavings}</strong>
+          Potential savings: <strong className="text-green-600">{formattedSavings}</strong>
         </p>
       </div>
       <ChevronRight className="h-5 w-5 text-muted-foreground" />
