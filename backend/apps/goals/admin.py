@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from apps.goals.models import Goal
+from apps.goals.models import Goal, GoalSolution
 
 
 @admin.register(Goal)
@@ -34,3 +34,12 @@ class GoalAdmin(admin.ModelAdmin):
             'classes': ('collapse',)
         }),
     )
+
+
+@admin.register(GoalSolution)
+class GoalSolutionAdmin(admin.ModelAdmin):
+    list_display = ['goal', 'success', 'computed_at', 'applied_at']
+    list_filter = ['success']
+    search_fields = ['goal__name', 'goal__household__name']
+    readonly_fields = ['id', 'computed_at', 'created_at', 'updated_at']
+    ordering = ['-computed_at']

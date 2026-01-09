@@ -109,11 +109,15 @@ class DataQualityView(APIView):
         return Response({
             'confidence_level': report.confidence_level,
             'confidence_score': report.confidence_score,
-            'missing': [
+            'confidence_tier': report.confidence_level,  # Alias for TASK-14 compatibility
+            'tier_description': self._get_tier_description(report.confidence_level),
+            'issues': [
                 {
                     'key': item.key,
+                    'field': item.key,  # Alias for TASK-14 compatibility
                     'severity': item.severity,
                     'title': item.title,
+                    'message': item.description,  # Alias for TASK-14 compatibility
                     'description': item.description,
                     'cta': item.cta,
                 }
@@ -122,11 +126,55 @@ class DataQualityView(APIView):
             'warnings': [
                 {
                     'key': item.key,
+                    'field': item.key,
                     'severity': item.severity,
                     'title': item.title,
+                    'message': item.description,
                     'description': item.description,
                     'cta': item.cta,
                 }
                 for item in report.warnings
             ],
+            'summary': {
+                'asset_accounts': self._count_accounts(household, 'asset'),
+                'liability_accounts': self._count_accounts(household, 'liability'),
+                'income_sources': self._count_income_sources(household),
+                'expense_flows': self._count_expense_flows(household),
+            }
         })
+
+    def _get_tier_description(self, level: str) -> str:
+        """Get description for confidence tier."""
+        descriptions = {
+            'high': 'Data is complete and projections are highly reliable.',
+            'medium': 'Some data is missing. Projections may not be fully accurate.',
+            'low': 'Significant data is missing. Please complete your profile for accurate projections.',
+        }
+        return descriptions.get(level, '')
+
+    def _count_accounts(self, household, account_class: str) -> int:
+        """Count accounts by class."""
+        from apps.accounts.models import Account, ASSET_TYPES, LIABILITY_TYPES
+        types = ASSET_TYPES if account_class == 'asset' else LIABILITY_TYPES
+        return Account.objects.filter(
+            household=household,
+            account_type__in=types,
+            is_active=True
+        ).count()
+
+    def _count_income_sources(self, household) -> int:
+        """Count active income sources."""
+        from apps.taxes.models import IncomeSource
+        return IncomeSource.objects.filter(
+            household=household,
+            is_active=True
+        ).count()
+
+    def _count_expense_flows(self, household) -> int:
+        """Count expense flows."""
+        from apps.flows.models import RecurringFlow, FlowType
+        return RecurringFlow.objects.filter(
+            household=household,
+            flow_type=FlowType.EXPENSE,
+            is_active=True
+        ).count()

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from apps.goals.models import Goal, GoalType
+from apps.goals.models import Goal, GoalSolution, GoalType, GoalStatus
 
 
 class GoalSerializer(serializers.ModelSerializer):
@@ -9,12 +9,14 @@ class GoalSerializer(serializers.ModelSerializer):
         source='get_goal_type_display',
         read_only=True
     )
+    display_name = serializers.ReadOnlyField()
 
     class Meta:
         model = Goal
         fields = [
             'id',
             'name',
+            'display_name',
             'goal_type',
             'goal_type_display',
             'target_value',
@@ -42,11 +44,10 @@ class GoalSerializer(serializers.ModelSerializer):
         goal_type = attrs.get('goal_type')
         target_date = attrs.get('target_date')
 
-        # Net worth target by date requires a target_date
-        if goal_type == GoalType.NET_WORTH_TARGET_BY_DATE and not target_date:
-            raise serializers.ValidationError({
-                'target_date': 'Target date is required for net worth target goals'
-            })
+        # Net worth target requires a target_date
+        if goal_type == GoalType.NET_WORTH_TARGET and not target_date:
+            # Target date is optional but recommended
+            pass
 
         return attrs
 
@@ -55,9 +56,51 @@ class GoalStatusSerializer(serializers.Serializer):
     """Serializer for goal evaluation status."""
     goal_id = serializers.UUIDField()
     goal_type = serializers.CharField()
-    name = serializers.CharField()
+    goal_name = serializers.CharField()
     target_value = serializers.CharField()
+    target_unit = serializers.CharField(required=False, allow_blank=True)
     current_value = serializers.CharField()
     status = serializers.ChoiceField(choices=['good', 'warning', 'critical'])
     delta_to_target = serializers.CharField()
-    recommendation = serializers.CharField()
+    percentage_complete = serializers.CharField(required=False, allow_null=True)
+    recommendation = serializers.CharField(allow_blank=True)
+
+
+class GoalSolutionSerializer(serializers.ModelSerializer):
+    """Serializer for GoalSolution model."""
+    goal_name = serializers.CharField(source='goal.display_name', read_only=True)
+
+    class Meta:
+        model = GoalSolution
+        fields = [
+            'id', 'goal', 'goal_name', 'options', 'plan', 'result',
+            'success', 'error_message', 'computed_at',
+            'applied_scenario', 'applied_at'
+        ]
+        read_only_fields = [
+            'id', 'plan', 'result', 'success', 'error_message',
+            'computed_at', 'applied_scenario', 'applied_at'
+        ]
+
+
+class GoalSolveOptionsSerializer(serializers.Serializer):
+    """Serializer for goal solve request options."""
+    allowed_interventions = serializers.ListField(
+        child=serializers.ChoiceField(choices=[
+            'reduce_expenses', 'increase_income', 'payoff_debt',
+            'refinance', 'increase_401k', 'pause_401k'
+        ]),
+        default=['reduce_expenses', 'increase_income']
+    )
+    bounds = serializers.DictField(
+        child=serializers.DecimalField(max_digits=12, decimal_places=2),
+        default=dict
+    )
+    start_date = serializers.DateField(required=False)
+    projection_months = serializers.IntegerField(default=24, min_value=6, max_value=120)
+
+
+class GoalApplySolutionSerializer(serializers.Serializer):
+    """Serializer for applying a goal solution."""
+    plan = serializers.ListField(child=serializers.DictField())
+    scenario_name = serializers.CharField(max_length=200, required=False)

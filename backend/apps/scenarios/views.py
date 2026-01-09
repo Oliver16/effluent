@@ -6,7 +6,7 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
-from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory
+from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory, ChangeType
 from .serializers import (
     ScenarioSerializer, ScenarioDetailSerializer, ScenarioChangeSerializer,
     ScenarioProjectionSerializer, ScenarioComparisonSerializer, LifeEventTemplateSerializer,
@@ -14,6 +14,7 @@ from .serializers import (
 )
 from .services import ScenarioEngine
 from .baseline import BaselineScenarioService
+from .comparison import ScenarioComparisonService
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -54,22 +55,209 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'])
     def compare(self, request):
-        """Compare projections across scenarios."""
+        """
+        Compare projections across scenarios with driver decomposition.
+
+        POST /api/v1/scenarios/compare/
+        {
+            "scenario_ids": ["id1", "id2", ...],
+            "horizon_months": 60,  // optional, max 360
+            "include_drivers": true  // optional, default true
+        }
+
+        Returns projections for each scenario and driver decomposition
+        explaining what changed and why relative to the first scenario (baseline).
+        """
         scenario_ids = request.data.get('scenario_ids', [])
-        scenarios = Scenario.objects.filter(
+        horizon_months = request.data.get('horizon_months')
+        include_drivers = request.data.get('include_drivers', True)
+
+        # Validate constraints (TASK-15: max 4 scenarios, max 360 months)
+        if len(scenario_ids) > ScenarioComparisonService.MAX_SCENARIOS:
+            return Response(
+                {'error': f'Maximum {ScenarioComparisonService.MAX_SCENARIOS} scenarios allowed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        if horizon_months and horizon_months > ScenarioComparisonService.MAX_HORIZON_MONTHS:
+            return Response(
+                {'error': f'Maximum horizon is {ScenarioComparisonService.MAX_HORIZON_MONTHS} months'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Fetch scenarios with ownership validation
+        scenarios = list(Scenario.objects.filter(
             household=request.household,
             id__in=scenario_ids
-        )
+        ))
 
+        if len(scenarios) != len(scenario_ids):
+            return Response(
+                {'error': 'One or more scenarios not found or not accessible'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        # Build basic comparison results
         comparisons = []
         for scenario in scenarios:
             projections = scenario.projections.all()
+            if horizon_months:
+                projections = projections[:horizon_months]
             comparisons.append({
                 'scenario': ScenarioSerializer(scenario).data,
                 'projections': ScenarioProjectionSerializer(projections, many=True).data,
             })
 
-        return Response({'results': comparisons})
+        result = {'results': comparisons}
+
+        # Add driver decomposition if requested and we have multiple scenarios
+        if include_drivers and len(scenarios) >= 2:
+            service = ScenarioComparisonService(request.household)
+            try:
+                driver_analysis = service.compare_multiple(
+                    scenarios,
+                    horizon_months=horizon_months
+                )
+
+                # Convert driver objects to dicts
+                result['driver_analysis'] = {
+                    'baseline_id': driver_analysis['baseline_id'],
+                    'baseline_name': driver_analysis['baseline_name'],
+                    'comparisons': [
+                        {
+                            'scenario_id': c.scenario_id,
+                            'horizon_months': c.horizon_months,
+                            'baseline_end_nw': float(c.baseline_end_nw),
+                            'scenario_end_nw': float(c.scenario_end_nw),
+                            'net_worth_delta': float(c.net_worth_delta),
+                            'drivers': [
+                                {
+                                    'name': d.name,
+                                    'amount': float(d.amount),
+                                    'description': d.description,
+                                }
+                                for d in c.drivers
+                            ],
+                            'reconciliation_error_percent': float(c.reconciliation_error_percent),
+                        }
+                        for c in driver_analysis['comparisons']
+                    ],
+                }
+            except ValueError as e:
+                # Include error but don't fail the whole request
+                result['driver_analysis'] = {'error': str(e)}
+
+        return Response(result)
+
+    @action(detail=True, methods=['post'])
+    def adopt(self, request, pk=None):
+        """
+        Adopt a scenario: persist its overlay changes as real data.
+
+        POST /api/v1/scenarios/{id}/adopt/
+
+        This converts scenario changes into actual RecurringFlows and updates,
+        making the scenario's projections the new baseline reality.
+        """
+        from apps.flows.models import RecurringFlow, FlowType
+
+        scenario = self.get_object()
+
+        if scenario.is_baseline:
+            return Response(
+                {'error': 'Cannot adopt the baseline scenario'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        adopted_changes = []
+        skipped_changes = []
+
+        for change in scenario.changes.filter(is_enabled=True):
+            params = change.parameters
+
+            # Handle changes that can be converted to persistent data
+            if change.change_type == ChangeType.ADD_EXPENSE:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name,
+                    description=change.description,
+                    flow_type=FlowType.EXPENSE,
+                    amount=params.get('amount', 0),
+                    frequency=params.get('frequency', 'monthly'),
+                    expense_category=params.get('category', 'miscellaneous'),
+                    start_date=change.effective_date,
+                    end_date=change.end_date,
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'ADD_EXPENSE',
+                    'flow_id': str(flow.id),
+                })
+
+            elif change.change_type == ChangeType.ADD_INCOME:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name,
+                    description=change.description,
+                    flow_type=FlowType.INCOME,
+                    amount=params.get('amount', 0),
+                    frequency=params.get('frequency', 'monthly'),
+                    income_category=params.get('category', 'other_income'),
+                    start_date=change.effective_date,
+                    end_date=change.end_date,
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'ADD_INCOME',
+                    'flow_id': str(flow.id),
+                })
+
+            elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
+                flow = RecurringFlow.objects.create(
+                    household=request.household,
+                    name=change.name or 'Savings Transfer',
+                    description='Automatic savings transfer',
+                    flow_type=FlowType.TRANSFER,
+                    amount=params.get('amount', 0),
+                    frequency='monthly',
+                    start_date=change.effective_date,
+                    linked_account_id=params.get('target_account_id'),
+                    is_baseline=True,
+                    is_active=True,
+                )
+                adopted_changes.append({
+                    'change_id': str(change.id),
+                    'type': 'SET_SAVINGS_TRANSFER',
+                    'flow_id': str(flow.id),
+                })
+
+            else:
+                # Overlay adjustments and other synthetic changes can't be adopted
+                skipped_changes.append({
+                    'change_id': str(change.id),
+                    'type': change.change_type,
+                    'reason': 'Overlay/synthetic changes cannot be adopted',
+                })
+
+        # Archive the scenario after adoption
+        scenario.is_archived = True
+        scenario.description = f"{scenario.description}\n\nAdopted on {date.today()}"
+        scenario.save()
+
+        # Trigger baseline refresh
+        from .reality_events import emit_flows_changed
+        emit_flows_changed(request.household)
+
+        return Response({
+            'status': 'adopted',
+            'adopted_changes': adopted_changes,
+            'skipped_changes': skipped_changes,
+            'scenario_archived': True,
+        })
 
 
 class ScenarioChangeViewSet(viewsets.ModelViewSet):

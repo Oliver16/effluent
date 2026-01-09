@@ -21,13 +21,29 @@ import type {
   LifeEventCategoryGroup,
   BaselineResponse,
   BaselineActionResponse,
+  // TASK-13 types
   DecisionCategoryGroup,
   DecisionTemplate,
   DecisionRunResponse,
   DecisionRun,
+  // TASK-14 types
   Goal,
-  GoalStatusDTO,
-  DataQualityReport,
+  GoalStatusResponse,
+  GoalSolveOptions,
+  GoalSolution,
+  GoalPlanStep,
+  ApplySolutionResponse,
+  NextActionsResponse,
+  ApplyActionResponse,
+  ActionTemplatesResponse,
+  TaxSummaryResponse,
+  DataQualityResponse,
+  AdoptScenarioResponse,
+  // TASK-15 types
+  StressTestListResponse,
+  StressTestResult,
+  StressTestBatchResponse,
+  ScenarioCompareResponse,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -361,9 +377,6 @@ export const metrics = {
   current: () => api.get<MetricSnapshot>('/api/v1/metrics/current/').then(data => toCamelCase<MetricSnapshot>(data)),
   history: (days?: number) => api.get<{ results: MetricSnapshot[] }>(`/api/v1/metrics/history/?days=${days || 90}`)
     .then(data => ({ results: toCamelCase<MetricSnapshot[]>(data.results || []) })),
-  dataQuality: () =>
-    api.get<DataQualityReport>('/api/v1/metrics/data-quality/')
-      .then(data => toCamelCase<DataQualityReport>(data)),
 }
 
 // Insights endpoints
@@ -487,11 +500,23 @@ export const scenarios = {
   updateChange: (changeId: string, data: Partial<ScenarioChange>) =>
     api.patch<ScenarioChange>(`/api/v1/scenario-changes/${changeId}/`, data),
   deleteChange: (changeId: string) => api.delete<void>(`/api/v1/scenario-changes/${changeId}/`),
-  compare: (scenarioIds: string[]) =>
-    api.post<{ results: Array<{ scenario: Scenario; projections: ScenarioProjection[] }> }>(
+  /**
+   * Compare scenarios with optional driver analysis.
+   * @param scenarioIds Array of scenario IDs to compare (first is baseline)
+   * @param options Optional: horizonMonths (max 360), includeDrivers (default true)
+   */
+  compare: (
+    scenarioIds: string[],
+    options?: { horizonMonths?: number; includeDrivers?: boolean }
+  ) =>
+    api.post<ScenarioCompareResponse>(
       '/api/v1/scenarios/compare/',
-      { scenario_ids: scenarioIds }
-    ),
+      {
+        scenario_ids: scenarioIds,
+        horizon_months: options?.horizonMonths,
+        include_drivers: options?.includeDrivers ?? true,
+      }
+    ).then(data => toCamelCase<ScenarioCompareResponse>(data)),
 }
 
 // Life Event Template endpoints
@@ -513,6 +538,112 @@ export const lifeEventTemplates = {
       changes_created: number;
       changes: ScenarioChange[];
     }>(`/api/v1/life-event-templates/${templateId}/apply/`, data),
+}
+
+// Goals endpoints (TASK-14)
+export const goals = {
+  list: () =>
+    api.get<{ results: Goal[] } | Goal[]>('/api/v1/goals/')
+      .then(normalizeListResponse)
+      .then(data => toCamelCase<Goal[]>(data)),
+
+  get: (id: string) =>
+    api.get<Goal>(`/api/v1/goals/${id}/`)
+      .then(data => toCamelCase<Goal>(data)),
+
+  create: (data: Partial<Goal>) =>
+    api.post<Goal>('/api/v1/goals/', toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+
+  update: (id: string, data: Partial<Goal>) =>
+    api.patch<Goal>(`/api/v1/goals/${id}/`, toSnakeCase(data))
+      .then(data => toCamelCase<Goal>(data)),
+
+  delete: (id: string) => api.delete<void>(`/api/v1/goals/${id}/`),
+
+  /**
+   * Get goal status evaluation for all active goals.
+   * @param scenarioId Optional scenario ID to evaluate against
+   */
+  status: (scenarioId?: string) => {
+    const params = scenarioId ? `?scenario_id=${scenarioId}` : ''
+    return api.get<GoalStatusResponse>(`/api/v1/goals/status/${params}`)
+      .then(data => toCamelCase<GoalStatusResponse>(data))
+  },
+
+  /**
+   * Solve for required changes to achieve a goal.
+   */
+  solve: (goalId: string, options: GoalSolveOptions) =>
+    api.post<GoalSolution>(`/api/v1/goals/${goalId}/solve/`, toSnakeCase(options))
+      .then(data => toCamelCase<GoalSolution>(data)),
+
+  /**
+   * Apply a solution as a new scenario.
+   */
+  applySolution: (goalId: string, plan: GoalPlanStep[], scenarioName?: string) =>
+    api.post<ApplySolutionResponse>(`/api/v1/goals/${goalId}/apply-solution/`, {
+      plan,
+      scenario_name: scenarioName,
+    }).then(data => toCamelCase<ApplySolutionResponse>(data)),
+}
+
+// Actions endpoints (TASK-14)
+export const actions = {
+  /**
+   * Get next best actions based on current financial state.
+   */
+  next: () =>
+    api.get<NextActionsResponse>('/api/v1/actions/next/')
+      .then(data => toCamelCase<NextActionsResponse>(data)),
+
+  /**
+   * Apply an action as a new scenario.
+   */
+  apply: (templateId: string, candidateId: string, parameters?: Record<string, unknown>, scenarioName?: string) =>
+    api.post<ApplyActionResponse>('/api/v1/actions/apply/', {
+      template_id: templateId,
+      candidate_id: candidateId,
+      parameters,
+      scenario_name: scenarioName,
+    }).then(data => toCamelCase<ApplyActionResponse>(data)),
+
+  /**
+   * Get all available action templates.
+   */
+  templates: () =>
+    api.get<ActionTemplatesResponse>('/api/v1/actions/templates/')
+      .then(data => toCamelCase<ActionTemplatesResponse>(data)),
+}
+
+// Tax summary endpoint (TASK-14)
+export const taxes = {
+  /**
+   * Get comprehensive tax summary for all income sources.
+   */
+  summary: () =>
+    api.get<TaxSummaryResponse>('/api/v1/taxes/summary/')
+      .then(data => toCamelCase<TaxSummaryResponse>(data)),
+}
+
+// Data quality endpoint (TASK-14)
+export const dataQuality = {
+  /**
+   * Get data quality report for the household.
+   */
+  report: () =>
+    api.get<DataQualityResponse>('/api/v1/metrics/data-quality/')
+      .then(data => toCamelCase<DataQualityResponse>(data)),
+}
+
+// Scenario adopt endpoint (TASK-14)
+export const scenarioActions = {
+  /**
+   * Adopt a scenario - persist overlay changes as real data.
+   */
+  adopt: (scenarioId: string) =>
+    api.post<AdoptScenarioResponse>(`/api/v1/scenarios/${scenarioId}/adopt/`)
+      .then(data => toCamelCase<AdoptScenarioResponse>(data)),
 }
 
 // Baseline scenario endpoints
@@ -550,7 +681,7 @@ export const baseline = {
       .then(data => toCamelCase<BaselineActionResponse>(data)),
 }
 
-// Decision Template endpoints
+// Decision Template endpoints (TASK-13)
 export const decisions = {
   listTemplates: () =>
     api.get<{ results: DecisionCategoryGroup[]; count: number }>('/api/v1/decisions/templates/')
@@ -584,23 +715,36 @@ export const decisions = {
     api.delete<void>(`/api/v1/decisions/runs/${id}/delete/`),
 }
 
-// Goals endpoints (TASK-13)
-export const goals = {
+// Stress Tests endpoints (TASK-15)
+export const stressTests = {
+  /**
+   * List available stress test templates.
+   */
   list: () =>
-    api.get<{ results: Goal[] }>('/api/v1/goals/')
-      .then(data => ({ results: toCamelCase<Goal[]>(data.results || []) })),
-  create: (data: Partial<Goal>) =>
-    api.post<Goal>('/api/v1/goals/', toSnakeCase(data))
-      .then(data => toCamelCase<Goal>(data)),
-  update: (id: string, data: Partial<Goal>) =>
-    api.patch<Goal>(`/api/v1/goals/${id}/`, toSnakeCase(data))
-      .then(data => toCamelCase<Goal>(data)),
-  remove: (id: string) =>
-    api.delete<void>(`/api/v1/goals/${id}/`),
-  status: (scenarioId?: string) =>
-    api.get<{ results: GoalStatusDTO[] }>(
-      scenarioId
-        ? `/api/v1/goals/status/?scenario_id=${scenarioId}`
-        : '/api/v1/goals/status/'
-    ).then(data => ({ results: toCamelCase<GoalStatusDTO[]>(data.results || []) })),
+    api.get<StressTestListResponse>('/api/v1/stress-tests/')
+      .then(data => toCamelCase<StressTestListResponse>(data)),
+
+  /**
+   * Run a single stress test.
+   * @param testKey The key of the stress test template
+   * @param inputs Custom input overrides for the test
+   * @param horizonMonths Projection horizon (default 60)
+   */
+  run: (testKey: string, inputs?: Record<string, unknown>, horizonMonths?: number) =>
+    api.post<StressTestResult>('/api/v1/stress-tests/run/', {
+      test_key: testKey,
+      inputs: inputs || {},
+      horizon_months: horizonMonths || 60,
+    }).then(data => toCamelCase<StressTestResult>(data)),
+
+  /**
+   * Run multiple stress tests in batch.
+   * @param testKeys Array of test keys to run (runs all if empty)
+   * @param horizonMonths Projection horizon (default 60)
+   */
+  batch: (testKeys?: string[], horizonMonths?: number) =>
+    api.post<StressTestBatchResponse>('/api/v1/stress-tests/batch/', {
+      test_keys: testKeys || [],
+      horizon_months: horizonMonths || 60,
+    }).then(data => toCamelCase<StressTestBatchResponse>(data)),
 }
