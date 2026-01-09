@@ -8,6 +8,8 @@ from apps.accounts.models import Account, BalanceSnapshot, LiabilityDetails, Acc
 from apps.flows.models import RecurringFlow, FlowType, ExpenseCategory, Frequency
 from apps.flows.services import generate_system_flows_for_household
 from apps.taxes.models import IncomeSource, W2Withholding, PreTaxDeduction
+from apps.scenarios.reality_events import emit_onboarding_completed
+from apps.scenarios.baseline import BaselineScenarioService
 from .models import OnboardingProgress, OnboardingStepData, OnboardingStep
 
 
@@ -909,3 +911,11 @@ class OnboardingService:
             self.progress.completed_at = timezone.now()
             self.progress.save()
             self.household.save()
+
+            # Auto-generate the baseline scenario now that onboarding is complete
+            # This creates and computes the initial projection synchronously
+            # so users immediately see their "Current Trajectory" baseline
+            BaselineScenarioService.refresh_baseline(self.household)
+
+            # Also emit the event for any async processing that may depend on it
+            emit_onboarding_completed(self.household)
