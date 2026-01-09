@@ -5,6 +5,7 @@ import { Sidebar } from './sidebar'
 import { MobileNav } from './mobile-nav'
 import { NewMenu } from '@/components/nav/NewMenu'
 import { CommandPalette } from '@/components/nav/CommandPalette'
+import { logout } from '@/lib/auth'
 
 interface AppShellProps {
   children: React.ReactNode
@@ -13,10 +14,8 @@ interface AppShellProps {
 export function AppShell({ children }: AppShellProps) {
   const router = useRouter()
 
-  const handleLogout = () => {
-    localStorage.removeItem('token')
-    localStorage.removeItem('refreshToken')
-    localStorage.removeItem('householdId')
+  const handleLogout = async () => {
+    await logout()
     router.push('/')
   }
 
