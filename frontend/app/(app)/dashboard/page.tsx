@@ -68,8 +68,13 @@ export default async function DashboardPage() {
   const overallStatus = getOverallStatus(goalStatus);
   const statusSubtitle = buildStatusSubtitle(goalStatus);
 
-  // Check for data quality errors
-  const dataQualityHasError = data && !data.dataQuality;
+  // Check for data quality errors - but only if we have data
+  // Don't show error banner just because dataQuality is missing
+  // The ModelConfidenceCard will handle displaying appropriate messaging
+  const dataQualityHasError = false; // Previously: data && !data.dataQuality
+
+  // Check if we have any actual data (user has set up their profile)
+  const hasNoData = data && !data.metrics && data.accounts.length === 0;
 
   // Sidebar content
   const sidebar = (
@@ -125,12 +130,31 @@ export default async function DashboardPage() {
       />
 
       {/* Error Alert */}
-      {(hasError || dataQualityHasError) && (
+      {hasError && (
         <Alert variant="destructive" className="mt-6">
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error loading data</AlertTitle>
           <AlertDescription>
-            Some dashboard data failed to load. Please try refreshing the page.
+            Unable to load dashboard data. This could be due to a session timeout.{' '}
+            <Link href="/login" className="underline font-medium">
+              Try logging in again
+            </Link>{' '}
+            or refresh the page.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Empty data notice - user hasn't set up their profile yet */}
+      {hasNoData && !hasError && (
+        <Alert className="mt-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Welcome! Let&apos;s get started</AlertTitle>
+          <AlertDescription>
+            Your dashboard is empty because you haven&apos;t added any financial data yet.{' '}
+            <Link href="/onboarding" className="underline font-medium">
+              Complete your onboarding
+            </Link>{' '}
+            to see your financial health metrics.
           </AlertDescription>
         </Alert>
       )}

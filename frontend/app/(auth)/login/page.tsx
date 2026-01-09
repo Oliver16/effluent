@@ -35,8 +35,8 @@ export default function LoginPage() {
         householdId = household.id
         localStorage.setItem('householdId', householdId)
 
-        // Set cookies for SSR authentication
-        await setAuthCookies(response.access, householdId)
+        // Set cookies for SSR authentication (including refresh token for server-side refresh)
+        await setAuthCookies(response.access, householdId, response.refresh)
 
         // Check if onboarding is complete
         const onboardingComplete = household.onboardingCompleted ??
@@ -48,8 +48,8 @@ export default function LoginPage() {
           router.push('/onboarding')
         }
       } else {
-        // Set cookies for SSR authentication (without household yet)
-        await setAuthCookies(response.access)
+        // Set cookies for SSR authentication (without household yet, but with refresh token)
+        await setAuthCookies(response.access, undefined, response.refresh)
         router.push('/onboarding')
       }
     } catch {

@@ -7,13 +7,20 @@
 /**
  * Set auth cookies after successful login.
  * Call this after storing tokens in localStorage.
+ *
+ * @param token - The access token
+ * @param householdId - Optional household ID
+ * @param refreshToken - Optional refresh token (for server-side token refresh)
  */
-export async function setAuthCookies(token: string, householdId?: string): Promise<boolean> {
+export async function setAuthCookies(token: string, householdId?: string, refreshToken?: string): Promise<boolean> {
   try {
+    // If no refreshToken provided, try to get it from localStorage
+    const refresh = refreshToken || (typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null);
+
     const response = await fetch('/api/auth/set-cookies', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token, householdId }),
+      body: JSON.stringify({ token, refreshToken: refresh, householdId }),
     });
     return response.ok;
   } catch (error) {

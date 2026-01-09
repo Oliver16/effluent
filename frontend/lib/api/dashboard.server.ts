@@ -19,6 +19,31 @@ import type {
 const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 /**
+ * Attempt to refresh the access token using the refresh token.
+ * Returns the new access token or null if refresh failed.
+ */
+async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${API_URL}/api/auth/token/refresh/`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (!response.ok) {
+      console.error('[Token Refresh] Failed:', response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.access || null;
+  } catch (error) {
+    console.error('[Token Refresh] Error:', error);
+    return null;
+  }
+}
+
+/**
  * Convert snake_case to camelCase
  */
 function snakeToCamel(str: string): string {
@@ -51,13 +76,20 @@ function toCamelCase<T>(obj: unknown): T {
 
 /**
  * Server-side fetch with auth from cookies
+ * Handles 401 errors by attempting token refresh
  */
-async function serverFetch<T>(path: string): Promise<T> {
+async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
   const cookieStore = await cookies();
 
-  // Get auth token from cookie or localStorage equivalent
+  // Get auth tokens from cookies
   const token = cookieStore.get('token')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
   const householdId = cookieStore.get('householdId')?.value;
+
+  // Debug logging for troubleshooting
+  const hasToken = !!token;
+  const hasRefreshToken = !!refreshToken;
+  const hasHouseholdId = !!householdId;
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -71,17 +103,85 @@ async function serverFetch<T>(path: string): Promise<T> {
     headers['X-Household-ID'] = householdId;
   }
 
-  const res = await fetch(`${API_URL}${path}`, {
-    headers,
-    cache: 'no-store', // Always fresh data for dashboard
-  });
+  const url = `${API_URL}${path}`;
 
-  if (!res.ok) {
-    throw new Error(`API error: ${res.status} ${res.statusText}`);
+  try {
+    const res = await fetch(url, {
+      headers,
+      cache: 'no-store', // Always fresh data for dashboard
+    });
+
+    // Handle 401 Unauthorized - try token refresh
+    if (res.status === 401 && !isRetry && refreshToken) {
+      console.log(`[Dashboard API] 401 on ${path}, attempting token refresh...`);
+      const newToken = await refreshAccessToken(refreshToken);
+
+      if (newToken) {
+        // Note: We can't update cookies in a Server Component, but we can retry with the new token
+        // The middleware should have handled this, but this is a fallback
+        console.log(`[Dashboard API] Token refreshed, retrying ${path}...`);
+
+        const retryHeaders: Record<string, string> = {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${newToken}`,
+        };
+
+        if (householdId) {
+          retryHeaders['X-Household-ID'] = householdId;
+        }
+
+        const retryRes = await fetch(url, {
+          headers: retryHeaders,
+          cache: 'no-store',
+        });
+
+        if (retryRes.ok) {
+          const data = await retryRes.json();
+          return toCamelCase<T>(data);
+        }
+
+        // Retry also failed
+        const errorBody = await retryRes.text().catch(() => 'Unable to read response body');
+        console.error(`[Dashboard API Error] ${path} (after token refresh):`, {
+          status: retryRes.status,
+          statusText: retryRes.statusText,
+          errorBody: errorBody.substring(0, 500),
+        });
+        throw new Error(`API error: ${retryRes.status} ${retryRes.statusText}`);
+      } else {
+        console.error(`[Dashboard API] Token refresh failed for ${path}`);
+      }
+    }
+
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => 'Unable to read response body');
+      console.error(`[Dashboard API Error] ${path}:`, {
+        status: res.status,
+        statusText: res.statusText,
+        hasToken,
+        hasRefreshToken,
+        hasHouseholdId,
+        apiUrl: API_URL,
+        errorBody: errorBody.substring(0, 500),
+      });
+      throw new Error(`API error: ${res.status} ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    return toCamelCase<T>(data);
+  } catch (error) {
+    // Log network errors or other failures
+    if (error instanceof Error && !error.message.startsWith('API error:')) {
+      console.error(`[Dashboard API Network Error] ${path}:`, {
+        error: error.message,
+        hasToken,
+        hasRefreshToken,
+        hasHouseholdId,
+        apiUrl: API_URL,
+      });
+    }
+    throw error;
   }
-
-  const data = await res.json();
-  return toCamelCase<T>(data);
 }
 
 /**

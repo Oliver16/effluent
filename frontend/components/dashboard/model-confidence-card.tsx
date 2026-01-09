@@ -46,8 +46,25 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
     return <SidebarCardSkeleton />
   }
 
+  // Show a helpful message when no report is available
   if (!report) {
-    return null
+    return (
+      <SectionCard dense title="Model Confidence">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <span className="text-2xl font-semibold tabular-nums tracking-tight text-muted-foreground">
+              --
+            </span>
+            <StatusBadge status="neutral" statusLabel="No Data" />
+          </div>
+          <Progress value={0} className="h-2" />
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <AlertCircle className="h-4 w-4" />
+            <span>Add financial data to see confidence score</span>
+          </div>
+        </div>
+      </SectionCard>
+    )
   }
 
   const confidencePercent = Math.round(report.confidenceScore * 100)
