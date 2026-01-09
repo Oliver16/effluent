@@ -135,6 +135,6 @@ class Migration(migrations.Migration):
         ),
         migrations.AddIndex(
             model_name='balancesnapshot',
-            index=models.Index(fields=['account', '-as_of_date'], name='balance_snapshot_account_as_of_date'),
+            index=models.Index(fields=['account', '-as_of_date'], name='bal_snap_acct_as_of_date'),
         ),
     ]
