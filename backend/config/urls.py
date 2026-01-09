@@ -28,7 +28,7 @@ from apps.onboarding.views import (
     go_back as onboarding_back
 )
 from apps.scenarios.views import (
-    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet
+    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet, BaselineView
 )
 from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
@@ -91,6 +91,13 @@ urlpatterns = [
     path('api/v1/decisions/', include(decision_router.urls)),
     path('api/v1/decisions/run/', DecisionRunViewSet.as_view({'post': 'run_decision'}), name='decision-run'),
     path('api/v1/decisions/draft/', DecisionRunViewSet.as_view({'post': 'save_draft'}), name='decision-draft'),
+    path('api/v1/decisions/runs/', DecisionRunViewSet.as_view({'get': 'list_runs'}), name='decision-runs-list'),
+    path('api/v1/decisions/runs/<uuid:pk>/', DecisionRunViewSet.as_view({'get': 'get_run'}), name='decision-run-detail'),
+    path('api/v1/decisions/runs/<uuid:pk>/complete/', DecisionRunViewSet.as_view({'post': 'complete_draft'}), name='decision-complete'),
+    path('api/v1/decisions/runs/<uuid:pk>/delete/', DecisionRunViewSet.as_view({'delete': 'delete_draft'}), name='decision-delete'),
+
+    # Baseline Scenario
+    path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline'),
 
     # Goals
     path('api/v1/goals/status/', GoalStatusView.as_view(), name='goal-status'),
