@@ -12,6 +12,10 @@ Creates:
 - Sample balance snapshots
 - Sample income sources with withholding and deductions
 - Sample recurring flows (income and expenses)
+- Baseline scenario for financial projections
+- Financial goals (emergency fund, savings rate, DSCR)
+- Metric thresholds with default values
+- Initial metric snapshot with calculated values
 """
 from decimal import Decimal
 from datetime import date, timedelta
@@ -24,6 +28,9 @@ from apps.accounts.models import Account, BalanceSnapshot, AssetGroup, Liability
 from apps.taxes.models import IncomeSource, W2Withholding, PreTaxDeduction
 from apps.flows.models import RecurringFlow
 from apps.onboarding.models import OnboardingProgress
+from apps.scenarios.models import Scenario
+from apps.goals.models import Goal
+from apps.metrics.models import MetricSnapshot, MetricThreshold, DEFAULT_THRESHOLDS
 
 
 class Command(BaseCommand):
@@ -819,4 +826,182 @@ class Command(BaseCommand):
                 'student_loans', 'other_debts', 'other_expenses'
             ],
             completed_at=timezone.now(),
+        )
+
+        # ===================
+        # CREATE BASELINE SCENARIO
+        # ===================
+        Scenario.objects.create(
+            household=household,
+            name='Baseline',
+            description='Current financial state based on your actual income, expenses, and assets.',
+            is_baseline=True,
+            baseline_mode='live',
+            start_date=today,
+            projection_months=60,
+            inflation_rate=Decimal('0.03'),
+            investment_return_rate=Decimal('0.07'),
+            salary_growth_rate=Decimal('0.03'),
+            is_active=True,
+            is_archived=False,
+        )
+
+        # ===================
+        # CREATE GOALS
+        # ===================
+        # Emergency fund goal - 6 months of expenses
+        Goal.objects.create(
+            household=household,
+            name='Emergency Fund',
+            goal_type='emergency_fund_months',
+            target_value=Decimal('6.0'),
+            target_unit='months',
+            is_primary=True,
+            is_active=True,
+        )
+
+        # Savings rate goal
+        Goal.objects.create(
+            household=household,
+            name='Savings Rate',
+            goal_type='min_savings_rate',
+            target_value=Decimal('20.0'),
+            target_unit='percent',
+            is_primary=False,
+            is_active=True,
+        )
+
+        # DSCR goal
+        Goal.objects.create(
+            household=household,
+            name='Debt Safety Ratio',
+            goal_type='min_dscr',
+            target_value=Decimal('2.0'),
+            target_unit='ratio',
+            is_primary=False,
+            is_active=True,
+        )
+
+        # ===================
+        # CREATE METRIC THRESHOLDS
+        # ===================
+        for threshold in DEFAULT_THRESHOLDS:
+            MetricThreshold.objects.create(
+                household=household,
+                metric_name=threshold['metric_name'],
+                warning_threshold=threshold['warning'],
+                critical_threshold=threshold['critical'],
+                comparison=threshold['comparison'],
+                is_enabled=True,
+            )
+
+        # ===================
+        # CREATE METRIC SNAPSHOT
+        # ===================
+        # Calculate values based on the sample data we created
+        # Total assets (market): checking + savings + 401ks + Roth IRA + HSA + brokerage + home + vehicle
+        total_assets_market = Decimal('8542.33') + Decimal('25000.00') + Decimal('125000.00') + \
+            Decimal('85000.00') + Decimal('45000.00') + Decimal('12500.00') + \
+            Decimal('35000.00') + Decimal('650000.00') + Decimal('38000.00')  # = 1,024,042.33
+
+        # Total assets (cost): sum of cost basis where applicable
+        total_assets_cost = Decimal('8542.33') + Decimal('25000.00') + Decimal('95000.00') + \
+            Decimal('72000.00') + Decimal('35000.00') + Decimal('12500.00') + \
+            Decimal('28000.00') + Decimal('480000.00') + Decimal('45000.00')  # = 801,042.33
+
+        # Total liabilities: mortgage + auto loan + credit card
+        total_liabilities = Decimal('385000.00') + Decimal('22500.00') + Decimal('3250.00')  # = 410,750.00
+
+        # Liquid assets: checking + savings + brokerage
+        total_liquid = Decimal('8542.33') + Decimal('25000.00') + Decimal('35000.00')  # = 68,542.33
+
+        # Monthly income (gross biweekly * 26 / 12)
+        john_monthly_gross = Decimal('145000.00') / 12
+        jane_monthly_gross = Decimal('92000.00') / 12
+        total_monthly_income = john_monthly_gross + jane_monthly_gross  # ~19,750
+
+        # Monthly expenses (sum of all recurring expenses)
+        total_monthly_expenses = Decimal('2580.00') + Decimal('185.00') + Decimal('65.00') + \
+            Decimal('80.00') + Decimal('89.99') + Decimal('145.00') + Decimal('660.00') + \
+            Decimal('165.00') + Decimal('120.00') + Decimal('850.00') + Decimal('350.00') + \
+            Decimal('1800.00') + Decimal('85.00') + Decimal('55.00') + Decimal('79.00') + \
+            Decimal('500.00')  # = 7,808.99
+
+        # Debt service (mortgage + auto loan + credit card minimum)
+        total_debt_service = Decimal('2580.00') + Decimal('660.00') + Decimal('65.00')  # = 3,305.00
+
+        # Calculate metrics
+        net_worth_market = total_assets_market - total_liabilities
+        net_worth_cost = total_assets_cost - total_liabilities
+        monthly_surplus = total_monthly_income - total_monthly_expenses
+        dscr = total_monthly_income / total_debt_service if total_debt_service > 0 else Decimal('99.999')
+        liquidity_months = total_liquid / total_monthly_expenses if total_monthly_expenses > 0 else Decimal('99.99')
+        savings_rate = monthly_surplus / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        # DTI ratio
+        dti_ratio = total_debt_service / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        # Debt to asset ratios
+        debt_to_asset_market = total_liabilities / total_assets_market if total_assets_market > 0 else Decimal('0')
+        debt_to_asset_cost = total_liabilities / total_assets_cost if total_assets_cost > 0 else Decimal('0')
+
+        # Housing ratio (mortgage / income)
+        housing_ratio = Decimal('2580.00') / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        # Fixed expense ratio (estimate: mortgage + auto + insurance + subscriptions)
+        fixed_expenses = Decimal('2580.00') + Decimal('660.00') + Decimal('165.00') + \
+            Decimal('85.00') + Decimal('55.00') + Decimal('79.00') + Decimal('89.99') + Decimal('145.00')
+        fixed_expense_ratio = fixed_expenses / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        # Essential expense ratio
+        essential_expenses = Decimal('2580.00') + Decimal('185.00') + Decimal('65.00') + \
+            Decimal('80.00') + Decimal('850.00') + Decimal('1800.00')
+        essential_expense_ratio = essential_expenses / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        # Income concentration (primary earner's share)
+        income_concentration = john_monthly_gross / total_monthly_income if total_monthly_income > 0 else Decimal('1')
+
+        # Unrealized gains
+        unrealized_gains = total_assets_market - total_assets_cost
+
+        # Weighted average interest rate (simplified)
+        # (mortgage_balance * mortgage_rate + auto_balance * auto_rate + cc_balance * cc_rate) / total_debt
+        weighted_interest = (Decimal('385000.00') * Decimal('0.0625') +
+                            Decimal('22500.00') * Decimal('0.0499') +
+                            Decimal('3250.00') * Decimal('0.2199'))
+        weighted_avg_interest = weighted_interest / total_liabilities if total_liabilities > 0 else Decimal('0')
+
+        # High interest debt ratio (credit card / total debt)
+        high_interest_debt_ratio = Decimal('3250.00') / total_liabilities if total_liabilities > 0 else Decimal('0')
+
+        # Investment rate (savings transfer / income)
+        investment_rate = Decimal('500.00') / total_monthly_income if total_monthly_income > 0 else Decimal('0')
+
+        MetricSnapshot.objects.create(
+            household=household,
+            as_of_date=today,
+            net_worth_market=net_worth_market,
+            net_worth_cost=net_worth_cost,
+            monthly_surplus=monthly_surplus,
+            dscr=min(dscr, Decimal('99.999')),
+            liquidity_months=min(liquidity_months, Decimal('99.99')),
+            savings_rate=savings_rate,
+            dti_ratio=dti_ratio,
+            debt_to_asset_market=debt_to_asset_market,
+            debt_to_asset_cost=debt_to_asset_cost,
+            weighted_avg_interest_rate=weighted_avg_interest,
+            high_interest_debt_ratio=high_interest_debt_ratio,
+            housing_ratio=housing_ratio,
+            fixed_expense_ratio=fixed_expense_ratio,
+            essential_expense_ratio=essential_expense_ratio,
+            income_concentration=income_concentration,
+            unrealized_gains=unrealized_gains,
+            investment_rate=investment_rate,
+            total_assets_market=total_assets_market,
+            total_assets_cost=total_assets_cost,
+            total_liabilities=total_liabilities,
+            total_monthly_income=total_monthly_income,
+            total_monthly_expenses=total_monthly_expenses,
+            total_debt_service=total_debt_service,
+            total_liquid_assets=total_liquid,
         )
