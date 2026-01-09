@@ -208,17 +208,10 @@ class StressTestService:
                 'applies_to': inputs.get('applies_to', 'all'),
             }
         elif change_type == ChangeType.ADJUST_INVESTMENT_VALUE:
-            # percent_change should be in percentage points (e.g., -20 for -20%)
-            # Convert from ratio if provided as ratio (between -1 and 1)
-            percent_change = inputs.get('percent_change', '0')
-            try:
-                pct = float(percent_change)
-                if -1 <= pct <= 1 and pct != 0:
-                    percent_change = str(pct * 100)
-            except (ValueError, TypeError):
-                pass
+            # percent_change should be a ratio (e.g., -0.20 for -20%)
+            # ScenarioEngine expects ratio format: multiplier = 1 + percent_change
             return {
-                'percent_change': percent_change,
+                'percent_change': inputs.get('percent_change', '0'),
                 'recovery_months': inputs.get('recovery_months', 36),
                 'applies_to': inputs.get('applies_to', 'all'),
             }
