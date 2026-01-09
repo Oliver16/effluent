@@ -33,7 +33,7 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
     // Group by status
     const critical = goalStatus.filter(g => g.status === 'critical')
     const warning = goalStatus.filter(g => g.status === 'warning')
-    const onTrack = goalStatus.filter(g => g.status === 'on_track' || g.status === 'achieved')
+    const onTrack = goalStatus.filter(g => g.status === 'good' || g.status === 'achieved')
 
     const parts = []
 

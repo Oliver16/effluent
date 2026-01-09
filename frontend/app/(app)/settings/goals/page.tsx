@@ -74,6 +74,12 @@ const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode;
     label: 'Net Worth Target',
     icon: <DollarSign className="h-4 w-4" />,
     unit: 'usd',
+    description: 'Target net worth amount',
+  },
+  net_worth_target_by_date: {
+    label: 'Net Worth by Date',
+    icon: <DollarSign className="h-4 w-4" />,
+    unit: 'usd',
     description: 'Target net worth by a specific date',
   },
   retirement_age: {
@@ -103,6 +109,7 @@ const goalFormSchema = z.object({
     'min_dscr',
     'min_savings_rate',
     'net_worth_target',
+    'net_worth_target_by_date',
     'retirement_age',
     'debt_free_date',
     'custom',

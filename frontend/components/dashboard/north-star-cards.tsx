@@ -1,9 +1,11 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { MetricSnapshot, GoalStatusResult, GoalType } from '@/lib/types'
-import { DollarSign, Calendar, TrendingUp, TrendingDown, Minus, Shield, PiggyBank, Wallet } from 'lucide-react'
+import { StatCard } from '@/components/ui/StatCard'
+import { StatCardSkeleton } from '@/components/ui/Skeletons'
+import { MetricSnapshot, GoalStatusResult, GoalType, GoalStatus } from '@/lib/types'
+import { goalStatusToStatus } from '@/lib/status'
+import { formatCurrency, formatPercent, formatNumber } from '@/lib/utils'
+import type { Status } from '@/components/ui/StatusBadge'
 
 interface NorthStarCardsProps {
   metrics: MetricSnapshot | null
@@ -11,258 +13,174 @@ interface NorthStarCardsProps {
   isLoading?: boolean
 }
 
-interface MetricCardData {
+interface MetricCardConfig {
   key: string
   title: string
-  icon: React.ReactNode
-  getValue: (m: MetricSnapshot) => string
-  getTarget: (goals: GoalStatusResult[]) => string | null
-  getDelta: (goals: GoalStatusResult[]) => string | null
-  getStatus: (goals: GoalStatusResult[]) => 'good' | 'warning' | 'critical' | null
-  format: 'currency' | 'months' | 'ratio' | 'percent'
   goalType: GoalType | null
+  getValue: (m: MetricSnapshot) => string
+  formatValue: (value: string) => string
+  getSuffix?: () => string
+  getDefaultStatus: (value: number) => Status
+  getDefaultStatusLabel: (value: number) => string
 }
 
-const METRIC_CARDS: MetricCardData[] = [
+const METRIC_CARDS: MetricCardConfig[] = [
   {
     key: 'netWorth',
     title: 'Net Worth',
-    icon: <DollarSign className="h-4 w-4" />,
-    getValue: (m) => m.netWorthMarket,
-    getTarget: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target')
-      return goal ? goal.targetValue : null
-    },
-    getDelta: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target')
-      return goal ? goal.deltaToTarget : null
-    },
-    getStatus: (goals) => {
-      const goal = goals.find(g => g.goalType === 'net_worth_target')
-      return goal ? (goal.status as 'good' | 'warning' | 'critical') : null
-    },
-    format: 'currency',
     goalType: 'net_worth_target',
+    getValue: (m) => m.netWorthMarket,
+    formatValue: (v) => formatCurrency(v),
+    getDefaultStatus: (v) => v >= 0 ? 'good' : 'warning',
+    getDefaultStatusLabel: (v) => v >= 0 ? 'Positive' : 'Negative',
   },
   {
     key: 'monthlySurplus',
     title: 'Monthly Surplus',
-    icon: <Wallet className="h-4 w-4" />,
-    getValue: (m) => m.monthlySurplus,
-    getTarget: () => null,
-    getDelta: () => null,
-    getStatus: () => null,
-    format: 'currency',
     goalType: null,
+    getValue: (m) => m.monthlySurplus,
+    formatValue: (v) => formatCurrency(v),
+    getDefaultStatus: (v) => v >= 0 ? 'good' : v >= -500 ? 'warning' : 'critical',
+    getDefaultStatusLabel: (v) => v >= 0 ? 'Positive' : v >= -500 ? 'Tight' : 'Deficit',
   },
   {
     key: 'liquidityMonths',
     title: 'Liquidity',
-    icon: <Calendar className="h-4 w-4" />,
-    getValue: (m) => m.liquidityMonths,
-    getTarget: (goals) => {
-      const goal = goals.find(g => g.goalType === 'emergency_fund_months')
-      return goal ? goal.targetValue : null
-    },
-    getDelta: (goals) => {
-      const goal = goals.find(g => g.goalType === 'emergency_fund_months')
-      return goal ? goal.deltaToTarget : null
-    },
-    getStatus: (goals) => {
-      const goal = goals.find(g => g.goalType === 'emergency_fund_months')
-      return goal ? (goal.status as 'good' | 'warning' | 'critical') : null
-    },
-    format: 'months',
     goalType: 'emergency_fund_months',
+    getValue: (m) => m.liquidityMonths,
+    formatValue: (v) => formatNumber(v, 1),
+    getSuffix: () => 'months',
+    getDefaultStatus: (v) => v >= 6 ? 'good' : v >= 3 ? 'warning' : 'critical',
+    getDefaultStatusLabel: (v) => v >= 6 ? 'Good' : v >= 3 ? 'Low' : 'Critical',
   },
   {
     key: 'dscr',
     title: 'DSCR',
-    icon: <Shield className="h-4 w-4" />,
-    getValue: (m) => m.dscr,
-    getTarget: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_dscr')
-      return goal ? goal.targetValue : null
-    },
-    getDelta: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_dscr')
-      return goal ? goal.deltaToTarget : null
-    },
-    getStatus: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_dscr')
-      return goal ? (goal.status as 'good' | 'warning' | 'critical') : null
-    },
-    format: 'ratio',
     goalType: 'min_dscr',
+    getValue: (m) => m.dscr,
+    formatValue: (v) => `${parseFloat(v).toFixed(2)}x`,
+    getDefaultStatus: (v) => v >= 1.25 ? 'good' : v >= 1.0 ? 'warning' : 'critical',
+    getDefaultStatusLabel: (v) => v >= 1.25 ? 'Strong' : v >= 1.0 ? 'Adequate' : 'Weak',
   },
   {
     key: 'savingsRate',
     title: 'Savings Rate',
-    icon: <PiggyBank className="h-4 w-4" />,
-    getValue: (m) => m.savingsRate,
-    getTarget: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_savings_rate')
-      return goal ? goal.targetValue : null
-    },
-    getDelta: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_savings_rate')
-      return goal ? goal.deltaToTarget : null
-    },
-    getStatus: (goals) => {
-      const goal = goals.find(g => g.goalType === 'min_savings_rate')
-      return goal ? (goal.status as 'good' | 'warning' | 'critical') : null
-    },
-    format: 'percent',
     goalType: 'min_savings_rate',
+    getValue: (m) => m.savingsRate,
+    formatValue: (v) => formatPercent(v, 1),
+    getDefaultStatus: (v) => v >= 0.20 ? 'good' : v >= 0.10 ? 'warning' : 'critical',
+    getDefaultStatusLabel: (v) => v >= 0.20 ? 'Strong' : v >= 0.10 ? 'Moderate' : 'Low',
+  },
+  {
+    key: 'totalDebt',
+    title: 'Total Debt',
+    goalType: 'debt_free_date',
+    getValue: (m) => m.totalLiabilities,
+    formatValue: (v) => formatCurrency(Math.abs(parseFloat(v) || 0)),
+    getDefaultStatus: (v) => v <= 0 ? 'good' : 'neutral',
+    getDefaultStatusLabel: (v) => v <= 0 ? 'Debt-free' : 'Active',
   },
 ]
 
-function formatValue(value: string, format: MetricCardData['format']): string {
-  const num = parseFloat(value)
-  if (isNaN(num)) return value
+function getGoalData(goalStatus: GoalStatusResult[] | null, goalType: GoalType | null) {
+  if (!goalStatus || !goalType) return null
+  return goalStatus.find(g => g.goalType === goalType)
+}
 
-  switch (format) {
-    case 'currency':
-      return new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(num)
-    case 'months':
-      return `${num.toFixed(1)} mo`
-    case 'ratio':
-      return `${num.toFixed(2)}x`
-    case 'percent':
-      return `${(num * 100).toFixed(1)}%`
+function convertGoalStatus(status: GoalStatus): Status {
+  return goalStatusToStatus(status)
+}
+
+function getStatusLabel(status: GoalStatus): string {
+  switch (status) {
+    case 'good':
+    case 'achieved':
+      return 'On Track'
+    case 'warning':
+      return 'At Risk'
+    case 'critical':
+      return 'Critical'
     default:
-      return value
+      return '—'
   }
 }
 
-function formatDelta(delta: string, format: MetricCardData['format']): string {
+function formatDelta(delta: string, goalType: GoalType | null): string | undefined {
   const num = parseFloat(delta)
-  if (isNaN(num)) return delta
+  if (isNaN(num) || Math.abs(num) < 0.01) return undefined
 
-  const prefix = num >= 0 ? '+' : ''
+  const absVal = Math.abs(num)
+  const direction = num > 0 ? 'above' : 'below'
 
-  switch (format) {
-    case 'currency':
-      return `${prefix}${new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(num)}`
-    case 'months':
-      return `${prefix}${num.toFixed(1)} mo`
-    case 'ratio':
-      return `${prefix}${num.toFixed(2)}`
-    case 'percent':
-      return `${prefix}${(num * 100).toFixed(1)}%`
-    default:
-      return delta
+  // Format based on goal type
+  if (goalType === 'emergency_fund_months') {
+    return `${absVal.toFixed(1)} mo ${direction} target`
   }
-}
-
-function MetricCard({
-  card,
-  metrics,
-  goalStatus,
-  isLoading,
-}: {
-  card: MetricCardData
-  metrics: MetricSnapshot | null
-  goalStatus: GoalStatusResult[] | null
-  isLoading?: boolean
-}) {
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-          <div className="h-4 w-4 text-muted-foreground">{card.icon}</div>
-        </CardHeader>
-        <CardContent>
-          <div className="animate-pulse space-y-2">
-            <div className="h-8 bg-muted rounded w-24" />
-            <div className="h-4 bg-muted rounded w-16" />
-          </div>
-        </CardContent>
-      </Card>
-    )
+  if (goalType === 'min_dscr') {
+    return `${absVal.toFixed(2)} ${direction} target`
+  }
+  if (goalType === 'min_savings_rate') {
+    return `${(absVal * 100).toFixed(1)}% ${direction} target`
+  }
+  if (goalType === 'net_worth_target' || goalType === 'debt_free_date') {
+    return `${formatCurrency(absVal)} ${direction} target`
   }
 
-  const value = metrics ? card.getValue(metrics) : 'N/A'
-  const target = goalStatus ? card.getTarget(goalStatus) : null
-  const delta = goalStatus ? card.getDelta(goalStatus) : null
-  const status = goalStatus ? card.getStatus(goalStatus) : null
-
-  const deltaNum = delta ? parseFloat(delta) : 0
-
-  const getStatusBadgeVariant = () => {
-    switch (status) {
-      case 'good':
-        return 'default'
-      case 'warning':
-        return 'secondary'
-      case 'critical':
-        return 'destructive'
-      default:
-        return undefined
-    }
-  }
-
-  const getDeltaIcon = () => {
-    if (!delta) return null
-    if (deltaNum > 0) return <TrendingUp className="h-3 w-3 text-green-500" />
-    if (deltaNum < 0) return <TrendingDown className="h-3 w-3 text-red-500" />
-    return <Minus className="h-3 w-3 text-muted-foreground" />
-  }
-
-  return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{card.title}</CardTitle>
-        <div className="h-4 w-4 text-muted-foreground">{card.icon}</div>
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{formatValue(value, card.format)}</div>
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1 text-xs text-muted-foreground">
-            {target && <span>Target: {formatValue(target, card.format)}</span>}
-          </div>
-          {status && (
-            <Badge variant={getStatusBadgeVariant()} className="text-xs">
-              {status === 'good' ? 'On Track' : status === 'warning' ? 'At Risk' : 'Critical'}
-            </Badge>
-          )}
-        </div>
-        {delta && (
-          <div className="flex items-center gap-1 text-xs mt-1">
-            {getDeltaIcon()}
-            <span className={deltaNum >= 0 ? 'text-green-600' : 'text-red-600'}>
-              {formatDelta(delta, card.format)} to target
-            </span>
-          </div>
-        )}
-      </CardContent>
-    </Card>
-  )
+  return undefined
 }
 
 export function NorthStarCards({ metrics, goalStatus, isLoading }: NorthStarCardsProps) {
+  if (isLoading) {
+    return (
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {METRIC_CARDS.map((card) => (
+          <StatCardSkeleton key={card.key} />
+        ))}
+      </div>
+    )
+  }
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-      {METRIC_CARDS.map((card) => (
-        <MetricCard
-          key={card.key}
-          card={card}
-          metrics={metrics}
-          goalStatus={goalStatus}
-          isLoading={isLoading}
-        />
-      ))}
+    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {METRIC_CARDS.map((card) => {
+        const rawValue = metrics ? card.getValue(metrics) : '0'
+        const numValue = parseFloat(rawValue) || 0
+        const formattedValue = card.formatValue(rawValue)
+
+        // Get goal data if available
+        const goal = getGoalData(goalStatus, card.goalType)
+
+        // Determine status - use goal status if available, else compute default
+        const status: Status = goal
+          ? convertGoalStatus(goal.status)
+          : card.getDefaultStatus(numValue)
+
+        const statusLabel = goal
+          ? getStatusLabel(goal.status)
+          : card.getDefaultStatusLabel(numValue)
+
+        // Target and delta labels
+        const targetLabel = goal && goal.targetValue
+          ? `Target: ${card.formatValue(goal.targetValue)}`
+          : undefined
+
+        const deltaLabel = goal && goal.deltaToTarget
+          ? formatDelta(goal.deltaToTarget, card.goalType)
+          : undefined
+
+        return (
+          <StatCard
+            key={card.key}
+            title={card.title}
+            value={formattedValue}
+            suffix={card.getSuffix?.()}
+            status={status}
+            statusLabel={statusLabel}
+            targetLabel={targetLabel}
+            deltaLabel={deltaLabel}
+          />
+        )
+      })}
     </div>
   )
 }
