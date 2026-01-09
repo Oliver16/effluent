@@ -188,14 +188,17 @@ class DecisionRunViewSet(ViewSet):
             takeaways.append(f"Net worth ${nw_diff:,.0f} by month {scenario_proj.month_number}")
 
         # Savings rate comparison
+        # savings_rate is stored as a ratio (e.g., 0.843 for 84.3%)
         baseline_sr = Decimal(str(baseline_proj.savings_rate))
         scenario_sr = Decimal(str(scenario_proj.savings_rate))
         sr_diff = scenario_sr - baseline_sr
+        # Convert ratio difference to percentage points for display
+        sr_diff_pct = sr_diff * Decimal('100')
 
-        if sr_diff > 1:
-            takeaways.append(f"Savings rate improves by {sr_diff:.1f}%")
-        elif sr_diff < -1:
-            takeaways.append(f"Savings rate decreases by {abs(sr_diff):.1f}%")
+        if sr_diff_pct > Decimal('1'):
+            takeaways.append(f"Savings rate improves by {sr_diff_pct:.1f}%")
+        elif sr_diff_pct < Decimal('-1'):
+            takeaways.append(f"Savings rate decreases by {abs(sr_diff_pct):.1f}%")
 
         # Cash flow comparison
         baseline_cf = Decimal(str(baseline_proj.net_cash_flow))

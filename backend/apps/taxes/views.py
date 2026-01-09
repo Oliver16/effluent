@@ -327,7 +327,8 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
         for ded in source.pretax_deductions.all():
             if ded.deduction_type in ('traditional_401k', 'roth_401k'):
                 if ded.amount_type == 'percentage':
-                    current_401k += (source.gross_annual * ded.amount / 100)
+                    # amount is stored as decimal (0.06 for 6%), no division needed
+                    current_401k += (source.gross_annual * ded.amount)
                 else:
                     current_401k += ded.amount * 12  # Assuming monthly
 
@@ -349,7 +350,8 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
         for ded in source.pretax_deductions.all():
             if ded.deduction_type == 'hsa':
                 if ded.amount_type == 'percentage':
-                    current_hsa += (source.gross_annual * ded.amount / 100)
+                    # amount is stored as decimal (0.06 for 6%), no division needed
+                    current_hsa += (source.gross_annual * ded.amount)
                 else:
                     current_hsa += ded.amount * 12
 
