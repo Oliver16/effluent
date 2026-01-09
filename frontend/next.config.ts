@@ -18,14 +18,17 @@ const nextConfig: NextConfig = {
       )
       return []
     }
-    return [
-      {
-        // Proxy all /api/* requests to the Django backend EXCEPT for
-        // Next.js internal API routes (set-cookies, clear-cookies)
-        source: '/api/:path((?!auth/set-cookies|auth/clear-cookies).*)',
-        destination: `${apiUrl}/api/:path*`,
-      },
-    ]
+    // Use structured rewrites with 'fallback' to ensure Next.js internal
+    // API routes (like /api/auth/set-cookies) are resolved FIRST.
+    // Fallback rewrites only apply when no page/route exists at the path.
+    return {
+      fallback: [
+        {
+          source: '/api/:path*',
+          destination: `${apiUrl}/api/:path*`,
+        },
+      ],
+    }
   },
 }
 
