@@ -28,11 +28,24 @@ SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 USE_X_FORWARDED_HOST = True
 USE_X_FORWARDED_PORT = True
 
+# HTTPS/SSL redirect (enable when not behind proxy that handles TLS termination)
+# Set SECURE_SSL_REDIRECT_ENABLED=true in environment to enable
+SECURE_SSL_REDIRECT = os.environ.get('SECURE_SSL_REDIRECT_ENABLED', 'false').lower() == 'true'
+
+# HSTS (HTTP Strict Transport Security)
+# Tells browsers to only access site over HTTPS
+_enable_hsts = os.environ.get('SECURE_COOKIES', 'false').lower() == 'true'
+SECURE_HSTS_SECONDS = 31536000 if _enable_hsts else 0  # 1 year
+SECURE_HSTS_INCLUDE_SUBDOMAINS = _enable_hsts
+SECURE_HSTS_PRELOAD = _enable_hsts
+
 # Session and CSRF settings
 # Enable secure cookies only when TLS is terminated upstream (set SECURE_COOKIES=true)
 _secure_cookies = os.environ.get('SECURE_COOKIES', 'false').lower() == 'true'
 SESSION_COOKIE_SECURE = _secure_cookies
 CSRF_COOKIE_SECURE = _secure_cookies
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
 CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS.copy()
 
 # Add the backend API domain itself for admin login CSRF validation

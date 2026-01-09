@@ -1,9 +1,9 @@
 [project]
 name = "effluent"
 version = "0.1.0"
-requires-python = ">=3.13"
+requires-python = ">=3.11"
 dependencies = [
-    "django>=6.0",
+    "django>=5.0,<6.0",
     "djangorestframework>=3.15",
     "djangorestframework-simplejwt>=5.3",
     "django-cors-headers>=4.3",
@@ -26,3 +26,8 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.dev"
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"

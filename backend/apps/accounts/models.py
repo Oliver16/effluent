@@ -1,8 +1,10 @@
 import uuid
+from datetime import date
 from decimal import Decimal
 from django.db import models
+from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator
-from apps.core.models import HouseholdOwnedModel
+from apps.core.models import HouseholdOwnedModel, TimestampedModel
 
 
 class AccountType(models.TextChoices):
@@ -242,12 +244,12 @@ class Account(HouseholdOwnedModel):
         return snapshot.balance if snapshot else Decimal('0')
 
 
-class BalanceSnapshot(models.Model):
+class BalanceSnapshot(TimestampedModel):
     """Point-in-time balance record with dual-basis tracking."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.ForeignKey(Account, on_delete=models.CASCADE, related_name='snapshots')
     as_of_date = models.DateField()
-    recorded_at = models.DateTimeField(auto_now_add=True)
+    recorded_at = models.DateTimeField(auto_now_add=True)  # Keep for specific business purpose
 
     balance = models.DecimalField(max_digits=14, decimal_places=2)
     cost_basis = models.DecimalField(max_digits=14, decimal_places=2, null=True, blank=True)
@@ -278,7 +280,7 @@ class BalanceSnapshot(models.Model):
         super().save(*args, **kwargs)
 
 
-class LiabilityDetails(models.Model):
+class LiabilityDetails(TimestampedModel):
     """Extended details for liability accounts."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name='liability_details')
@@ -323,7 +325,7 @@ class LiabilityDetails(models.Model):
         return f"{self.interest_rate * 100:.2f}%"
 
 
-class AssetDetails(models.Model):
+class AssetDetails(TimestampedModel):
     """Extended details for asset accounts."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     account = models.OneToOneField(Account, on_delete=models.CASCADE, related_name='asset_details')
@@ -340,7 +342,10 @@ class AssetDetails(models.Model):
     zip_code = models.CharField(max_length=10, blank=True)
     square_footage = models.PositiveIntegerField(null=True, blank=True)
     lot_size_acres = models.DecimalField(max_digits=10, decimal_places=4, null=True, blank=True)
-    year_built = models.PositiveIntegerField(null=True, blank=True)
+    year_built = models.PositiveIntegerField(
+        null=True, blank=True,
+        validators=[MinValueValidator(1800), MaxValueValidator(date.today().year + 1)]
+    )
 
     annual_property_tax = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     annual_insurance = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
@@ -356,6 +361,13 @@ class AssetDetails(models.Model):
 
     class Meta:
         db_table = 'asset_details'
+
+    def clean(self):
+        super().clean()
+        if self.acquisition_date and self.acquisition_date > date.today():
+            raise ValidationError({
+                'acquisition_date': 'Acquisition date cannot be in the future.'
+            })
 
     @property
     def monthly_carrying_cost(self) -> Decimal:

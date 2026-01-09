@@ -31,33 +31,21 @@ RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 # Copy application
 COPY . .
 
-# Build-time defaults for collectstatic
-ARG SECRET_KEY=build-secret-key
-ARG ALLOWED_HOSTS=localhost
-ARG CORS_ORIGINS=https://localhost
-ARG DB_NAME=effluent
-ARG DB_USER=effluent
-ARG DB_PASSWORD=build-password
-ARG DB_HOST=localhost
-ARG DB_PORT=5432
-ENV SECRET_KEY=${SECRET_KEY} \
-    ALLOWED_HOSTS=${ALLOWED_HOSTS} \
-    CORS_ORIGINS=${CORS_ORIGINS} \
-    DB_NAME=${DB_NAME} \
-    DB_USER=${DB_USER} \
-    DB_PASSWORD=${DB_PASSWORD} \
-    DB_HOST=${DB_HOST} \
-    DB_PORT=${DB_PORT}
+# Copy and set up entrypoint script
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Collect static files
+# Set Django settings module
 ENV DJANGO_SETTINGS_MODULE=config.settings.prod
-RUN python manage.py collectstatic --noinput
 
 # Create non-root user
 RUN useradd -m -u 1000 django && chown -R django:django /app
 USER django
 
 EXPOSE 8000
+
+# Use entrypoint script for migrations and static files at runtime
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Use gunicorn for production
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2", "--threads", "4", "--access-logfile", "-", "--error-logfile", "-"]
