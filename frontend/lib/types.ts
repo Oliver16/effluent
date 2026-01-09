@@ -528,11 +528,13 @@ export type GoalType =
   | 'min_dscr'
   | 'min_savings_rate'
   | 'net_worth_target'
+  | 'net_worth_target_by_date'  // Added: time-bound net worth goal
   | 'retirement_age'
   | 'debt_free_date'
   | 'custom'
 
-export type GoalStatus = 'on_track' | 'warning' | 'critical' | 'achieved'
+// Backend returns 'good' for on-track goals
+export type GoalStatus = 'good' | 'warning' | 'critical' | 'achieved'
 
 export interface Goal {
   id: string
@@ -566,6 +568,9 @@ export interface GoalStatusResult {
   percentageComplete?: string | null
   recommendation: string
 }
+
+// Type alias for backward compatibility with components using GoalStatusDTO
+export type GoalStatusDTO = GoalStatusResult
 
 export interface GoalStatusResponse {
   results: GoalStatusResult[]
@@ -726,6 +731,26 @@ export interface DataQualityResponse {
     incomeSources: number
     expenseFlows: number
   }
+}
+
+// Types used by ModelConfidenceCard component
+export interface DataQualityItemCta {
+  label: string
+  route: string
+}
+
+export interface DataQualityItem {
+  key: string
+  title: string
+  severity: 'critical' | 'warning' | 'info'
+  cta?: DataQualityItemCta
+}
+
+export interface DataQualityReport {
+  confidenceScore: number
+  confidenceLevel: 'high' | 'medium' | 'low'
+  missing: DataQualityItem[]
+  warnings: DataQualityItem[]
 }
 
 // TASK-14: Adopt scenario types

@@ -134,7 +134,8 @@ function formatValue(value: string, format: MetricCardData['format']): string {
     case 'ratio':
       return `${num.toFixed(2)}x`
     case 'percent':
-      return `${num.toFixed(1)}%`
+      // Backend returns ratio (0.10 for 10%), multiply by 100 for display
+      return `${(num * 100).toFixed(1)}%`
     default:
       return value
   }
@@ -159,7 +160,8 @@ function formatDelta(delta: string, format: MetricCardData['format']): string {
     case 'ratio':
       return `${prefix}${num.toFixed(2)}`
     case 'percent':
-      return `${prefix}${num.toFixed(1)}%`
+      // Backend returns ratio (0.10 for 10%), multiply by 100 for display
+      return `${prefix}${(num * 100).toFixed(1)}%`
     default:
       return delta
   }
