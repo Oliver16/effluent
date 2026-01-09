@@ -5,6 +5,7 @@ import { useTheme } from 'next-themes';
 import type { ChartTheme } from './types';
 import type { DeepPartial, ChartOptions } from 'lightweight-charts';
 import { ColorType, CrosshairMode, LineStyle } from 'lightweight-charts';
+import { formatCurrencyCompact } from '@/lib/format';
 
 /**
  * Returns chart theme based on current app theme
@@ -58,6 +59,9 @@ export function useChartOptions(
         textColor: theme.textColor,
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 11,
+      },
+      localization: {
+        priceFormatter: (price: number) => formatCurrencyCompact(price),
       },
       grid: {
         vertLines: { color: theme.gridColor, style: LineStyle.Solid },

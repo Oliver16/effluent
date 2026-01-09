@@ -347,6 +347,11 @@ export default function AccountsPage() {
       <InstrumentPanel
         title="Accounts"
         subtitle={`${accounts.length} account${accounts.length !== 1 ? 's' : ''} · Cash, investment, and retirement`}
+        controls={
+          <span className="text-sm font-semibold tabular-nums">
+            {formatCurrency(totalAccounts)}
+          </span>
+        }
       >
         {accounts.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No accounts added yet</div>
@@ -366,7 +371,7 @@ export default function AccountsPage() {
               {accounts.map((account) => {
                 const Icon = getAccountIcon(account.accountType);
                 return (
-                  <TableRow key={account.id} className={cn(densityStyles.row)}>
+                  <TableRow key={account.id} className={cn(densityStyles.row, 'group')}>
                     <TableCell className={cn(densityStyles.cell)}>
                       <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -390,14 +395,16 @@ export default function AccountsPage() {
                       {formatCurrency(parseFloat(account.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => openUpdateModal(account)}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => openUpdateModal(account)}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -412,6 +419,11 @@ export default function AccountsPage() {
         title="Fixed Assets"
         subtitle={`${fixedAssets.length} asset${fixedAssets.length !== 1 ? 's' : ''} · Property, vehicles, and other tangible assets`}
         className="mt-6"
+        controls={
+          <span className="text-sm font-semibold tabular-nums">
+            {formatCurrency(totalFixedAssets)}
+          </span>
+        }
       >
         {fixedAssets.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No fixed assets added yet</div>
@@ -431,7 +443,7 @@ export default function AccountsPage() {
               {fixedAssets.map((asset) => {
                 const Icon = getAccountIcon(asset.accountType);
                 return (
-                  <TableRow key={asset.id} className={cn(densityStyles.row)}>
+                  <TableRow key={asset.id} className={cn(densityStyles.row, 'group')}>
                     <TableCell className={cn(densityStyles.cell)}>
                       <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -455,14 +467,16 @@ export default function AccountsPage() {
                       {formatCurrency(parseFloat(asset.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => openUpdateModal(asset)}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => openUpdateModal(asset)}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -477,6 +491,11 @@ export default function AccountsPage() {
         title="Liabilities"
         subtitle={`${liabilities.length} account${liabilities.length !== 1 ? 's' : ''} · Loans, credit cards, and other debts`}
         className="mt-6"
+        controls={
+          <span className="text-sm font-semibold tabular-nums">
+            {formatCurrency(totalLiabilities)}
+          </span>
+        }
       >
         {liabilities.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">No liabilities added yet</div>
@@ -496,7 +515,7 @@ export default function AccountsPage() {
               {liabilities.map((account) => {
                 const Icon = getAccountIcon(account.accountType);
                 return (
-                  <TableRow key={account.id} className={cn(densityStyles.row)}>
+                  <TableRow key={account.id} className={cn(densityStyles.row, 'group')}>
                     <TableCell className={cn(densityStyles.cell)}>
                       <div className="flex items-center gap-2">
                         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -520,14 +539,16 @@ export default function AccountsPage() {
                       {formatCurrency(Math.abs(parseFloat(account.currentBalance) || 0))}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-7 w-7 p-0"
-                        onClick={() => openUpdateModal(account)}
-                      >
-                        <RefreshCw className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                          onClick={() => openUpdateModal(account)}
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );

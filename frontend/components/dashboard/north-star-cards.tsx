@@ -113,7 +113,7 @@ const METRIC_CARDS: MetricCardConfig[] = [
     getValue: (m) => m.totalLiabilities,
     formatValue: (v) => formatCurrency(Math.abs(parseFloat(v) || 0)),
     getDefaultStatus: (v) => (v <= 0 ? 'good' : 'neutral'),
-    getDefaultStatusLabel: (v) => (v <= 0 ? 'Debt-free' : 'Active'),
+    getDefaultStatusLabel: (v) => (v <= 0 ? 'Debt-free' : ''),
     goodDirection: 'down',
   },
 ];
@@ -204,68 +204,51 @@ export function NorthStarCards({
   }));
 
   // Get the primary metrics for prominent display
-  const [netWorth, surplus, ...otherCards] = cardData;
+  const [netWorth, surplus] = cardData;
 
   return (
-    <div className="space-y-4">
-      {/* Top row: Primary metrics + Status Annunciator */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="grid grid-cols-2 gap-4 flex-1">
-          {/* Net Worth - Primary metric */}
-          <MetricCard
-            label={netWorth.title}
-            value={netWorth.formattedValue}
-            tone={netWorth.tone}
-            statusLabel={netWorth.statusLabel}
-            icon={netWorth.icon}
-            delta={
-              netWorth.delta
-                ? {
-                    value: formatCurrencySigned(netWorth.delta),
-                    direction: deriveDeltaDirection(netWorth.delta),
-                    tone: deriveDeltaStatus(netWorth.delta, netWorth.goodDirection),
-                  }
-                : undefined
-            }
-          />
+    <div className="flex items-start justify-between gap-4">
+      <div className="grid grid-cols-2 gap-4 flex-1">
+        {/* Net Worth - Primary metric */}
+        <MetricCard
+          label={netWorth.title}
+          value={netWorth.formattedValue}
+          tone={netWorth.tone}
+          statusLabel={netWorth.statusLabel}
+          icon={netWorth.icon}
+          delta={
+            netWorth.delta
+              ? {
+                  value: formatCurrencySigned(netWorth.delta),
+                  direction: deriveDeltaDirection(netWorth.delta),
+                  tone: deriveDeltaStatus(netWorth.delta, netWorth.goodDirection),
+                }
+              : undefined
+          }
+        />
 
-          {/* Monthly Surplus - Secondary primary metric */}
-          <MetricCard
-            label={surplus.title}
-            value={surplus.formattedValue}
-            tone={surplus.tone}
-            statusLabel={surplus.statusLabel}
-            icon={surplus.icon}
-            delta={
-              surplus.delta
-                ? {
-                    value: formatCurrencySigned(surplus.delta),
-                    direction: deriveDeltaDirection(surplus.delta),
-                    tone: deriveDeltaStatus(surplus.delta, surplus.goodDirection),
-                  }
-                : undefined
-            }
-          />
-        </div>
-
-        {/* Status Annunciator - Compact status overview */}
-        <div className="shrink-0">
-          <StatusAnnunciator items={annunciatorItems} direction="row" />
-        </div>
+        {/* Monthly Surplus - Secondary primary metric */}
+        <MetricCard
+          label={surplus.title}
+          value={surplus.formattedValue}
+          tone={surplus.tone}
+          statusLabel={surplus.statusLabel}
+          icon={surplus.icon}
+          delta={
+            surplus.delta
+              ? {
+                  value: formatCurrencySigned(surplus.delta),
+                  direction: deriveDeltaDirection(surplus.delta),
+                  tone: deriveDeltaStatus(surplus.delta, surplus.goodDirection),
+                }
+              : undefined
+          }
+        />
       </div>
 
-      {/* Secondary metrics row */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        {otherCards.map((data) => (
-          <MetricCard
-            key={data.key}
-            label={data.title}
-            value={data.formattedValue}
-            tone={data.tone}
-            statusLabel={data.statusLabel}
-            icon={data.icon}
-          />
-        ))}
+      {/* Status Annunciator - Compact status overview */}
+      <div className="shrink-0">
+        <StatusAnnunciator items={annunciatorItems} direction="row" />
       </div>
     </div>
   );

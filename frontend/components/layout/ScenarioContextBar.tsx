@@ -4,13 +4,6 @@ import { cn } from '@/lib/utils';
 import { TYPOGRAPHY, StatusTone } from '@/lib/design-tokens';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Play, Plus, Sparkles, Loader2 } from 'lucide-react';
 
 interface ScenarioContextBarProps {
@@ -23,10 +16,6 @@ interface ScenarioContextBarProps {
     tone: StatusTone;
     label: string;
   };
-  /** Current projection horizon */
-  horizon: '12' | '24' | '60' | '120' | '360';
-  /** Horizon change handler */
-  onHorizonChange: (horizon: string) => void;
   /** Run projection handler */
   onRunProjection?: () => void;
   /** Add change handler */
@@ -43,8 +32,6 @@ export function ScenarioContextBar({
   scenarioName,
   baselineName,
   status,
-  horizon,
-  onHorizonChange,
   onRunProjection,
   onAddChange,
   onLifeEvent,
@@ -70,23 +57,6 @@ export function ScenarioContextBar({
             <p className="text-xs text-muted-foreground">vs {baselineName}</p>
           )}
         </div>
-      </div>
-
-      {/* Center: Horizon selector */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs text-muted-foreground">Horizon:</span>
-        <Select value={horizon} onValueChange={onHorizonChange}>
-          <SelectTrigger className="w-24 h-8">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="12">1 Year</SelectItem>
-            <SelectItem value="24">2 Years</SelectItem>
-            <SelectItem value="60">5 Years</SelectItem>
-            <SelectItem value="120">10 Years</SelectItem>
-            <SelectItem value="360">30 Years</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Right: Actions */}

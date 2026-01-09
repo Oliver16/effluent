@@ -33,7 +33,6 @@ export default function ScenarioDetailPage() {
   const queryClient = useQueryClient();
   const [showAddChange, setShowAddChange] = useState(false);
   const [showLifeEvents, setShowLifeEvents] = useState(false);
-  const [horizon, setHorizon] = useState<'12' | '24' | '60' | '120' | '360'>('60');
 
   const scenarioId = id as string;
 
@@ -104,8 +103,6 @@ export default function ScenarioDetailPage() {
           ? { tone: 'good', label: 'Computed' }
           : { tone: 'warning', label: 'Not Run' }
       }
-      horizon={String(scenario.projectionMonths || 60) as typeof horizon}
-      onHorizonChange={(h) => setHorizon(h as typeof horizon)}
       onAddChange={() => setShowAddChange(true)}
       onLifeEvent={() => setShowLifeEvents(true)}
       onRunProjection={() => computeMutation.mutate()}
