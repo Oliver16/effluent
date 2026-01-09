@@ -6,6 +6,7 @@ import { LoginForm } from '@/components/auth/login-form'
 import { households, ApiError } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { isOnboardingComplete } from '@/lib/utils'
+import { logout, updateHouseholdCookie } from '@/lib/auth'
 
 type AuthState = 'loading' | 'unauthenticated' | 'authenticated' | 'network_error'
 
@@ -38,6 +39,8 @@ export default function Home() {
 
       const household = householdList[0]
       localStorage.setItem('householdId', household.id)
+      // Sync householdId to cookie for SSR
+      await updateHouseholdCookie(household.id)
 
       if (isOnboardingComplete(household)) {
         router.push('/dashboard')
@@ -49,9 +52,7 @@ export default function Home() {
       if (error instanceof ApiError) {
         if (error.status === 401 || error.status === 403) {
           // Token invalid or expired - clear auth and show login
-          localStorage.removeItem('token')
-          localStorage.removeItem('refreshToken')
-          localStorage.removeItem('householdId')
+          await logout()
           setAuthState('unauthenticated')
         } else {
           // Server error - don't wipe credentials
@@ -99,10 +100,8 @@ export default function Home() {
             </Button>
             <Button
               variant="outline"
-              onClick={() => {
-                localStorage.removeItem('token')
-                localStorage.removeItem('refreshToken')
-                localStorage.removeItem('householdId')
+              onClick={async () => {
+                await logout()
                 setAuthState('unauthenticated')
               }}
             >

@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { onboarding, households, members, incomeSources, accounts, flows, ApiError } from '@/lib/api'
+import { logout, updateHouseholdCookie } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -445,10 +446,7 @@ export default function OnboardingPage() {
   // Helper to handle authentication errors - sign user out on token expiration
   const handleAuthError = useCallback((error: unknown): boolean => {
     if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
-      localStorage.removeItem('token')
-      localStorage.removeItem('refreshToken')
-      localStorage.removeItem('householdId')
-      router.push('/')
+      logout().then(() => router.push('/'))
       return true
     }
     return false
@@ -470,9 +468,13 @@ export default function OnboardingPage() {
       if (householdList.length === 0) {
         const newHousehold = await households.create({ name: 'My Household' })
         localStorage.setItem('householdId', newHousehold.id)
+        // Sync householdId to cookie for SSR
+        await updateHouseholdCookie(newHousehold.id)
       } else {
         const household = householdList[0]
         localStorage.setItem('householdId', household.id)
+        // Sync householdId to cookie for SSR
+        await updateHouseholdCookie(household.id)
         const onboardingComplete = household.onboardingCompleted ??
           (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
         if (onboardingComplete) {
