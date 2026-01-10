@@ -122,28 +122,21 @@ class MetricsCalculator:
         return total
 
     def _calculate_flow_totals(self) -> tuple[Decimal, Decimal, Decimal]:
-        """Calculate total monthly income, expenses, and debt service."""
-        from apps.taxes.models import IncomeSource
+        """Calculate total monthly income, expenses, and debt service.
 
+        Income is calculated exclusively from RecurringFlow objects, which includes:
+        - System-generated flows from IncomeSource objects (gross income flows)
+        - Manual income entries added directly as flows
+
+        This avoids double-counting that would occur if we also summed IncomeSource
+        objects directly, since they already generate corresponding RecurringFlow entries.
+        """
         total_income = Decimal('0')
         total_expenses = Decimal('0')
         total_debt_service = Decimal('0')
 
-        # Calculate income from IncomeSource objects (primary source of income data)
-        income_sources = IncomeSource.objects.filter(
-            household=self.household,
-            is_active=True
-        )
-        for source in income_sources:
-            # Check if source is active on the as_of_date
-            if source.start_date and source.start_date > self.as_of_date:
-                continue
-            if source.end_date and source.end_date < self.as_of_date:
-                continue
-            # Convert annual income to monthly
-            total_income += source.gross_annual / Decimal('12')
-
-        # Also include any income from RecurringFlow (for manual income entries)
+        # Calculate all totals from RecurringFlow objects
+        # This includes system-generated flows from IncomeSource as well as manual entries
         active_flows = RecurringFlow.objects.filter(
             household=self.household,
             is_active=True
