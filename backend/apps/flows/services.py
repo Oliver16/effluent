@@ -26,7 +26,18 @@ from .models import RecurringFlow, FlowType, Frequency, ExpenseCategory, IncomeC
 # Current version of flow calculation logic - increment when logic changes
 # v2: Added tax withholding as visible expense flow
 # v3: Use PaycheckCalculator for accurate tax calculations instead of flat 25% estimate
-CALCULATION_VERSION = 3
+# v4: Fix start_date to use first of month (aligns with baseline scenario start_date)
+CALCULATION_VERSION = 4
+
+
+def _get_default_start_date() -> date:
+    """
+    Get the default start date for system-generated flows.
+
+    Uses the first of the current month to align with baseline scenario's
+    start_date, ensuring flows are active when the baseline projection begins.
+    """
+    return date.today().replace(day=1)
 
 # Pay frequency to flow frequency mapping
 PAY_FREQ_TO_FLOW_FREQ = {
@@ -173,7 +184,7 @@ class SystemFlowGenerator:
                 expense_category=ExpenseCategory.ESTIMATED_TAX,
                 amount=taxes_withheld,
                 frequency=flow_frequency,
-                start_date=income_source.start_date or date.today(),
+                start_date=income_source.start_date or _get_default_start_date(),
                 end_date=income_source.end_date,
                 household_member=income_source.household_member,
                 income_source=income_source,
@@ -197,7 +208,7 @@ class SystemFlowGenerator:
                 flow_type=FlowType.TRANSFER,
                 amount=net_pay,
                 frequency=flow_frequency,
-                start_date=income_source.start_date or date.today(),
+                start_date=income_source.start_date or _get_default_start_date(),
                 end_date=income_source.end_date,
                 from_account=payroll_clearing,
                 to_account=checking_account,
@@ -223,7 +234,7 @@ class SystemFlowGenerator:
             income_category=income_category,
             amount=gross_per_period,
             frequency=flow_frequency,
-            start_date=income_source.start_date or date.today(),
+            start_date=income_source.start_date or _get_default_start_date(),
             end_date=income_source.end_date,
             household_member=income_source.household_member,
             income_source=income_source,
@@ -269,7 +280,7 @@ class SystemFlowGenerator:
                 'flow_type': FlowType.TRANSFER,
                 'amount': amount,
                 'frequency': frequency,
-                'start_date': income_source.start_date or date.today(),
+                'start_date': income_source.start_date or _get_default_start_date(),
                 'end_date': income_source.end_date,
                 'from_account': payroll_clearing,
                 'to_account': target_account,
@@ -292,7 +303,7 @@ class SystemFlowGenerator:
                 'flow_type': FlowType.TRANSFER,
                 'amount': amount,
                 'frequency': frequency,
-                'start_date': income_source.start_date or date.today(),
+                'start_date': income_source.start_date or _get_default_start_date(),
                 'end_date': income_source.end_date,
                 'from_account': payroll_clearing,
                 'to_account': target_account,
@@ -322,7 +333,7 @@ class SystemFlowGenerator:
                 'expense_category': expense_category_map.get(deduction_type, ExpenseCategory.HEALTH_INSURANCE),
                 'amount': amount,
                 'frequency': frequency,
-                'start_date': income_source.start_date or date.today(),
+                'start_date': income_source.start_date or _get_default_start_date(),
                 'end_date': income_source.end_date,
                 'from_account': payroll_clearing,
                 'household_member': income_source.household_member,
@@ -344,7 +355,7 @@ class SystemFlowGenerator:
                 'expense_category': ExpenseCategory.MISCELLANEOUS,
                 'amount': amount,
                 'frequency': frequency,
-                'start_date': income_source.start_date or date.today(),
+                'start_date': income_source.start_date or _get_default_start_date(),
                 'end_date': income_source.end_date,
                 'from_account': payroll_clearing,
                 'household_member': income_source.household_member,
@@ -464,7 +475,7 @@ class SystemFlowGenerator:
                 expense_category=expense_category,
                 amount=details.minimum_payment,
                 frequency=Frequency.MONTHLY,
-                start_date=date.today(),
+                start_date=_get_default_start_date(),
                 from_account=checking_account,
                 linked_account=account,
                 is_active=True,
