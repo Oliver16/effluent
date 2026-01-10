@@ -516,7 +516,7 @@ export default function FlowsPage() {
     },
   })
 
-  const incomeSources = incomeSourcesData?.results || incomeSourcesData || []
+  const incomeSources = incomeSourcesData || []
 
   const flows = flowsData || []
   const incomeFlows = flows.filter(f => f.flowType === 'income')
