@@ -2,8 +2,8 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { lifeEventTemplates, incomeSources, flows } from '@/lib/api';
-import { LifeEventTemplate, LifeEventCategoryGroup, SuggestedChange, IncomeSourceDetail, RecurringFlow } from '@/lib/types';
+import { lifeEventTemplates, incomeSources, flows, accounts } from '@/lib/api';
+import { LifeEventTemplate, LifeEventCategoryGroup, SuggestedChange, IncomeSourceDetail, RecurringFlow, Account } from '@/lib/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
@@ -148,6 +148,46 @@ export function LifeEventTemplatesDialog({
         amount: parseFloat(String(flow.amount || '0')),
       }));
   }, [flowsData]);
+
+  // Fetch accounts for source account selection (assets and debts)
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: accounts.list,
+    enabled: open && selectedTemplate?.suggestedChanges.some(c => c.requiresSourceAccount),
+  });
+
+  // Get available assets for dropdown
+  const availableAssets = useMemo(() => {
+    if (!accountsData?.results) return [];
+    // Asset account types (non-liability types)
+    const assetTypes = ['checking', 'savings', 'brokerage', 'retirement_401k', 'retirement_ira',
+      'retirement_roth_ira', 'hsa', 'crypto', 'primary_residence', 'investment_property',
+      'vehicle', 'other_asset'];
+    return accountsData.results
+      .filter((acct: Account) => assetTypes.includes(acct.accountType))
+      .map((acct: Account) => ({
+        id: acct.id,
+        name: acct.name,
+        balance: parseFloat(acct.currentBalance || '0'),
+        type: acct.accountType,
+      }));
+  }, [accountsData]);
+
+  // Get available debts for dropdown
+  const availableDebts = useMemo(() => {
+    if (!accountsData?.results) return [];
+    // Liability account types
+    const debtTypes = ['credit_card', 'personal_loan', 'auto_loan', 'mortgage',
+      'student_loan', 'heloc', 'other_debt'];
+    return accountsData.results
+      .filter((acct: Account) => debtTypes.includes(acct.accountType))
+      .map((acct: Account) => ({
+        id: acct.id,
+        name: acct.name,
+        balance: parseFloat(acct.currentBalance || '0'),
+        type: acct.accountType,
+      }));
+  }, [accountsData]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -523,6 +563,35 @@ export function LifeEventTemplatesDialog({
                               {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).length === 0 && (
                                 <SelectItem value="" disabled>
                                   No {change.sourceFlowType === 'income' ? 'income sources' : 'expenses'} found
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+                      {/* Source account selector for SELL_ASSET/PAYOFF_DEBT changes */}
+                      {change.requiresSourceAccount && (
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label htmlFor={`${idx}-source-account`} className="text-sm">
+                            {change.sourceAccountType === 'asset' ? 'Select Asset' : 'Select Debt'}
+                            <span className="text-destructive ml-1">*</span>
+                          </Label>
+                          <Select
+                            value={changeValues[String(idx)]?.source_account_id as string || ''}
+                            onValueChange={(value) => handleChangeValue(idx, 'source_account_id', value)}
+                          >
+                            <SelectTrigger id={`${idx}-source-account`}>
+                              <SelectValue placeholder={`Choose ${change.sourceAccountType === 'asset' ? 'asset' : 'debt'} to ${change.changeType.includes('sell') ? 'sell' : 'pay off'}...`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name} (${Number(item.balance).toLocaleString()})
+                                </SelectItem>
+                              ))}
+                              {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).length === 0 && (
+                                <SelectItem value="" disabled>
+                                  No {change.sourceAccountType === 'asset' ? 'assets' : 'debts'} found
                                 </SelectItem>
                               )}
                             </SelectContent>
