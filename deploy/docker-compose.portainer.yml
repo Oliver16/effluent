@@ -47,8 +47,8 @@ services:
       - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
       # Same-origin API via app host (/api/* on app.effluent.io -> Django) - HTTPS
-      # Exclude Next.js internal routes (set-cookies, clear-cookies) which must be handled by Next.js
-      - "traefik.http.routers.effluent-api-app.rule=Host(`app.effluent.io`) && PathPrefix(`/api`) && !PathPrefix(`/api/auth/set-cookies`) && !PathPrefix(`/api/auth/clear-cookies`)"
+      # Next.js auth routes are handled by frontend with priority 300
+      - "traefik.http.routers.effluent-api-app.rule=Host(`app.effluent.io`) && PathPrefix(`/api`)"
       - "traefik.http.routers.effluent-api-app.entrypoints=websecure"
       - "traefik.http.routers.effluent-api-app.tls=true"
       - "traefik.http.routers.effluent-api-app.tls.certresolver=letsencrypt"
@@ -73,12 +73,21 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
+      # Main frontend router
       - "traefik.http.routers.effluent-web.rule=Host(`app.effluent.io`)"
       - "traefik.http.routers.effluent-web.entrypoints=websecure"
       - "traefik.http.routers.effluent-web.tls=true"
       - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"
       - "traefik.http.routers.effluent-web.priority=100"
       - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
+      # Next.js auth API routes - must be handled by frontend, not Django
+      # Priority 300 ensures these match before the Django /api/* router (priority 200)
+      - "traefik.http.routers.effluent-nextjs-auth.rule=Host(`app.effluent.io`) && (PathPrefix(`/api/auth/set-cookies`) || PathPrefix(`/api/auth/clear-cookies`))"
+      - "traefik.http.routers.effluent-nextjs-auth.entrypoints=websecure"
+      - "traefik.http.routers.effluent-nextjs-auth.tls=true"
+      - "traefik.http.routers.effluent-nextjs-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.effluent-nextjs-auth.priority=300"
+      - "traefik.http.routers.effluent-nextjs-auth.service=effluent-web"
     networks:
       - effluent-internal
       - proxy
