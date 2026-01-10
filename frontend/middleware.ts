@@ -1,8 +1,23 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// API base URL for token refresh
-const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// API base URL for token refresh (server-side only)
+// In production, INTERNAL_API_URL must be set. The http:// fallback is only for local development.
+function getApiUrl(): string {
+  const url = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (url) return url;
+
+  // Only allow localhost fallback in development
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8000';
+  }
+
+  // In production, this would cause mixed content issues - fail fast
+  console.error('[Middleware] CRITICAL: No API URL configured. Set INTERNAL_API_URL environment variable.');
+  throw new Error('INTERNAL_API_URL or NEXT_PUBLIC_API_URL must be set in production');
+}
+
+const API_URL = getApiUrl();
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = [

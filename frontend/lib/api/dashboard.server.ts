@@ -16,7 +16,22 @@ import type {
 } from '@/lib/types';
 
 // API base URL for server-side requests
-const API_URL = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+// In production, INTERNAL_API_URL must be set. The http:// fallback is only for local development.
+function getApiUrl(): string {
+  const url = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (url) return url;
+
+  // Only allow localhost fallback in development
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:8000';
+  }
+
+  // In production, this would cause mixed content issues - fail fast
+  console.error('[Dashboard API] CRITICAL: No API URL configured. Set INTERNAL_API_URL environment variable.');
+  throw new Error('INTERNAL_API_URL or NEXT_PUBLIC_API_URL must be set in production');
+}
+
+const API_URL = getApiUrl();
 
 /**
  * Attempt to refresh the access token using the refresh token.

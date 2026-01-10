@@ -63,12 +63,12 @@ services:
       context: https://github.com/Oliver16/effluent.git#main:frontend
       dockerfile: Dockerfile.prod
       args:
-        # Internal URL for build-time configuration
-        - NEXT_PUBLIC_API_URL=http://backend:8000
+        # Internal URL for server-side API calls within Docker network
+        # Note: NEXT_PUBLIC_API_URL is intentionally NOT set - client uses same-origin /api/* routing
         - INTERNAL_API_URL=http://backend:8000
     restart: unless-stopped
     environment:
-      # Internal routing - no HTTPS needed, Next.js rewrites proxy to backend
+      # Internal routing - HTTP is fine within Docker network, Traefik handles HTTPS externally
       - INTERNAL_API_URL=http://backend:8000
     labels:
       - "traefik.enable=true"

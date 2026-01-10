@@ -9,9 +9,10 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_URL
+# INTERNAL_API_URL is used for server-side API calls within Docker network
+# Note: NEXT_PUBLIC_API_URL is intentionally NOT used - client uses same-origin /api/* routing
+# which avoids mixed content issues and works with any domain
 ARG INTERNAL_API_URL
-ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
 ENV INTERNAL_API_URL=$INTERNAL_API_URL
 
 ENV NEXT_TELEMETRY_DISABLED=1
