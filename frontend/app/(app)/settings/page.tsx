@@ -16,7 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { User, Home, Bell, Shield, Pencil, Trash2, Plus, Users } from 'lucide-react'
+import { User, Home, Bell, Shield, Pencil, Trash2, Plus, Users, Copy, Check } from 'lucide-react'
 
 const TAX_FILING_STATUS: Record<string, string> = {
   single: 'Single',
@@ -70,6 +70,7 @@ export default function SettingsPage() {
   const [isProfileSaved, setIsProfileSaved] = useState(false)
   const [isPasswordUpdated, setIsPasswordUpdated] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
+  const [copiedId, setCopiedId] = useState(false)
 
   // Member editing state
   const [memberModalOpen, setMemberModalOpen] = useState(false)
@@ -380,6 +381,35 @@ export default function SettingsPage() {
                   onChange={(e) => setHouseholdData({ ...householdData, name: e.target.value })}
                   placeholder="e.g., The Smith Family"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="householdId">Household ID</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="householdId"
+                    value={household?.id || ''}
+                    readOnly
+                    className="bg-muted font-mono text-sm"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => {
+                      if (household?.id) {
+                        navigator.clipboard.writeText(household.id)
+                        setCopiedId(true)
+                        setTimeout(() => setCopiedId(false), 2000)
+                      }
+                    }}
+                  >
+                    {copiedId ? <Check className="h-4 w-4 text-green-600" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Share this ID with family members so they can join your household during registration
+                </p>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
