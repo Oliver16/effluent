@@ -35,6 +35,7 @@ from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
 from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
 from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView
+from apps.help.views import HelpViewSet
 
 # Create routers
 router = DefaultRouter()
@@ -60,6 +61,10 @@ router.register('goal-solutions', GoalSolutionViewSet, basename='goal-solution')
 decision_router = DefaultRouter()
 decision_router.register('templates', DecisionTemplateViewSet, basename='decision-template')
 decision_router.register('runs', DecisionRunViewSet, basename='decision-run')
+
+# Help router
+help_router = DefaultRouter()
+help_router.register('', HelpViewSet, basename='help')
 
 urlpatterns = [
     # Admin
@@ -122,4 +127,7 @@ urlpatterns = [
     path('api/v1/stress-tests/', StressTestListView.as_view(), name='stress-test-list'),
     path('api/v1/stress-tests/run/', StressTestRunView.as_view(), name='stress-test-run'),
     path('api/v1/stress-tests/batch/', StressTestBatchRunView.as_view(), name='stress-test-batch'),
+
+    # Help System
+    path('api/v1/help/', include(help_router.urls)),
 ]

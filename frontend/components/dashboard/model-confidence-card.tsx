@@ -85,7 +85,7 @@ export function ModelConfidenceCard({ report, isLoading }: ModelConfidenceCardPr
   }
 
   return (
-    <SectionCard dense title="Model Confidence">
+    <SectionCard dense title="Model Confidence" data-tour="confidence-card">
       <div className="space-y-3">
         {/* Score display */}
         <div className="flex items-center justify-between">

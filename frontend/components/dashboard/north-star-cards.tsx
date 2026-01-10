@@ -232,58 +232,64 @@ export function NorthStarCards({
       {/* Primary metric cards - 3 columns */}
       <div className="grid grid-cols-3 gap-4">
         {/* Net Worth - Primary metric */}
-        <MetricCard
-          label={netWorth.title}
-          value={netWorth.formattedValue}
-          tone={netWorth.tone}
-          statusLabel={netWorth.statusLabel}
-          icon={netWorth.icon}
-          delta={
-            netWorth.delta
-              ? {
-                  value: formatCurrencySigned(netWorth.delta),
-                  direction: deriveDeltaDirection(netWorth.delta),
-                  tone: deriveDeltaStatus(netWorth.delta, netWorth.goodDirection),
-                }
-              : undefined
-          }
-        />
+        <div data-tour="net-worth-card">
+          <MetricCard
+            label={netWorth.title}
+            value={netWorth.formattedValue}
+            tone={netWorth.tone}
+            statusLabel={netWorth.statusLabel}
+            icon={netWorth.icon}
+            delta={
+              netWorth.delta
+                ? {
+                    value: formatCurrencySigned(netWorth.delta),
+                    direction: deriveDeltaDirection(netWorth.delta),
+                    tone: deriveDeltaStatus(netWorth.delta, netWorth.goodDirection),
+                  }
+                : undefined
+            }
+          />
+        </div>
 
         {/* Monthly Surplus */}
-        <MetricCard
-          label={surplus.title}
-          value={surplus.formattedValue}
-          tone={surplus.tone}
-          statusLabel={surplus.statusLabel}
-          icon={surplus.icon}
-          delta={
-            surplus.delta
-              ? {
-                  value: formatCurrencySigned(surplus.delta),
-                  direction: deriveDeltaDirection(surplus.delta),
-                  tone: deriveDeltaStatus(surplus.delta, surplus.goodDirection),
-                }
-              : undefined
-          }
-        />
+        <div data-tour="surplus-card">
+          <MetricCard
+            label={surplus.title}
+            value={surplus.formattedValue}
+            tone={surplus.tone}
+            statusLabel={surplus.statusLabel}
+            icon={surplus.icon}
+            delta={
+              surplus.delta
+                ? {
+                    value: formatCurrencySigned(surplus.delta),
+                    direction: deriveDeltaDirection(surplus.delta),
+                    tone: deriveDeltaStatus(surplus.delta, surplus.goodDirection),
+                  }
+                : undefined
+            }
+          />
+        </div>
 
         {/* Liquidity - Third card */}
-        <MetricCard
-          label={liquidity.title}
-          value={liquidity.formattedValue}
-          tone={liquidity.tone}
-          statusLabel={liquidity.statusLabel}
-          icon={liquidity.icon}
-          delta={
-            liquidity.delta
-              ? {
-                  value: formatCurrencySigned(liquidity.delta),
-                  direction: deriveDeltaDirection(liquidity.delta),
-                  tone: deriveDeltaStatus(liquidity.delta, liquidity.goodDirection),
-                }
-              : undefined
-          }
-        />
+        <div data-tour="runway-card">
+          <MetricCard
+            label={liquidity.title}
+            value={liquidity.formattedValue}
+            tone={liquidity.tone}
+            statusLabel={liquidity.statusLabel}
+            icon={liquidity.icon}
+            delta={
+              liquidity.delta
+                ? {
+                    value: formatCurrencySigned(liquidity.delta),
+                    direction: deriveDeltaDirection(liquidity.delta),
+                    tone: deriveDeltaStatus(liquidity.delta, liquidity.goodDirection),
+                  }
+                : undefined
+            }
+          />
+        </div>
       </div>
     </div>
   );

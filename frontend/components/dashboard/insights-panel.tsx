@@ -72,7 +72,7 @@ export function InsightsPanel({ insights, isLoading }: InsightsPanelProps) {
   }
 
   return (
-    <SectionCard dense title="Insights">
+    <SectionCard dense title="Insights" data-tour="insights-panel">
       <div className="space-y-2">
         {active.slice(0, 5).map(insight => (
           <div

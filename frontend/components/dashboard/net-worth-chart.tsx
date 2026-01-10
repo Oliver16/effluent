@@ -105,6 +105,7 @@ export function NetWorthChart({ history, isLoading }: NetWorthChartProps) {
     <InstrumentPanel
       title="Net Worth Trajectory"
       subtitle={`${history.length} month${history.length !== 1 ? 's' : ''} of history`}
+      data-tour="net-worth-chart"
       footer={
         <div className="flex items-center gap-4 text-xs">
           <span className="flex items-center gap-1.5">

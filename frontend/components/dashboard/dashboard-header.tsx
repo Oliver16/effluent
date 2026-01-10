@@ -70,7 +70,7 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
   const statusParts = buildStatusSentence()
 
   return (
-    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4" data-tour="dashboard-header">
       <div className="space-y-1">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         {isLoading ? (
