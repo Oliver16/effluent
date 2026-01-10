@@ -6,12 +6,12 @@ import { Badge } from '@/components/ui/badge'
 import { Target, Lightbulb, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react'
 import { GoalStatusResult } from '@/lib/types'
 
-interface DashboardHeaderProps {
+interface ControlPlaneHeaderProps {
   goalStatus: GoalStatusResult[] | null
   isLoading?: boolean
 }
 
-export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps) {
+export function ControlPlaneHeader({ goalStatus, isLoading }: ControlPlaneHeaderProps) {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'good':
@@ -72,7 +72,7 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
   return (
     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
       <div className="space-y-1">
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">Control Plane</h1>
         {isLoading ? (
           <div className="h-5 w-48 bg-muted rounded animate-pulse" />
         ) : statusParts && statusParts.length > 0 ? (

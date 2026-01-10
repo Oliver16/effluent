@@ -283,7 +283,7 @@ export default function GoalsSettingsPage() {
               <Target className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium">No goals yet</h3>
               <p className="text-muted-foreground mt-1">
-                Set financial goals to track your progress on the dashboard.
+                Set financial goals to track your progress on the control plane.
               </p>
               <Button className="mt-4" onClick={() => handleOpenDialog()}>
                 <Plus className="h-4 w-4 mr-2" />
@@ -351,7 +351,7 @@ export default function GoalsSettingsPage() {
             <DialogDescription>
               {editingGoal
                 ? 'Update your financial goal settings.'
-                : 'Set a new financial goal to track on your dashboard.'}
+                : 'Set a new financial goal to track on your control plane.'}
             </DialogDescription>
           </DialogHeader>
 
@@ -448,7 +448,7 @@ export default function GoalsSettingsPage() {
                     <div className="space-y-0.5">
                       <FormLabel className="text-base">Primary Goal</FormLabel>
                       <FormDescription>
-                        Your primary goal will be highlighted on the dashboard
+                        Your primary goal will be highlighted on the control plane
                       </FormDescription>
                     </div>
                     <FormControl>

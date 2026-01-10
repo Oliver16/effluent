@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Control Plane', href: '/control-plane', icon: LayoutDashboard },
   { name: 'Accounts', href: '/accounts', icon: Wallet },
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
   { name: 'Decisions', href: '/decisions', icon: Lightbulb },
@@ -39,7 +39,7 @@ export function Sidebar({ onLogout }: SidebarProps) {
       <div className="flex grow flex-col gap-y-5 overflow-y-auto border-r border-border bg-sidebar px-6 pb-4">
         {/* Logo */}
         <div className="flex h-16 shrink-0 items-center">
-          <Link href="/dashboard" className="flex items-center gap-2 group">
+          <Link href="/control-plane" className="flex items-center gap-2 group">
             <div className="h-8 w-8 rounded-lg bg-gradient-primary flex items-center justify-center shadow-primary transition-all duration-200 group-hover:shadow-lg group-hover:scale-105">
               <span className="text-primary-foreground font-bold text-lg">E</span>
             </div>

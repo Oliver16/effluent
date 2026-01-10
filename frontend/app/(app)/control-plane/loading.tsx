@@ -1,10 +1,10 @@
 import { PageShell } from '@/components/layout/PageShell';
-import { DashboardSkeleton, SidebarCardSkeleton } from '@/components/ui/Skeletons';
+import { ControlPlaneSkeleton, SidebarCardSkeleton } from '@/components/ui/Skeletons';
 
-export default function DashboardLoading() {
+export default function ControlPlaneLoading() {
   return (
     <PageShell
-      variant="dashboard"
+      variant="control-plane"
       sidebar={
         <div className="space-y-6">
           <SidebarCardSkeleton />
@@ -13,7 +13,7 @@ export default function DashboardLoading() {
         </div>
       }
     >
-      <DashboardSkeleton />
+      <ControlPlaneSkeleton />
     </PageShell>
   );
 }

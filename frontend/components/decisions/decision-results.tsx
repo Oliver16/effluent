@@ -253,9 +253,9 @@ export function DecisionResults({ result, onStartAnother }: DecisionResultsProps
           </Link>
         </Button>
         <Button asChild>
-          <Link href="/dashboard">
+          <Link href="/control-plane">
             <LayoutDashboard className="h-4 w-4 mr-2" />
-            Back to Dashboard
+            Back to Control Plane
           </Link>
         </Button>
       </div>

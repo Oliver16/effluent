@@ -56,11 +56,11 @@ function LoginPageContent() {
           (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
 
         if (onboardingComplete) {
-          // Use redirect URL if valid, otherwise default to dashboard
+          // Use redirect URL if valid, otherwise default to control plane
           if (redirectUrl && isValidRedirectUrl(redirectUrl)) {
             window.location.href = redirectUrl
           } else {
-            router.push('/dashboard')
+            router.push('/control-plane')
           }
         } else {
           router.push('/onboarding')

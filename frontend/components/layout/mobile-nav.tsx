@@ -20,7 +20,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+  { name: 'Control Plane', href: '/control-plane', icon: LayoutDashboard },
   { name: 'Accounts', href: '/accounts', icon: Wallet },
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
   { name: 'Decisions', href: '/decisions', icon: Lightbulb },
@@ -52,7 +52,7 @@ export function MobileNav({ onLogout }: MobileNavProps) {
           <Menu className="h-6 w-6" aria-hidden="true" />
         </Button>
         <div className="flex-1 text-sm font-semibold leading-6">
-          <Link href="/dashboard" className="flex items-center gap-2">
+          <Link href="/control-plane" className="flex items-center gap-2">
             <div className="h-7 w-7 rounded-lg bg-primary flex items-center justify-center">
               <span className="text-primary-foreground font-bold">E</span>
             </div>
@@ -89,7 +89,7 @@ export function MobileNav({ onLogout }: MobileNavProps) {
               {/* Sidebar content */}
               <div className="flex grow flex-col gap-y-5 overflow-y-auto bg-card px-6 pb-4">
                 <div className="flex h-16 shrink-0 items-center">
-                  <Link href="/dashboard" className="flex items-center gap-2">
+                  <Link href="/control-plane" className="flex items-center gap-2">
                     <div className="h-8 w-8 rounded-lg bg-primary flex items-center justify-center">
                       <span className="text-primary-foreground font-bold text-lg">E</span>
                     </div>

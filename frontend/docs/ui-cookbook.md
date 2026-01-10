@@ -160,15 +160,15 @@ if (items.length === 0) {
 }
 ```
 
-## Dashboard Layout with Sidebar
+## Control Plane Layout with Sidebar
 
 ```tsx
 import { PageShell } from '@/components/layout/PageShell';
 
-export default function DashboardPage() {
+export default function ControlPlanePage() {
   return (
     <PageShell
-      variant="dashboard"
+      variant="control-plane"
       sidebar={
         <div className="space-y-6">
           <SidebarCard1 />
@@ -212,7 +212,7 @@ import {
   SidebarCardSkeleton,
   ChartSkeleton,
   ListRowSkeleton,
-  DashboardSkeleton,
+  ControlPlaneSkeleton,
   PageSkeleton
 } from '@/components/ui/Skeletons';
 
@@ -228,8 +228,8 @@ import {
 // For lists (with count parameter)
 <ListRowSkeleton count={5} />
 
-// For full dashboard loading
-<DashboardSkeleton />
+// For full control plane loading
+<ControlPlaneSkeleton />
 
 // For generic page loading
 <PageSkeleton />

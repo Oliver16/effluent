@@ -1,14 +1,14 @@
-import { getDashboardData } from '@/lib/api/dashboard.server';
+import { getControlPlaneData } from '@/lib/api/control-plane.server';
 import { PageShell } from '@/components/layout/PageShell';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { SystemAlert } from '@/components/ui/SystemAlert';
-import { NorthStarCards } from '@/components/dashboard/north-star-cards';
-import { ModelConfidenceCard } from '@/components/dashboard/model-confidence-card';
-import { ActionPanel } from '@/components/dashboard/action-panel';
-import { NetWorthChart } from '@/components/dashboard/net-worth-chart';
-import { AccountsList } from '@/components/dashboard/accounts-list';
-import { InsightsPanel } from '@/components/dashboard/insights-panel';
+import { NorthStarCards } from '@/components/control-plane/north-star-cards';
+import { ModelConfidenceCard } from '@/components/control-plane/model-confidence-card';
+import { ActionPanel } from '@/components/control-plane/action-panel';
+import { NetWorthChart } from '@/components/control-plane/net-worth-chart';
+import { AccountsList } from '@/components/control-plane/accounts-list';
+import { InsightsPanel } from '@/components/control-plane/insights-panel';
 import { BaselineProjectionCharts } from '@/components/baseline';
 import { Button } from '@/components/ui/button';
 import { Target, Lightbulb } from 'lucide-react';
@@ -50,17 +50,17 @@ function getOverallStatus(
 }
 
 /**
- * Dashboard Page - Server Component
+ * Control Plane Page - Server Component
  *
  * Fetches data server-side for SSR/streaming and SEO.
  * Uses camelCase types with server-side response transformation.
  */
-export default async function DashboardPage() {
+export default async function ControlPlanePage() {
   let data;
   let hasError = false;
 
   try {
-    data = await getDashboardData();
+    data = await getControlPlaneData();
   } catch {
     hasError = true;
     data = null;
@@ -85,10 +85,10 @@ export default async function DashboardPage() {
   );
 
   return (
-    <PageShell variant="dashboard" sidebar={sidebar}>
-      {/* Dashboard Header */}
+    <PageShell variant="control-plane" sidebar={sidebar}>
+      {/* Control Plane Header */}
       <PageHeader
-        title="Dashboard"
+        title="Control Plane"
         subtitle={statusSubtitle}
         left={
           goalStatus.length > 0 ? (
@@ -119,7 +119,7 @@ export default async function DashboardPage() {
           <SystemAlert
             tone="critical"
             title="Error loading data"
-            description="Unable to load dashboard data. This could be due to a session timeout. Try logging in again or refresh the page."
+            description="Unable to load control plane data. This could be due to a session timeout. Try logging in again or refresh the page."
           />
           <Button variant="outline" size="sm" asChild>
             <Link href="/login">Log in again</Link>
@@ -133,7 +133,7 @@ export default async function DashboardPage() {
           <SystemAlert
             tone="info"
             title="Welcome! Let's get started"
-            description="Your dashboard is empty because you haven't added any financial data yet. Complete your onboarding to see your financial health metrics."
+            description="Your control plane is empty because you haven't added any financial data yet. Complete your onboarding to see your financial health metrics."
           />
           <Button size="sm" asChild>
             <Link href="/onboarding">Complete Onboarding</Link>

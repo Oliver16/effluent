@@ -6,7 +6,7 @@ import { SectionCard } from '@/components/layout/SectionCard';
 import { Button } from '@/components/ui/button';
 import { AlertCircle, RefreshCw } from 'lucide-react';
 
-export default function DashboardError({
+export default function ControlPlaneError({
   error,
   reset,
 }: {
@@ -15,7 +15,7 @@ export default function DashboardError({
 }) {
   useEffect(() => {
     // Log to error reporting service (e.g., Sentry)
-    console.error('Dashboard error:', error);
+    console.error('Control plane error:', error);
   }, [error]);
 
   return (
@@ -27,7 +27,7 @@ export default function DashboardError({
           </div>
           <h2 className="text-lg font-semibold">Something went wrong</h2>
           <p className="mt-2 text-sm text-muted-foreground max-w-md">
-            We couldn&apos;t load your dashboard. This might be a temporary issue.
+            We couldn&apos;t load your control plane. This might be a temporary issue.
           </p>
           {process.env.NODE_ENV === 'development' && error.message && (
             <p className="mt-2 text-xs text-muted-foreground font-mono bg-muted px-2 py-1 rounded max-w-md truncate">
