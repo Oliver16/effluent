@@ -107,7 +107,14 @@ class PaycheckCalculator:
         dependent_credit = Decimal('0')
 
         if self.withholding:
-            status = self.withholding.filing_status
+            # Map W2Withholding filing_status to FEDERAL_BRACKETS keys
+            # W2Withholding uses 'married' but brackets use 'married_jointly'
+            status_map = {
+                'single': 'single',
+                'married': 'married_jointly',
+                'head_of_household': 'head_of_household',
+            }
+            status = status_map.get(self.withholding.filing_status, 'single')
             annual += self.withholding.other_income
             annual -= self.withholding.deductions
             extra = self.withholding.extra_withholding

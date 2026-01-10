@@ -118,7 +118,7 @@ class SystemFlowGenerator:
         income_sources = IncomeSource.objects.filter(
             household=self.household,
             is_active=True
-        ).select_related('household_member').prefetch_related(
+        ).select_related('household_member', 'household').prefetch_related(
             'w2_withholding', 'pretax_deductions'
         )
 
