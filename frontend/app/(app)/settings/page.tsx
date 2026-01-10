@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { households, profile as profileApi, settings as settingsApi, incomeSources, members, accounts, flows } from '@/lib/api'
-import { Household, UserProfile, UserSettings, UserSession, IncomeSourceDetail, HouseholdMember, Account, RecurringFlow } from '@/lib/types'
+import { households, profile as profileApi, settings as settingsApi, members } from '@/lib/api'
+import { Household, UserProfile, UserSettings, UserSession, HouseholdMember } from '@/lib/types'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,8 +16,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { User, Home, Bell, Shield, DollarSign, Pencil, Trash2, Plus, Users, Wallet, Receipt } from 'lucide-react'
-import { formatCurrency } from '@/lib/utils'
+import { User, Home, Bell, Shield, Pencil, Trash2, Plus, Users } from 'lucide-react'
 
 const TAX_FILING_STATUS: Record<string, string> = {
   single: 'Single',
@@ -41,24 +40,6 @@ const US_STATES: Record<string, string> = {
   DC: 'District of Columbia',
 }
 
-const INCOME_TYPES: Record<string, string> = {
-  w2: 'W-2 Salary',
-  w2_hourly: 'W-2 Hourly',
-  self_employed: 'Self-Employed',
-  rental: 'Rental Income',
-  investment: 'Investment Income',
-  retirement: 'Retirement Income',
-  social_security: 'Social Security',
-  other: 'Other Income',
-}
-
-const PAY_FREQUENCIES: Record<string, string> = {
-  weekly: 'Weekly',
-  biweekly: 'Every 2 Weeks',
-  semimonthly: 'Twice Monthly',
-  monthly: 'Monthly',
-}
-
 const RELATIONSHIPS: Record<string, string> = {
   self: 'Self',
   spouse: 'Spouse',
@@ -79,57 +60,6 @@ const EMPLOYMENT_STATUSES: Record<string, string> = {
   other: 'Other',
 }
 
-const ACCOUNT_TYPES: Record<string, string> = {
-  checking: 'Checking',
-  savings: 'Savings',
-  money_market: 'Money Market',
-  cd: 'Certificate of Deposit',
-  brokerage: 'Brokerage',
-  crypto: 'Cryptocurrency',
-  '401k': '401(k)',
-  '403b': '403(b)',
-  ira: 'Traditional IRA',
-  roth_ira: 'Roth IRA',
-  hsa: 'HSA',
-  pension: 'Pension',
-  real_estate: 'Real Estate',
-  vehicle: 'Vehicle',
-  other_asset: 'Other Asset',
-  mortgage: 'Mortgage',
-  credit_card: 'Credit Card',
-  student_loan: 'Student Loan',
-  auto_loan: 'Auto Loan',
-  personal_loan: 'Personal Loan',
-  heloc: 'HELOC',
-  other_liability: 'Other Liability',
-}
-
-const EXPENSE_CATEGORIES: Record<string, string> = {
-  housing: 'Housing',
-  utilities: 'Utilities',
-  transportation: 'Transportation',
-  food: 'Food & Groceries',
-  healthcare: 'Healthcare',
-  insurance: 'Insurance',
-  entertainment: 'Entertainment',
-  personal: 'Personal Care',
-  education: 'Education',
-  childcare: 'Childcare',
-  debt_payment: 'Debt Payment',
-  savings: 'Savings',
-  charitable: 'Charitable',
-  other: 'Other',
-}
-
-const FLOW_FREQUENCIES: Record<string, string> = {
-  weekly: 'Weekly',
-  biweekly: 'Every 2 Weeks',
-  semimonthly: 'Twice Monthly',
-  monthly: 'Monthly',
-  quarterly: 'Quarterly',
-  annual: 'Annually',
-}
-
 export default function SettingsPage() {
   const [householdData, setHouseholdData] = useState<Partial<Household>>({})
   const [profileData, setProfileData] = useState<Partial<UserProfile>>({})
@@ -141,16 +71,6 @@ export default function SettingsPage() {
   const [isPasswordUpdated, setIsPasswordUpdated] = useState(false)
   const [isExporting, setIsExporting] = useState(false)
 
-  // Income editing state
-  const [incomeModalOpen, setIncomeModalOpen] = useState(false)
-  const [editingIncome, setEditingIncome] = useState<IncomeSourceDetail | null>(null)
-  const [incomeForm, setIncomeForm] = useState({
-    name: '',
-    incomeType: 'w2',
-    grossAnnual: '',
-    payFrequency: 'biweekly',
-  })
-
   // Member editing state
   const [memberModalOpen, setMemberModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<HouseholdMember | null>(null)
@@ -159,26 +79,6 @@ export default function SettingsPage() {
     relationship: 'self',
     employmentStatus: 'employed',
     dateOfBirth: '',
-  })
-
-  // Account editing state
-  const [accountModalOpen, setAccountModalOpen] = useState(false)
-  const [editingAccount, setEditingAccount] = useState<Account | null>(null)
-  const [accountForm, setAccountForm] = useState({
-    name: '',
-    accountType: 'checking',
-    institution: '',
-    currentBalance: '',
-  })
-
-  // Expense editing state
-  const [expenseModalOpen, setExpenseModalOpen] = useState(false)
-  const [editingExpense, setEditingExpense] = useState<RecurringFlow | null>(null)
-  const [expenseForm, setExpenseForm] = useState({
-    name: '',
-    expenseCategory: 'other',
-    amount: '',
-    frequency: 'monthly',
   })
 
   const queryClient = useQueryClient()
@@ -203,29 +103,12 @@ export default function SettingsPage() {
     queryFn: () => settingsApi.sessions(),
   })
 
-  const { data: incomeSourcesList, isLoading: isIncomeLoading } = useQuery({
-    queryKey: ['income-sources'],
-    queryFn: () => incomeSources.list(),
-  })
-
   const { data: membersList, isLoading: isMembersLoading } = useQuery({
     queryKey: ['members'],
     queryFn: () => members.list(),
   })
 
-  const { data: accountsData, isLoading: isAccountsLoading } = useQuery({
-    queryKey: ['accounts'],
-    queryFn: () => accounts.list(),
-  })
-
-  const { data: flowsList, isLoading: isFlowsLoading } = useQuery({
-    queryKey: ['flows'],
-    queryFn: () => flows.list(),
-  })
-
   const household = householdList?.[0]
-  const accountsList = accountsData?.results || []
-  const expenseFlows = flowsList?.filter(f => f.flowType === 'expense' && !f.isSystemGenerated) || []
 
   useEffect(() => {
     if (household) {
@@ -280,81 +163,6 @@ export default function SettingsPage() {
 
   const handleSave = () => {
     updateHouseholdMutation.mutate(householdData)
-  }
-
-  // Income source mutations
-  const createIncomeMutation = useMutation({
-    mutationFn: (data: Partial<IncomeSourceDetail>) => incomeSources.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setIncomeModalOpen(false)
-      resetIncomeForm()
-    },
-  })
-
-  const updateIncomeMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<IncomeSourceDetail> }) =>
-      incomeSources.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setIncomeModalOpen(false)
-      setEditingIncome(null)
-      resetIncomeForm()
-    },
-  })
-
-  const deleteIncomeMutation = useMutation({
-    mutationFn: (id: string) => incomeSources.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-    },
-  })
-
-  const resetIncomeForm = () => {
-    setIncomeForm({
-      name: '',
-      incomeType: 'w2',
-      grossAnnual: '',
-      payFrequency: 'biweekly',
-    })
-  }
-
-  const openIncomeModal = (income?: IncomeSourceDetail) => {
-    if (income) {
-      setEditingIncome(income)
-      setIncomeForm({
-        name: income.name || '',
-        incomeType: income.incomeType || 'w2',
-        grossAnnual: income.grossAnnual || '',
-        payFrequency: income.payFrequency || 'biweekly',
-      })
-    } else {
-      setEditingIncome(null)
-      resetIncomeForm()
-    }
-    setIncomeModalOpen(true)
-  }
-
-  const handleIncomeSave = () => {
-    const data = {
-      name: incomeForm.name,
-      incomeType: incomeForm.incomeType,
-      grossAnnual: incomeForm.grossAnnual,
-      payFrequency: incomeForm.payFrequency,
-      isActive: true,
-    }
-
-    if (editingIncome) {
-      updateIncomeMutation.mutate({ id: editingIncome.id, data })
-    } else {
-      createIncomeMutation.mutate(data)
-    }
   }
 
   // Member mutations
@@ -422,153 +230,6 @@ export default function SettingsPage() {
       updateMemberMutation.mutate({ id: editingMember.id, data })
     } else {
       createMemberMutation.mutate(data)
-    }
-  }
-
-  // Account mutations
-  const createAccountMutation = useMutation({
-    mutationFn: (data: Partial<Account>) => accounts.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setAccountModalOpen(false)
-      resetAccountForm()
-    },
-  })
-
-  const updateAccountMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Account> }) =>
-      accounts.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setAccountModalOpen(false)
-      setEditingAccount(null)
-      resetAccountForm()
-    },
-  })
-
-  const deleteAccountMutation = useMutation({
-    mutationFn: (id: string) => accounts.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['accounts'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-    },
-  })
-
-  const resetAccountForm = () => {
-    setAccountForm({
-      name: '',
-      accountType: 'checking',
-      institution: '',
-      currentBalance: '',
-    })
-  }
-
-  const openAccountModal = (account?: Account) => {
-    if (account) {
-      setEditingAccount(account)
-      setAccountForm({
-        name: account.name || '',
-        accountType: account.accountType || 'checking',
-        institution: account.institution || '',
-        currentBalance: account.currentBalance || '',
-      })
-    } else {
-      setEditingAccount(null)
-      resetAccountForm()
-    }
-    setAccountModalOpen(true)
-  }
-
-  const handleAccountSave = () => {
-    const data = {
-      name: accountForm.name,
-      accountType: accountForm.accountType,
-      institution: accountForm.institution,
-      currentBalance: accountForm.currentBalance,
-      isActive: true,
-    }
-
-    if (editingAccount) {
-      updateAccountMutation.mutate({ id: editingAccount.id, data })
-    } else {
-      createAccountMutation.mutate(data)
-    }
-  }
-
-  // Expense mutations
-  const createExpenseMutation = useMutation({
-    mutationFn: (data: Partial<RecurringFlow>) => flows.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setExpenseModalOpen(false)
-      resetExpenseForm()
-    },
-  })
-
-  const updateExpenseMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<RecurringFlow> }) =>
-      flows.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-      setExpenseModalOpen(false)
-      setEditingExpense(null)
-      resetExpenseForm()
-    },
-  })
-
-  const deleteExpenseMutation = useMutation({
-    mutationFn: (id: string) => flows.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['flows'] })
-      queryClient.invalidateQueries({ queryKey: ['metrics'] })
-    },
-  })
-
-  const resetExpenseForm = () => {
-    setExpenseForm({
-      name: '',
-      expenseCategory: 'other',
-      amount: '',
-      frequency: 'monthly',
-    })
-  }
-
-  const openExpenseModal = (expense?: RecurringFlow) => {
-    if (expense) {
-      setEditingExpense(expense)
-      setExpenseForm({
-        name: expense.name || '',
-        expenseCategory: expense.expenseCategory || 'other',
-        amount: expense.amount || '',
-        frequency: expense.frequency || 'monthly',
-      })
-    } else {
-      setEditingExpense(null)
-      resetExpenseForm()
-    }
-    setExpenseModalOpen(true)
-  }
-
-  const handleExpenseSave = () => {
-    const today = new Date().toISOString().split('T')[0]
-    const data = {
-      name: expenseForm.name,
-      flowType: 'expense' as const,
-      expenseCategory: expenseForm.expenseCategory,
-      amount: expenseForm.amount,
-      frequency: expenseForm.frequency,
-      startDate: editingExpense?.startDate || today,
-      isActive: true,
-    }
-
-    if (editingExpense) {
-      updateExpenseMutation.mutate({ id: editingExpense.id, data })
-    } else {
-      createExpenseMutation.mutate(data)
     }
   }
 
@@ -660,11 +321,6 @@ export default function SettingsPage() {
     }
   }
 
-  // Helper function to check if account type is a liability
-  const isLiabilityType = (type: string) => {
-    return ['mortgage', 'credit_card', 'student_loan', 'auto_loan', 'personal_loan', 'heloc', 'other_liability'].includes(type)
-  }
-
   if (isLoading || isProfileLoading || isNotificationsLoading) {
     return (
       <div className="space-y-6">
@@ -692,18 +348,6 @@ export default function SettingsPage() {
           <TabsTrigger value="members" className="flex items-center gap-2">
             <Users className="h-4 w-4" />
             Members
-          </TabsTrigger>
-          <TabsTrigger value="income" className="flex items-center gap-2">
-            <DollarSign className="h-4 w-4" />
-            Income
-          </TabsTrigger>
-          <TabsTrigger value="accounts" className="flex items-center gap-2">
-            <Wallet className="h-4 w-4" />
-            Accounts
-          </TabsTrigger>
-          <TabsTrigger value="expenses" className="flex items-center gap-2">
-            <Receipt className="h-4 w-4" />
-            Expenses
           </TabsTrigger>
           <TabsTrigger value="account" className="flex items-center gap-2">
             <User className="h-4 w-4" />
@@ -864,226 +508,6 @@ export default function SettingsPage() {
                             <Trash2 className="h-4 w-4 text-red-500" />
                           </Button>
                         )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="income" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Income Sources</span>
-                <Button onClick={() => openIncomeModal()} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Income
-                </Button>
-              </CardTitle>
-              <CardDescription>
-                Manage your income sources. Changes automatically update your tax withholding calculations.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isIncomeLoading ? (
-                <p className="text-muted-foreground">Loading income sources...</p>
-              ) : !incomeSourcesList?.length ? (
-                <p className="text-muted-foreground py-4 text-center">
-                  No income sources configured. Add your first income source to see tax calculations.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {incomeSourcesList.map((income) => (
-                    <div
-                      key={income.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium">{income.name}</p>
-                        <div className="flex gap-4 text-sm text-muted-foreground">
-                          <span>{INCOME_TYPES[income.incomeType] || income.incomeType}</span>
-                          <span>{PAY_FREQUENCIES[income.payFrequency] || income.payFrequency}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="font-semibold text-green-600">
-                            {formatCurrency(parseFloat(income.grossAnnual || '0'))}/year
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            ~{formatCurrency(parseFloat(income.grossAnnual || '0') / 12)}/month
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openIncomeModal(income)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm('Delete this income source?')) {
-                                deleteIncomeMutation.mutate(income.id)
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <p className="text-xs text-muted-foreground mt-4">
-                Tax withholding flows are automatically calculated based on your income sources.
-                Visit the Cash Flows page to see your tax expense breakdown.
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="accounts" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Accounts</span>
-                <Button onClick={() => openAccountModal()} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Account
-                </Button>
-              </CardTitle>
-              <CardDescription>
-                Manage your bank accounts, investments, and liabilities
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isAccountsLoading ? (
-                <p className="text-muted-foreground">Loading accounts...</p>
-              ) : !accountsList?.length ? (
-                <p className="text-muted-foreground py-4 text-center">
-                  No accounts configured. Add your first account.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {accountsList.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium">{account.name}</p>
-                        <div className="flex gap-4 text-sm text-muted-foreground">
-                          <span>{ACCOUNT_TYPES[account.accountType] || account.accountType}</span>
-                          {account.institution && <span>{account.institution}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className={`font-semibold ${isLiabilityType(account.accountType) ? 'text-red-600' : 'text-green-600'}`}>
-                            {isLiabilityType(account.accountType) ? '-' : ''}{formatCurrency(parseFloat(account.currentBalance || '0'))}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openAccountModal(account)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm('Delete this account?')) {
-                                deleteAccountMutation.mutate(account.id)
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="expenses" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Recurring Expenses</span>
-                <Button onClick={() => openExpenseModal()} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Expense
-                </Button>
-              </CardTitle>
-              <CardDescription>
-                Manage your recurring expenses (excludes system-generated flows like taxes)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isFlowsLoading ? (
-                <p className="text-muted-foreground">Loading expenses...</p>
-              ) : !expenseFlows?.length ? (
-                <p className="text-muted-foreground py-4 text-center">
-                  No expenses configured. Add your first recurring expense.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {expenseFlows.map((expense) => (
-                    <div
-                      key={expense.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium">{expense.name}</p>
-                        <div className="flex gap-4 text-sm text-muted-foreground">
-                          <span>{EXPENSE_CATEGORIES[expense.expenseCategory || ''] || expense.expenseCategory || 'Other'}</span>
-                          <span>{FLOW_FREQUENCIES[expense.frequency] || expense.frequency}</span>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="font-semibold text-red-600">
-                            {formatCurrency(parseFloat(expense.amount || '0'))}/{expense.frequency === 'annual' ? 'year' : 'period'}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            ~{formatCurrency(parseFloat(expense.monthlyAmount || '0'))}/month
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openExpenseModal(expense)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm('Delete this expense?')) {
-                                deleteExpenseMutation.mutate(expense.id)
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
                       </div>
                     </div>
                   ))}
@@ -1389,109 +813,6 @@ export default function SettingsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Income Edit Modal */}
-      <Dialog open={incomeModalOpen} onOpenChange={setIncomeModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingIncome ? 'Edit Income Source' : 'Add Income Source'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingIncome
-                ? 'Update your income details. Tax flows will be recalculated automatically.'
-                : 'Add a new income source. Tax withholding will be calculated automatically for W-2 income.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="incomeName">Name</Label>
-              <Input
-                id="incomeName"
-                value={incomeForm.name}
-                onChange={(e) => setIncomeForm({ ...incomeForm, name: e.target.value })}
-                placeholder="e.g., Main Job, Freelance Work"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="incomeType">Income Type</Label>
-                <select
-                  id="incomeType"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={incomeForm.incomeType}
-                  onChange={(e) => setIncomeForm({ ...incomeForm, incomeType: e.target.value })}
-                >
-                  {Object.entries(INCOME_TYPES).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="payFrequency">Pay Frequency</Label>
-                <select
-                  id="payFrequency"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={incomeForm.payFrequency}
-                  onChange={(e) => setIncomeForm({ ...incomeForm, payFrequency: e.target.value })}
-                >
-                  {Object.entries(PAY_FREQUENCIES).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="grossAnnual">Annual Gross Income</Label>
-              <Input
-                id="grossAnnual"
-                type="number"
-                step="0.01"
-                value={incomeForm.grossAnnual}
-                onChange={(e) => setIncomeForm({ ...incomeForm, grossAnnual: e.target.value })}
-                placeholder="e.g., 75000"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter your total annual gross income before taxes and deductions
-              </p>
-            </div>
-
-            {(incomeForm.incomeType === 'w2' || incomeForm.incomeType === 'w2_hourly') && (
-              <p className="text-sm text-blue-600 bg-blue-50 p-3 rounded-md">
-                Tax withholding will be calculated using federal tax brackets, FICA, and state taxes based on your W-4 settings.
-              </p>
-            )}
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setIncomeModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleIncomeSave}
-                disabled={
-                  createIncomeMutation.isPending ||
-                  updateIncomeMutation.isPending ||
-                  !incomeForm.name ||
-                  !incomeForm.grossAnnual
-                }
-              >
-                {(createIncomeMutation.isPending || updateIncomeMutation.isPending)
-                  ? 'Saving...'
-                  : editingIncome
-                  ? 'Save Changes'
-                  : 'Add Income'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Member Edit Modal */}
       <Dialog open={memberModalOpen} onOpenChange={setMemberModalOpen}>
         <DialogContent>
@@ -1577,225 +898,6 @@ export default function SettingsPage() {
                   : editingMember
                   ? 'Save Changes'
                   : 'Add Member'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Account Edit Modal */}
-      <Dialog open={accountModalOpen} onOpenChange={setAccountModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingAccount ? 'Edit Account' : 'Add Account'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingAccount
-                ? 'Update account details.'
-                : 'Add a new bank account, investment, or liability.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="accountName">Account Name</Label>
-              <Input
-                id="accountName"
-                value={accountForm.name}
-                onChange={(e) => setAccountForm({ ...accountForm, name: e.target.value })}
-                placeholder="e.g., Chase Checking, Fidelity 401k"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="accountType">Account Type</Label>
-                <select
-                  id="accountType"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={accountForm.accountType}
-                  onChange={(e) => setAccountForm({ ...accountForm, accountType: e.target.value })}
-                >
-                  <optgroup label="Bank Accounts">
-                    <option value="checking">Checking</option>
-                    <option value="savings">Savings</option>
-                    <option value="money_market">Money Market</option>
-                    <option value="cd">Certificate of Deposit</option>
-                  </optgroup>
-                  <optgroup label="Investments">
-                    <option value="brokerage">Brokerage</option>
-                    <option value="crypto">Cryptocurrency</option>
-                  </optgroup>
-                  <optgroup label="Retirement">
-                    <option value="401k">401(k)</option>
-                    <option value="403b">403(b)</option>
-                    <option value="ira">Traditional IRA</option>
-                    <option value="roth_ira">Roth IRA</option>
-                    <option value="hsa">HSA</option>
-                    <option value="pension">Pension</option>
-                  </optgroup>
-                  <optgroup label="Other Assets">
-                    <option value="real_estate">Real Estate</option>
-                    <option value="vehicle">Vehicle</option>
-                    <option value="other_asset">Other Asset</option>
-                  </optgroup>
-                  <optgroup label="Liabilities">
-                    <option value="mortgage">Mortgage</option>
-                    <option value="credit_card">Credit Card</option>
-                    <option value="student_loan">Student Loan</option>
-                    <option value="auto_loan">Auto Loan</option>
-                    <option value="personal_loan">Personal Loan</option>
-                    <option value="heloc">HELOC</option>
-                    <option value="other_liability">Other Liability</option>
-                  </optgroup>
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="institution">Institution</Label>
-                <Input
-                  id="institution"
-                  value={accountForm.institution}
-                  onChange={(e) => setAccountForm({ ...accountForm, institution: e.target.value })}
-                  placeholder="e.g., Chase, Fidelity"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="currentBalance">
-                {isLiabilityType(accountForm.accountType) ? 'Current Balance Owed' : 'Current Balance'}
-              </Label>
-              <Input
-                id="currentBalance"
-                type="number"
-                step="0.01"
-                value={accountForm.currentBalance}
-                onChange={(e) => setAccountForm({ ...accountForm, currentBalance: e.target.value })}
-                placeholder="e.g., 10000"
-              />
-              <p className="text-xs text-muted-foreground">
-                {isLiabilityType(accountForm.accountType)
-                  ? 'Enter the amount you currently owe'
-                  : 'Enter the current account balance'}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setAccountModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleAccountSave}
-                disabled={
-                  createAccountMutation.isPending ||
-                  updateAccountMutation.isPending ||
-                  !accountForm.name ||
-                  !accountForm.currentBalance
-                }
-              >
-                {(createAccountMutation.isPending || updateAccountMutation.isPending)
-                  ? 'Saving...'
-                  : editingAccount
-                  ? 'Save Changes'
-                  : 'Add Account'}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Expense Edit Modal */}
-      <Dialog open={expenseModalOpen} onOpenChange={setExpenseModalOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingExpense ? 'Edit Expense' : 'Add Expense'}
-            </DialogTitle>
-            <DialogDescription>
-              {editingExpense
-                ? 'Update expense details.'
-                : 'Add a new recurring expense.'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="expenseName">Expense Name</Label>
-              <Input
-                id="expenseName"
-                value={expenseForm.name}
-                onChange={(e) => setExpenseForm({ ...expenseForm, name: e.target.value })}
-                placeholder="e.g., Rent, Groceries, Netflix"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="expenseCategory">Category</Label>
-                <select
-                  id="expenseCategory"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={expenseForm.expenseCategory}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, expenseCategory: e.target.value })}
-                >
-                  {Object.entries(EXPENSE_CATEGORIES).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="expenseFrequency">Frequency</Label>
-                <select
-                  id="expenseFrequency"
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  value={expenseForm.frequency}
-                  onChange={(e) => setExpenseForm({ ...expenseForm, frequency: e.target.value })}
-                >
-                  {Object.entries(FLOW_FREQUENCIES).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="expenseAmount">Amount per Period</Label>
-              <Input
-                id="expenseAmount"
-                type="number"
-                step="0.01"
-                value={expenseForm.amount}
-                onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                placeholder="e.g., 1500"
-              />
-              <p className="text-xs text-muted-foreground">
-                Enter the amount you pay each {expenseForm.frequency === 'annual' ? 'year' : 'period'}
-              </p>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="outline" onClick={() => setExpenseModalOpen(false)}>
-                Cancel
-              </Button>
-              <Button
-                onClick={handleExpenseSave}
-                disabled={
-                  createExpenseMutation.isPending ||
-                  updateExpenseMutation.isPending ||
-                  !expenseForm.name ||
-                  !expenseForm.amount
-                }
-              >
-                {(createExpenseMutation.isPending || updateExpenseMutation.isPending)
-                  ? 'Saving...'
-                  : editingExpense
-                  ? 'Save Changes'
-                  : 'Add Expense'}
               </Button>
             </div>
           </div>

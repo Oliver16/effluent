@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { flows as flowsApi, metrics as metricsApi, normalizeListResponse } from '@/lib/api'
-import { RecurringFlow, MetricSnapshot } from '@/lib/types'
+import { flows as flowsApi, incomeSources as incomeSourcesApi, metrics as metricsApi, normalizeListResponse } from '@/lib/api'
+import { RecurringFlow, IncomeSourceDetail, MetricSnapshot } from '@/lib/types'
 import { formatCurrency } from '@/lib/format'
 import { ControlListLayout } from '@/components/layout/ControlListLayout'
 import { MetricCard } from '@/components/ui/MetricCard'
@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, RefreshCw, Cpu } from 'lucide-react'
+import { Plus, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Pencil, RefreshCw, Cpu, Trash2, Briefcase } from 'lucide-react'
 import { deriveStatus } from '@/lib/status'
 import { StatusTone } from '@/lib/design-tokens'
 
@@ -385,6 +385,24 @@ const EXPENSE_CATEGORY_GROUPS: Array<{ label: string; options: Array<{ value: st
   },
 ]
 
+const INCOME_TYPES: Record<string, string> = {
+  w2: 'W-2 Salary',
+  w2_hourly: 'W-2 Hourly',
+  self_employed: 'Self-Employed',
+  rental: 'Rental Income',
+  investment: 'Investment Income',
+  retirement: 'Retirement Income',
+  social_security: 'Social Security',
+  other: 'Other Income',
+}
+
+const PAY_FREQUENCIES: Record<string, string> = {
+  weekly: 'Weekly',
+  biweekly: 'Every 2 Weeks',
+  semimonthly: 'Twice Monthly',
+  monthly: 'Monthly',
+}
+
 export default function FlowsPage() {
   const [addModalOpen, setAddModalOpen] = useState(false)
   const [editModalOpen, setEditModalOpen] = useState(false)
@@ -399,6 +417,16 @@ export default function FlowsPage() {
     startDate: new Date().toISOString().split('T')[0],
     endDate: '',
     isBaseline: true,
+  })
+
+  // Income source state
+  const [incomeSourceModalOpen, setIncomeSourceModalOpen] = useState(false)
+  const [editingIncomeSource, setEditingIncomeSource] = useState<IncomeSourceDetail | null>(null)
+  const [incomeSourceForm, setIncomeSourceForm] = useState({
+    name: '',
+    incomeType: 'w2',
+    grossAnnualSalary: '',
+    payFrequency: 'biweekly',
   })
 
   const queryClient = useQueryClient()
@@ -442,6 +470,53 @@ export default function FlowsPage() {
       queryClient.invalidateQueries({ queryKey: ['metrics'] })
     },
   })
+
+  // Income sources query and mutations
+  const { data: incomeSourcesData, isLoading: isIncomeSourcesLoading } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: () => incomeSourcesApi.list(),
+  })
+
+  const createIncomeSourceMutation = useMutation({
+    mutationFn: (data: Partial<IncomeSourceDetail>) => incomeSourcesApi.create(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+      // Regenerate tax flows when income sources change
+      regenerateFlowsMutation.mutate()
+      setIncomeSourceModalOpen(false)
+      resetIncomeSourceForm()
+    },
+  })
+
+  const updateIncomeSourceMutation = useMutation({
+    mutationFn: ({ id, data }: { id: string; data: Partial<IncomeSourceDetail> }) =>
+      incomeSourcesApi.update(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+      // Regenerate tax flows when income sources change
+      regenerateFlowsMutation.mutate()
+      setIncomeSourceModalOpen(false)
+      setEditingIncomeSource(null)
+      resetIncomeSourceForm()
+    },
+  })
+
+  const deleteIncomeSourceMutation = useMutation({
+    mutationFn: (id: string) => incomeSourcesApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] })
+      queryClient.invalidateQueries({ queryKey: ['flows'] })
+      queryClient.invalidateQueries({ queryKey: ['metrics'] })
+      // Regenerate tax flows when income sources change
+      regenerateFlowsMutation.mutate()
+    },
+  })
+
+  const incomeSources = incomeSourcesData?.results || incomeSourcesData || []
 
   const flows = flowsData || []
   const incomeFlows = flows.filter(f => f.flowType === 'income')
@@ -514,6 +589,59 @@ export default function FlowsPage() {
     })
   }
 
+  // Income source handlers
+  const resetIncomeSourceForm = () => {
+    setIncomeSourceForm({
+      name: '',
+      incomeType: 'w2',
+      grossAnnualSalary: '',
+      payFrequency: 'biweekly',
+    })
+  }
+
+  const openIncomeSourceModal = (incomeSource?: IncomeSourceDetail) => {
+    if (incomeSource) {
+      setEditingIncomeSource(incomeSource)
+      setIncomeSourceForm({
+        name: incomeSource.name || '',
+        incomeType: incomeSource.incomeType || 'w2',
+        grossAnnualSalary: incomeSource.grossAnnualSalary || incomeSource.grossAnnual || '',
+        payFrequency: incomeSource.payFrequency || 'biweekly',
+      })
+    } else {
+      setEditingIncomeSource(null)
+      resetIncomeSourceForm()
+    }
+    setIncomeSourceModalOpen(true)
+  }
+
+  const handleIncomeSourceSave = () => {
+    const data = {
+      name: incomeSourceForm.name,
+      incomeType: incomeSourceForm.incomeType,
+      grossAnnualSalary: incomeSourceForm.grossAnnualSalary,
+      payFrequency: incomeSourceForm.payFrequency,
+      isActive: true,
+    }
+
+    if (editingIncomeSource) {
+      updateIncomeSourceMutation.mutate({ id: editingIncomeSource.id, data })
+    } else {
+      createIncomeSourceMutation.mutate(data)
+    }
+  }
+
+  const handleDeleteIncomeSource = (incomeSource: IncomeSourceDetail) => {
+    if (confirm(`Delete "${incomeSource.name}"? This will also remove associated tax flows.`)) {
+      deleteIncomeSourceMutation.mutate(incomeSource.id)
+    }
+  }
+
+  // Calculate total gross income from income sources
+  const totalGrossIncome = Array.isArray(incomeSources)
+    ? incomeSources.reduce((sum, s) => sum + parseFloat(s.grossAnnual || s.grossAnnualSalary || '0'), 0)
+    : 0
+
   // Derive surplus status (positive surplus is good)
   const surplusStatus: StatusTone = monthlySurplus >= totalMonthlyIncome * 0.2
     ? 'good'
@@ -573,12 +701,90 @@ export default function FlowsPage() {
       }
     >
       {/* Flows Tabs */}
-      <Tabs defaultValue="income" className="space-y-4">
+      <Tabs defaultValue="sources" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="sources" className="flex items-center gap-1">
+            <Briefcase className="h-3.5 w-3.5" />
+            Income Sources ({Array.isArray(incomeSources) ? incomeSources.length : 0})
+          </TabsTrigger>
           <TabsTrigger value="income">Income ({incomeFlows.length})</TabsTrigger>
           <TabsTrigger value="expenses">Expenses ({expenseFlows.length})</TabsTrigger>
           <TabsTrigger value="transfers">Transfers ({transferFlows.length})</TabsTrigger>
         </TabsList>
+
+        {/* Income Sources Tab */}
+        <TabsContent value="sources" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-muted-foreground">
+                Income sources drive tax calculations. Changes automatically update tax withholding flows.
+              </p>
+            </div>
+            <Button onClick={() => openIncomeSourceModal()}>
+              <Plus className="h-4 w-4 mr-2" />
+              Add Income Source
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="pt-6">
+              {isIncomeSourcesLoading ? (
+                <p className="text-muted-foreground text-center py-8">Loading income sources...</p>
+              ) : !Array.isArray(incomeSources) || incomeSources.length === 0 ? (
+                <p className="text-muted-foreground text-center py-8">
+                  No income sources configured. Add your first income source to calculate taxes.
+                </p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Pay Frequency</TableHead>
+                      <TableHead className="text-right">Gross Annual</TableHead>
+                      <TableHead className="w-24"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {incomeSources.map((source) => (
+                      <TableRow key={source.id}>
+                        <TableCell className="font-medium">{source.name}</TableCell>
+                        <TableCell>{INCOME_TYPES[source.incomeType] || source.incomeType}</TableCell>
+                        <TableCell>{PAY_FREQUENCIES[source.payFrequency] || source.payFrequency}</TableCell>
+                        <TableCell className="text-right tabular-nums font-semibold">
+                          {formatCurrency(parseFloat(source.grossAnnual || source.grossAnnualSalary || '0'))}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1 justify-end">
+                            <Button variant="ghost" size="sm" onClick={() => openIncomeSourceModal(source)}>
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteIncomeSource(source)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+              {Array.isArray(incomeSources) && incomeSources.length > 0 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                  <span className="text-sm text-muted-foreground">
+                    Total Gross Annual Income
+                  </span>
+                  <span className="font-semibold tabular-nums">
+                    {formatCurrency(totalGrossIncome)}
+                  </span>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="income" className="space-y-4">
           <div className="flex justify-end">
@@ -969,6 +1175,103 @@ export default function FlowsPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Income Source Modal */}
+      <Dialog open={incomeSourceModalOpen} onOpenChange={setIncomeSourceModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingIncomeSource ? 'Edit Income Source' : 'Add Income Source'}
+            </DialogTitle>
+            <DialogDescription>
+              {editingIncomeSource
+                ? 'Update income source details. Tax flows will be automatically recalculated.'
+                : 'Add a new income source. Tax withholding will be automatically calculated.'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="sourceName">Name</Label>
+              <Input
+                id="sourceName"
+                value={incomeSourceForm.name}
+                onChange={(e) => setIncomeSourceForm({ ...incomeSourceForm, name: e.target.value })}
+                placeholder="e.g., Primary Job, Side Gig"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="sourceType">Income Type</Label>
+                <select
+                  id="sourceType"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={incomeSourceForm.incomeType}
+                  onChange={(e) => setIncomeSourceForm({ ...incomeSourceForm, incomeType: e.target.value })}
+                >
+                  {Object.entries(INCOME_TYPES).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="payFrequency">Pay Frequency</Label>
+                <select
+                  id="payFrequency"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={incomeSourceForm.payFrequency}
+                  onChange={(e) => setIncomeSourceForm({ ...incomeSourceForm, payFrequency: e.target.value })}
+                >
+                  {Object.entries(PAY_FREQUENCIES).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="grossAnnual">Gross Annual Salary</Label>
+              <Input
+                id="grossAnnual"
+                type="number"
+                step="0.01"
+                value={incomeSourceForm.grossAnnualSalary}
+                onChange={(e) => setIncomeSourceForm({ ...incomeSourceForm, grossAnnualSalary: e.target.value })}
+                placeholder="e.g., 75000"
+              />
+              <p className="text-xs text-muted-foreground">
+                Enter your gross annual income before taxes and deductions
+              </p>
+            </div>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setIncomeSourceModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleIncomeSourceSave}
+                disabled={
+                  createIncomeSourceMutation.isPending ||
+                  updateIncomeSourceMutation.isPending ||
+                  !incomeSourceForm.name ||
+                  !incomeSourceForm.grossAnnualSalary
+                }
+              >
+                {(createIncomeSourceMutation.isPending || updateIncomeSourceMutation.isPending)
+                  ? 'Saving...'
+                  : editingIncomeSource
+                  ? 'Save Changes'
+                  : 'Add Income Source'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </ControlListLayout>

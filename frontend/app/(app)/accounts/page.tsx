@@ -43,7 +43,16 @@ import {
   TrendingDown,
   Loader2,
   Landmark,
+  Pencil,
+  Trash2,
+  MoreHorizontal,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 const LIABILITY_TYPES = new Set([
   'credit_card',
@@ -208,6 +217,7 @@ function getAccountIcon(accountType: string) {
 export default function AccountsPage() {
   const [updateModalOpen, setUpdateModalOpen] = useState(false);
   const [addModalOpen, setAddModalOpen] = useState(false);
+  const [editModalOpen, setEditModalOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [newBalance, setNewBalance] = useState('');
   const [density, setDensity] = useState<DensityMode>(DEFAULT_DENSITY);
@@ -216,6 +226,12 @@ export default function AccountsPage() {
     accountType: 'checking',
     institution: '',
     currentBalance: '0',
+  });
+  const [editAccount, setEditAccount] = useState({
+    name: '',
+    accountType: 'checking',
+    institution: '',
+    currentBalance: '',
   });
 
   const queryClient = useQueryClient();
@@ -247,6 +263,32 @@ export default function AccountsPage() {
         institution: '',
         currentBalance: '0',
       });
+    },
+  });
+
+  const updateAccountMutation = useMutation({
+    mutationFn: async ({ id, data, balanceChanged, newBalance }: { id: string; data: Partial<Account>; balanceChanged: boolean; newBalance: string }) => {
+      // Update account metadata
+      await accountsApi.update(id, data);
+      // If balance changed, update via balance endpoint (current_balance is read-only on PATCH)
+      if (balanceChanged && newBalance) {
+        const today = new Date().toISOString().split('T')[0];
+        await accountsApi.updateBalance(id, newBalance, today);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['metrics'] });
+      setEditModalOpen(false);
+      setSelectedAccount(null);
+    },
+  });
+
+  const deleteAccountMutation = useMutation({
+    mutationFn: (id: string) => accountsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['accounts'] });
+      queryClient.invalidateQueries({ queryKey: ['metrics'] });
     },
   });
 
@@ -289,6 +331,40 @@ export default function AccountsPage() {
       currentBalance: newAccount.currentBalance,
       isActive: true,
     });
+  };
+
+  const openEditModal = (account: Account) => {
+    setSelectedAccount(account);
+    setEditAccount({
+      name: account.name || '',
+      accountType: account.accountType || 'checking',
+      institution: account.institution || '',
+      currentBalance: account.currentBalance || '0',
+    });
+    setEditModalOpen(true);
+  };
+
+  const handleUpdateAccount = () => {
+    if (!selectedAccount) return;
+    const data = {
+      name: editAccount.name,
+      accountType: editAccount.accountType,
+      institution: editAccount.institution,
+      isActive: true,
+    };
+    const balanceChanged = editAccount.currentBalance !== selectedAccount.currentBalance;
+    updateAccountMutation.mutate({
+      id: selectedAccount.id,
+      data,
+      balanceChanged,
+      newBalance: editAccount.currentBalance,
+    });
+  };
+
+  const handleDeleteAccount = (account: Account) => {
+    if (confirm(`Delete "${account.name}"? This action cannot be undone.`)) {
+      deleteAccountMutation.mutate(account.id);
+    }
   };
 
   if (isLoading) {
@@ -395,15 +471,36 @@ export default function AccountsPage() {
                       {formatCurrency(parseFloat(account.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
                           onClick={() => openUpdateModal(account)}
+                          title="Update balance"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditModal(account)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleDeleteAccount(account)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -467,15 +564,36 @@ export default function AccountsPage() {
                       {formatCurrency(parseFloat(asset.currentBalance) || 0)}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
                           onClick={() => openUpdateModal(asset)}
+                          title="Update value"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditModal(asset)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleDeleteAccount(asset)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -539,15 +657,36 @@ export default function AccountsPage() {
                       {formatCurrency(Math.abs(parseFloat(account.currentBalance) || 0))}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-7 w-7 p-0"
                           onClick={() => openUpdateModal(account)}
+                          title="Update balance"
                         >
                           <RefreshCw className="h-3.5 w-3.5" />
                         </Button>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditModal(account)}>
+                              <Pencil className="h-4 w-4 mr-2" />
+                              Edit
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              className="text-red-600"
+                              onClick={() => handleDeleteAccount(account)}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -708,6 +847,128 @@ export default function AccountsPage() {
                 disabled={createAccountMutation.isPending || !newAccount.name}
               >
                 {createAccountMutation.isPending ? 'Creating...' : 'Create'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Account Modal */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-md max-h-[80vh] overflow-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Account</DialogTitle>
+            <DialogDescription>Update account details</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName">Name</Label>
+              <Input
+                id="editName"
+                value={editAccount.name}
+                onChange={(e) => setEditAccount({ ...editAccount, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editType">Type</Label>
+              <select
+                id="editType"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={editAccount.accountType}
+                onChange={(e) => setEditAccount({ ...editAccount, accountType: e.target.value })}
+              >
+                <optgroup label="Cash & Equivalents">
+                  <option value="checking">Checking</option>
+                  <option value="savings">Savings</option>
+                  <option value="money_market">Money Market</option>
+                  <option value="cd">Certificate of Deposit</option>
+                  <option value="cash">Cash on Hand</option>
+                </optgroup>
+                <optgroup label="Investment Accounts">
+                  <option value="brokerage">Brokerage</option>
+                  <option value="crypto">Cryptocurrency</option>
+                </optgroup>
+                <optgroup label="Retirement Accounts">
+                  <option value="traditional_401k">401(k) - Traditional</option>
+                  <option value="roth_401k">401(k) - Roth</option>
+                  <option value="traditional_ira">IRA - Traditional</option>
+                  <option value="roth_ira">IRA - Roth</option>
+                  <option value="sep_ira">SEP IRA</option>
+                  <option value="simple_ira">SIMPLE IRA</option>
+                  <option value="tsp">TSP (Federal)</option>
+                  <option value="pension">Pension</option>
+                  <option value="annuity">Annuity</option>
+                  <option value="hsa">Health Savings Account</option>
+                </optgroup>
+                <optgroup label="Real Property">
+                  <option value="primary_residence">Primary Residence</option>
+                  <option value="rental_property">Rental Property</option>
+                  <option value="vacation_property">Vacation Property</option>
+                  <option value="land">Land</option>
+                  <option value="commercial_property">Commercial Property</option>
+                </optgroup>
+                <optgroup label="Personal Property">
+                  <option value="vehicle">Vehicle</option>
+                  <option value="boat">Boat/RV</option>
+                  <option value="jewelry">Jewelry/Collectibles</option>
+                  <option value="other_asset">Other Asset</option>
+                </optgroup>
+                <optgroup label="Credit Cards">
+                  <option value="credit_card">Credit Card</option>
+                  <option value="store_card">Store Credit Card</option>
+                </optgroup>
+                <optgroup label="Lines of Credit">
+                  <option value="heloc">Home Equity Line of Credit</option>
+                  <option value="personal_loc">Personal Line of Credit</option>
+                  <option value="business_loc">Business Line of Credit</option>
+                </optgroup>
+                <optgroup label="Mortgages">
+                  <option value="primary_mortgage">Primary Residence Mortgage</option>
+                  <option value="rental_mortgage">Rental Property Mortgage</option>
+                  <option value="second_mortgage">Second Mortgage</option>
+                </optgroup>
+                <optgroup label="Installment Loans">
+                  <option value="auto_loan">Auto Loan</option>
+                  <option value="personal_loan">Personal Loan</option>
+                  <option value="student_loan_federal">Federal Student Loan</option>
+                  <option value="student_loan_private">Private Student Loan</option>
+                  <option value="boat_loan">Boat/RV Loan</option>
+                </optgroup>
+                <optgroup label="Other Liabilities">
+                  <option value="medical_debt">Medical Debt</option>
+                  <option value="tax_debt">Tax Debt Owed</option>
+                  <option value="family_loan">Loan from Family/Friends</option>
+                  <option value="other_liability">Other Liability</option>
+                </optgroup>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editInstitution">Institution / Description</Label>
+              <Input
+                id="editInstitution"
+                value={editAccount.institution}
+                onChange={(e) => setEditAccount({ ...editAccount, institution: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editBalance">Current Balance / Value</Label>
+              <Input
+                id="editBalance"
+                type="number"
+                step="0.01"
+                value={editAccount.currentBalance}
+                onChange={(e) => setEditAccount({ ...editAccount, currentBalance: e.target.value })}
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleUpdateAccount}
+                disabled={updateAccountMutation.isPending || !editAccount.name}
+              >
+                {updateAccountMutation.isPending ? 'Saving...' : 'Save Changes'}
               </Button>
             </div>
           </div>
