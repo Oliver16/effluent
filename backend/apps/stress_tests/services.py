@@ -122,6 +122,7 @@ class StressTestService:
             name=f"Stress Test: {template['name']}",
             description=template['description'],
             is_baseline=False,
+            is_stress_test=True,  # Mark as stress test so it doesn't appear in scenarios list
             parent_scenario=baseline,
             start_date=date.today(),
             projection_months=horizon_months,

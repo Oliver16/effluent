@@ -259,6 +259,7 @@ export interface Scenario {
   salaryGrowthRate?: string
   isActive?: boolean
   isArchived?: boolean
+  isStressTest?: boolean
   createdAt?: string
   updatedAt?: string
   changes?: ScenarioChange[]

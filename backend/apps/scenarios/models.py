@@ -50,6 +50,7 @@ class Scenario(HouseholdOwnedModel):
 
     is_active = models.BooleanField(default=True)
     is_archived = models.BooleanField(default=False)
+    is_stress_test = models.BooleanField(default=False)
 
     class Meta:
         db_table = 'scenarios'
