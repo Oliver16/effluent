@@ -19,7 +19,12 @@ class StressTestListView(APIView):
 
     def get(self, request):
         """List all available stress test templates."""
-        household = request.household
+        household = request.household or request.user.get_default_household()
+        if not household:
+            return Response(
+                {'error': 'No household available. Please select or create a household.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         service = StressTestService(household)
         tests = service.list_available_tests()
 
@@ -35,7 +40,12 @@ class StressTestRunView(APIView):
 
     def post(self, request):
         """Run a stress test against the household's baseline scenario."""
-        household = request.household
+        household = request.household or request.user.get_default_household()
+        if not household:
+            return Response(
+                {'error': 'No household available. Please select or create a household.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         test_key = request.data.get('test_key')
         custom_inputs = request.data.get('inputs', {})
         horizon_months = request.data.get('horizon_months', 60)
@@ -93,7 +103,12 @@ class StressTestBatchRunView(APIView):
 
     def post(self, request):
         """Run multiple stress tests and return combined results."""
-        household = request.household
+        household = request.household or request.user.get_default_household()
+        if not household:
+            return Response(
+                {'error': 'No household available. Please select or create a household.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
         test_keys = request.data.get('test_keys', [])
         horizon_months = request.data.get('horizon_months', 60)
 
