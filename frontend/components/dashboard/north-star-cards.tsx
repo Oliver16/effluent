@@ -152,10 +152,13 @@ export function NorthStarCards({
 }: NorthStarCardsProps) {
   if (isLoading) {
     return (
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-        {METRIC_CARDS.map((card) => (
-          <StatCardSkeleton key={card.key} />
-        ))}
+      <div className="space-y-4">
+        <div className="h-8 w-full bg-muted animate-pulse rounded" />
+        <div className="grid grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => (
+            <StatCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     );
   }
@@ -203,12 +206,16 @@ export function NorthStarCards({
     value: data.formattedValue,
   }));
 
-  // Get the primary metrics for prominent display
-  const [netWorth, surplus] = cardData;
+  // Get the primary metrics for prominent display (Net Worth, Monthly Surplus, Liquidity)
+  const [netWorth, surplus, liquidity] = cardData;
 
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="grid grid-cols-2 gap-4 flex-1">
+    <div className="space-y-4">
+      {/* Status Annunciator - Compact status overview at top */}
+      <StatusAnnunciator items={annunciatorItems} direction="row" />
+
+      {/* Primary metric cards - 3 columns */}
+      <div className="grid grid-cols-3 gap-4">
         {/* Net Worth - Primary metric */}
         <MetricCard
           label={netWorth.title}
@@ -227,7 +234,7 @@ export function NorthStarCards({
           }
         />
 
-        {/* Monthly Surplus - Secondary primary metric */}
+        {/* Monthly Surplus */}
         <MetricCard
           label={surplus.title}
           value={surplus.formattedValue}
@@ -244,11 +251,24 @@ export function NorthStarCards({
               : undefined
           }
         />
-      </div>
 
-      {/* Status Annunciator - Compact status overview */}
-      <div className="shrink-0">
-        <StatusAnnunciator items={annunciatorItems} direction="row" />
+        {/* Liquidity - Third card */}
+        <MetricCard
+          label={liquidity.title}
+          value={liquidity.formattedValue}
+          tone={liquidity.tone}
+          statusLabel={liquidity.statusLabel}
+          icon={liquidity.icon}
+          delta={
+            liquidity.delta
+              ? {
+                  value: formatCurrencySigned(liquidity.delta),
+                  direction: deriveDeltaDirection(liquidity.delta),
+                  tone: deriveDeltaStatus(liquidity.delta, liquidity.goodDirection),
+                }
+              : undefined
+          }
+        />
       </div>
     </div>
   );
