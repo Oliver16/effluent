@@ -134,7 +134,8 @@ class ScenarioChange(TimestampedModel):
 
     # Reference to existing objects (optional)
     source_account_id = models.UUIDField(null=True, blank=True)
-    source_flow_id = models.UUIDField(null=True, blank=True)
+    # CharField to store flow identifiers like "income_source_<uuid>" or plain UUIDs
+    source_flow_id = models.CharField(max_length=100, null=True, blank=True)
 
     # Change parameters stored as JSON
     parameters = models.JSONField(default=dict)
@@ -280,6 +281,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Update health insurance premiums for new employer',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'healthcare'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.MODIFY_EXPENSE,
@@ -287,6 +290,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Adjust transportation/commuting expenses',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'transportation'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.LUMP_SUM_INCOME,
@@ -455,6 +460,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Sell home at current market value (minus selling costs)',
                         'parameters_template': {'sale_price': 0, 'selling_costs': 0},
                         'is_required': True,
+                        'requires_source_account': True,
+                        'source_account_type': 'asset',
                     },
                     {
                         'change_type': ChangeType.PAYOFF_DEBT,
@@ -462,6 +469,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Use sale proceeds to pay off mortgage',
                         'parameters_template': {},
                         'is_required': False,
+                        'requires_source_account': True,
+                        'source_account_type': 'debt',
                     },
                 ],
             },
@@ -493,6 +502,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Add child to health insurance plan',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'healthcare'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.ADD_EXPENSE,
@@ -537,6 +548,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Update to family health insurance plan',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'healthcare'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                 ],
             },
@@ -600,6 +613,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Reduce income if working part-time',
                         'parameters_template': {'amount': 0, 'frequency': 'annually', 'category': 'salary'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
                     },
                 ],
             },
@@ -616,6 +631,8 @@ class LifeEventTemplate(models.Model):
                         'description': 'Add extra monthly payment toward student loans',
                         'parameters_template': {'extra_monthly': 500},
                         'is_required': True,
+                        'requires_source_account': True,
+                        'source_account_type': 'debt',
                     },
                 ],
             },

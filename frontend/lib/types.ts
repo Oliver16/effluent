@@ -390,6 +390,8 @@ export interface SuggestedChange {
   isRequired: boolean
   requiresSourceFlow?: boolean
   sourceFlowType?: 'income' | 'expense'
+  requiresSourceAccount?: boolean
+  sourceAccountType?: 'asset' | 'debt'
 }
 
 export interface LifeEventTemplate {
