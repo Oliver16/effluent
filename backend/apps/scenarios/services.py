@@ -239,7 +239,10 @@ class ScenarioEngine:
         liabilities = {}
 
         # Determine the reference date for checking active flows
-        reference_date = as_of_date or self.scenario.start_date
+        # For live baselines (as_of_date=None), use today's date to match metrics service
+        # behavior. This ensures flows created today are included in the projection.
+        # For pinned baselines, use the specified as_of_date.
+        reference_date = as_of_date or date.today()
 
         for acct in Account.objects.filter(household=self.household, is_active=True):
             # Get appropriate snapshot based on as_of_date
@@ -309,7 +312,9 @@ class ScenarioEngine:
         # income data; RecurringFlow income entries are legacy or supplementary.
         has_income_sources = len(incomes) > 0
 
-        for flow in RecurringFlow.objects.filter(household=self.household, is_baseline=True):
+        # Query active flows - use is_active=True to match metrics service behavior
+        # The is_active_on() check below handles date-based filtering
+        for flow in RecurringFlow.objects.filter(household=self.household, is_active=True):
             # Skip flows that are not active on the reference date
             if not flow.is_active_on(reference_date):
                 continue
