@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { flows as flowsApi, normalizeListResponse } from '@/lib/api'
-import { RecurringFlow } from '@/lib/types'
+import { flows as flowsApi, metrics as metricsApi, normalizeListResponse } from '@/lib/api'
+import { RecurringFlow, MetricSnapshot } from '@/lib/types'
 import { formatCurrency } from '@/lib/format'
 import { ControlListLayout } from '@/components/layout/ControlListLayout'
 import { MetricCard } from '@/components/ui/MetricCard'
@@ -408,6 +408,12 @@ export default function FlowsPage() {
     queryFn: () => flowsApi.list().then(normalizeListResponse),
   })
 
+  // Fetch metrics from API for accurate surplus (includes IncomeSource data)
+  const { data: metricsData } = useQuery({
+    queryKey: ['metrics', 'current'],
+    queryFn: () => metricsApi.current(),
+  })
+
   const createFlowMutation = useMutation({
     mutationFn: (data: Partial<RecurringFlow>) => flowsApi.create(data),
     onSuccess: () => {
@@ -443,13 +449,16 @@ export default function FlowsPage() {
   const transferFlows = flows.filter(f => f.flowType === 'transfer')
   const systemFlowCount = flows.filter(f => f.isSystemGenerated).length
 
-  const totalMonthlyIncome = incomeFlows
-    .filter(f => f.isActive)
-    .reduce((sum, f) => sum + parseFloat(f.monthlyAmount || '0'), 0)
-  const totalMonthlyExpenses = expenseFlows
-    .filter(f => f.isActive)
-    .reduce((sum, f) => sum + parseFloat(f.monthlyAmount || '0'), 0)
-  const monthlySurplus = totalMonthlyIncome - totalMonthlyExpenses
+  // Use API metrics for accurate totals (includes IncomeSource data, matches dashboard)
+  const totalMonthlyIncome = metricsData
+    ? parseFloat(metricsData.totalMonthlyIncome || '0')
+    : incomeFlows.filter(f => f.isActive).reduce((sum, f) => sum + parseFloat(f.monthlyAmount || '0'), 0)
+  const totalMonthlyExpenses = metricsData
+    ? parseFloat(metricsData.totalMonthlyExpenses || '0')
+    : expenseFlows.filter(f => f.isActive).reduce((sum, f) => sum + parseFloat(f.monthlyAmount || '0'), 0)
+  const monthlySurplus = metricsData
+    ? parseFloat(metricsData.monthlySurplus || '0')
+    : totalMonthlyIncome - totalMonthlyExpenses
 
   const resetNewFlow = () => {
     setNewFlow({
