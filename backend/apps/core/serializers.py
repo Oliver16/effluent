@@ -1,5 +1,18 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer as BaseTokenRefreshSerializer
+from rest_framework_simplejwt.exceptions import InvalidToken
 from .models import Household, HouseholdMember, HouseholdMembership, User, UserSettings
+
+
+class TokenRefreshSerializer(BaseTokenRefreshSerializer):
+    """Custom token refresh serializer that handles deleted users gracefully."""
+
+    def validate(self, attrs):
+        try:
+            return super().validate(attrs)
+        except ObjectDoesNotExist:
+            raise InvalidToken('User no longer exists')
 
 
 class HouseholdMembershipSerializer(serializers.ModelSerializer):
