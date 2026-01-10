@@ -46,6 +46,8 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const [scenarioName, setScenarioName] = useState(
     `${template.name} - ${new Date().toLocaleDateString()}`
   )
+  // Get suggested changes with fallback
+  const suggestedChanges = template.suggestedChanges || []
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>(() => {
     // Initialize change values from template
     const values: Record<string, ChangeValue> = {}
@@ -58,9 +60,6 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
     })
     return values
   })
-
-  // Get suggested changes with fallback
-  const suggestedChanges = template.suggestedChanges || []
   const [result, setResult] = useState<WizardResult | null>(null)
 
   // Steps: 1. Overview & Date, 2. Configure Changes, 3. Review & Create
