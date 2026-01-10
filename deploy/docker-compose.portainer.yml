@@ -30,23 +30,28 @@ services:
       - DB_NAME=effluent
       - DB_USER=effluent
       - DB_PASSWORD=${DB_PASSWORD}
-      - ALLOWED_HOSTS=api.effluent.io,app.effluent.io,backend,localhost,192.168.1.20
-      - CORS_ORIGINS=https://app.effluent.io,http://app.effluent.io,http://localhost:3000
+      - ALLOWED_HOSTS=api.effluent.io,app.effluent.io,backend,localhost
+      - CORS_ORIGINS=https://app.effluent.io
       - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - SECURE_COOKIES=true
     depends_on:
       db:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      # Direct API host (api.effluent.io)
-      - "traefik.http.routers.effluent-api.rule=Host(`${BACKEND_HOST:-api.effluent.io}`)"
-      - "traefik.http.routers.effluent-api.entrypoints=web"
+      # Direct API host (api.effluent.io) - HTTPS
+      - "traefik.http.routers.effluent-api.rule=Host(`api.effluent.io`)"
+      - "traefik.http.routers.effluent-api.entrypoints=websecure"
+      - "traefik.http.routers.effluent-api.tls=true"
+      - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
       - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
-      # Same-origin API via app host (/api/* on app.effluent.io -> Django)
+      # Same-origin API via app host (/api/* on app.effluent.io -> Django) - HTTPS
       # Exclude Next.js internal routes (set-cookies, clear-cookies) which must be handled by Next.js
-      - "traefik.http.routers.effluent-api-app.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`) && PathPrefix(`/api`) && !PathPrefix(`/api/auth/set-cookies`) && !PathPrefix(`/api/auth/clear-cookies`)"
-      - "traefik.http.routers.effluent-api-app.entrypoints=web"
+      - "traefik.http.routers.effluent-api-app.rule=Host(`app.effluent.io`) && PathPrefix(`/api`) && !PathPrefix(`/api/auth/set-cookies`) && !PathPrefix(`/api/auth/clear-cookies`)"
+      - "traefik.http.routers.effluent-api-app.entrypoints=websecure"
+      - "traefik.http.routers.effluent-api-app.tls=true"
+      - "traefik.http.routers.effluent-api-app.tls.certresolver=letsencrypt"
       - "traefik.http.routers.effluent-api-app.priority=200"
       - "traefik.http.routers.effluent-api-app.service=effluent-api"
     networks:
@@ -68,8 +73,10 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy"
-      - "traefik.http.routers.effluent-web.rule=Host(`${FRONTEND_HOST:-app.effluent.io}`)"
-      - "traefik.http.routers.effluent-web.entrypoints=web"
+      - "traefik.http.routers.effluent-web.rule=Host(`app.effluent.io`)"
+      - "traefik.http.routers.effluent-web.entrypoints=websecure"
+      - "traefik.http.routers.effluent-web.tls=true"
+      - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"
       - "traefik.http.routers.effluent-web.priority=100"
       - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
     networks:

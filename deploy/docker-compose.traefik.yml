@@ -1,6 +1,5 @@
-# Traefik configuration for HAProxy TLS termination (Option A)
-# HAProxy handles HTTPS and forwards HTTP to Traefik on port 80
-# This file is a reference for deploying Traefik alongside the Effluent stack
+# Traefik configuration for production HTTPS with Let's Encrypt
+# This file configures Traefik to handle TLS termination with automatic certificate management
 version: "3.8"
 
 services:
@@ -8,33 +7,35 @@ services:
     image: traefik:v3.0
     restart: unless-stopped
     command:
-      # Entrypoints - HTTP only (HAProxy handles TLS)
+      # Entrypoints
       - "--entrypoints.web.address=:80"
-      # Trust forwarded headers from HAProxy (for X-Forwarded-Proto)
-      - "--entrypoints.web.forwardedHeaders.insecure=true"
+      - "--entrypoints.websecure.address=:443"
+      # HTTP to HTTPS redirect
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+      # Let's Encrypt certificate resolver
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@effluent.io}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
       # Docker provider
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
       - "--providers.docker.network=proxy"
-      # Dashboard (optional, for debugging)
-      - "--api.dashboard=true"
-      - "--api.insecure=true"
       # Logging
       - "--log.level=INFO"
       - "--accesslog=true"
     ports:
       - "80:80"
-      - "8080:8080"  # Dashboard (optional, remove in production)
+      - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_letsencrypt:/letsencrypt
     networks:
       - proxy
-    labels:
-      - "traefik.enable=true"
-      # Dashboard route (optional, for debugging)
-      - "traefik.http.routers.traefik-dashboard.rule=Host(`traefik.localhost`)"
-      - "traefik.http.routers.traefik-dashboard.entrypoints=web"
-      - "traefik.http.routers.traefik-dashboard.service=api@internal"
+
+volumes:
+  traefik_letsencrypt:
 
 networks:
   proxy:
