@@ -13,6 +13,16 @@ import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { Plus, GitCompare, Loader2 } from 'lucide-react';
 import { Scenario } from '@/lib/types';
 import { cn } from '@/lib/utils';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 function isBaseline(scenario: Scenario) {
   return scenario.isBaseline === true;
@@ -26,6 +36,8 @@ export default function ScenariosPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [scenarioToDelete, setScenarioToDelete] = useState<Scenario | null>(null);
 
   const { data: scenarioList = [], isLoading } = useQuery({
     queryKey: ['scenarios'],
@@ -36,6 +48,26 @@ export default function ScenariosPage() {
     mutationFn: (payload: Partial<Scenario>) => scenarios.create(payload),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['scenarios'] }),
   });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => scenarios.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      setDeleteDialogOpen(false);
+      setScenarioToDelete(null);
+    },
+  });
+
+  const handleDeleteClick = (scenario: Scenario) => {
+    setScenarioToDelete(scenario);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (scenarioToDelete) {
+      deleteMutation.mutate(scenarioToDelete.id);
+    }
+  };
 
   const createBaseline = () => {
     createMutation.mutate({
@@ -155,6 +187,7 @@ export default function ScenariosPage() {
                 isSelected={selectedIds.has(scenario.id)}
                 onSelectionChange={(selected) => toggleSelection(scenario.id, selected)}
                 onOpen={() => router.push(`/scenarios/${scenario.id}`)}
+                onDelete={() => handleDeleteClick(scenario)}
               />
             ))}
           </div>
@@ -190,6 +223,33 @@ export default function ScenariosPage() {
         onClear={handleClearSelection}
         visible={selectedIds.size > 0}
       />
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Scenario</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{scenarioToDelete?.name}&quot;? This will also
+              delete all changes and projections associated with this scenario. This action cannot
+              be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleteMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleteMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : null}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

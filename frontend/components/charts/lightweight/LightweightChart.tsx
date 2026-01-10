@@ -36,6 +36,40 @@ const LINE_STYLE_MAP: Record<string, LineStyle> = {
   dotted: LineStyle.Dotted,
 };
 
+/**
+ * Make a color transparent (alpha = 0) for gradient bottom
+ * Handles rgba(), rgb(), and hex colors
+ */
+function makeTransparent(color: string): string {
+  // Handle rgba - replace alpha value with 0
+  if (color.startsWith('rgba(')) {
+    return color.replace(/,\s*[\d.]+\)$/, ', 0)');
+  }
+  // Handle rgb - convert to rgba with 0 alpha
+  if (color.startsWith('rgb(')) {
+    return color.replace('rgb(', 'rgba(').replace(')', ', 0)');
+  }
+  // Handle hex - append 00 for transparency
+  return `${color}00`;
+}
+
+/**
+ * Make a color semi-transparent for gradient top (40% opacity)
+ * Handles rgba(), rgb(), and hex colors
+ */
+function makeSemiTransparent(color: string): string {
+  // Handle rgba - replace alpha value with 0.4
+  if (color.startsWith('rgba(')) {
+    return color.replace(/,\s*[\d.]+\)$/, ', 0.4)');
+  }
+  // Handle rgb - convert to rgba with 0.4 alpha
+  if (color.startsWith('rgb(')) {
+    return color.replace('rgb(', 'rgba(').replace(')', ', 0.4)');
+  }
+  // Handle hex - append 40 for 25% opacity
+  return `${color}40`;
+}
+
 export const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProps>(
   function LightweightChart(
     {
@@ -135,8 +169,8 @@ export const LightweightChart = forwardRef<LightweightChartHandle, LightweightCh
           case 'area':
             seriesApi = chart.addSeries(AreaSeries, {
               lineColor: config.color,
-              topColor: config.fillColor ?? `${config.color}40`,
-              bottomColor: config.fillColor ? `${config.fillColor}00` : `${config.color}00`,
+              topColor: config.fillColor ?? makeSemiTransparent(config.color),
+              bottomColor: makeTransparent(config.fillColor ?? config.color),
               lineWidth: (config.lineWidth ?? 2) as LineWidth,
               lineStyle: LINE_STYLE_MAP[config.lineStyle ?? 'solid'],
               priceScaleId: config.priceScaleId ?? 'right',
@@ -160,11 +194,11 @@ export const LightweightChart = forwardRef<LightweightChartHandle, LightweightCh
             seriesApi = chart.addSeries(BaselineSeries, {
               baseValue: { type: 'price', price: 0 },
               topLineColor: theme.upColor,
-              topFillColor1: `${theme.upColor}40`,
-              topFillColor2: `${theme.upColor}00`,
+              topFillColor1: makeSemiTransparent(theme.upColor),
+              topFillColor2: makeTransparent(theme.upColor),
               bottomLineColor: theme.downColor,
-              bottomFillColor1: `${theme.downColor}00`,
-              bottomFillColor2: `${theme.downColor}40`,
+              bottomFillColor1: makeTransparent(theme.downColor),
+              bottomFillColor2: makeSemiTransparent(theme.downColor),
               lineWidth: (config.lineWidth ?? 2) as LineWidth,
               priceScaleId: config.priceScaleId ?? 'right',
               lastValueVisible: false,

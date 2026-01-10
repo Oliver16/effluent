@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { formatCurrencyCompact } from '@/lib/format';
 import { deriveDeltaDirection, deriveDeltaStatus } from '@/lib/status';
+import { Trash2 } from 'lucide-react';
 
 interface ScenarioTileProps {
   /** Scenario ID */
@@ -42,6 +43,8 @@ interface ScenarioTileProps {
   onSelectionChange?: (selected: boolean) => void;
   /** Open scenario handler */
   onOpen: () => void;
+  /** Delete scenario handler */
+  onDelete?: () => void;
   /** Additional classes */
   className?: string;
 }
@@ -58,6 +61,7 @@ export function ScenarioTile({
   isSelected = false,
   onSelectionChange,
   onOpen,
+  onDelete,
   className,
 }: ScenarioTileProps) {
   return (
@@ -154,9 +158,25 @@ export function ScenarioTile({
           )}
         </div>
 
-        <Button size="sm" onClick={onOpen} className="h-7">
-          {isBaseline ? 'View' : 'Open'}
-        </Button>
+        <div className="flex items-center gap-2">
+          {onDelete && !isBaseline && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+              className="h-7 px-2 text-muted-foreground hover:text-destructive"
+              title="Delete scenario"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+          <Button size="sm" onClick={onOpen} className="h-7">
+            {isBaseline ? 'View' : 'Open'}
+          </Button>
+        </div>
       </div>
     </div>
   );
