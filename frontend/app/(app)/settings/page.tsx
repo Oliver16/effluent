@@ -130,6 +130,80 @@ const FLOW_FREQUENCIES: Record<string, string> = {
   annual: 'Annually',
 }
 
+// Account type classification sets (matching accounts page)
+const LIABILITY_TYPES = new Set([
+  'credit_card',
+  'store_card',
+  'heloc',
+  'personal_loc',
+  'business_loc',
+  'primary_mortgage',
+  'rental_mortgage',
+  'second_mortgage',
+  'auto_loan',
+  'personal_loan',
+  'student_loan_federal',
+  'student_loan_private',
+  'boat_loan',
+  'medical_debt',
+  'tax_debt',
+  'family_loan',
+  'other_liability',
+  // Also include simpler type names from settings
+  'mortgage',
+  'student_loan',
+])
+
+// Financial accounts with actual balances at institutions
+const ACCOUNT_ASSET_TYPES = new Set([
+  // Cash & Equivalents
+  'checking',
+  'savings',
+  'money_market',
+  'cd',
+  'cash',
+  // Investment Accounts
+  'brokerage',
+  'crypto',
+  // Retirement Accounts
+  'traditional_401k',
+  'roth_401k',
+  'traditional_ira',
+  'roth_ira',
+  'sep_ira',
+  'simple_ira',
+  'tsp',
+  'pension',
+  'annuity',
+  'hsa',
+  // Also include simpler type names from settings
+  '401k',
+  '403b',
+  'ira',
+])
+
+// Physical/tangible assets (property, vehicles, etc.)
+const FIXED_ASSET_TYPES = new Set([
+  // Real Property
+  'primary_residence',
+  'rental_property',
+  'vacation_property',
+  'land',
+  'commercial_property',
+  // Personal Property
+  'vehicle',
+  'boat',
+  'jewelry',
+  'other_asset',
+  // Business & Receivables
+  'business_equity',
+  'accounts_receivable',
+  'loans_receivable',
+  'tax_refund',
+  // Also include simpler type names from settings
+  'real_estate',
+])
+
 export default function SettingsPage() {
   const [householdData, setHouseholdData] = useState<Partial<Household>>({})
   const [profileData, setProfileData] = useState<Partial<UserProfile>>({})
@@ -331,7 +405,7 @@ export default function SettingsPage() {
       setIncomeForm({
         name: income.name || '',
         incomeType: income.incomeType || 'w2',
-        grossAnnual: income.grossAnnual || '',
+        grossAnnual: income.grossAnnualSalary || income.grossAnnual || '', // Use grossAnnualSalary (editable), fallback to grossAnnual (computed)
         payFrequency: income.payFrequency || 'biweekly',
       })
     } else {
@@ -345,7 +419,7 @@ export default function SettingsPage() {
     const data = {
       name: incomeForm.name,
       incomeType: incomeForm.incomeType,
-      grossAnnual: incomeForm.grossAnnual,
+      grossAnnualSalary: incomeForm.grossAnnual, // Backend field is gross_annual_salary, not gross_annual
       payFrequency: incomeForm.payFrequency,
       isActive: true,
     }
@@ -437,8 +511,15 @@ export default function SettingsPage() {
   })
 
   const updateAccountMutation = useMutation({
-    mutationFn: ({ id, data }: { id: string; data: Partial<Account> }) =>
-      accounts.update(id, data),
+    mutationFn: async ({ id, data, balanceChanged, newBalance }: { id: string; data: Partial<Account>; balanceChanged: boolean; newBalance: string }) => {
+      // Update account metadata first
+      await accounts.update(id, data)
+      // If balance changed, update it via the balance endpoint (current_balance is read-only on account PATCH)
+      if (balanceChanged && newBalance) {
+        const today = new Date().toISOString().split('T')[0]
+        await accounts.updateBalance(id, newBalance, today)
+      }
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] })
       queryClient.invalidateQueries({ queryKey: ['metrics'] })
@@ -486,14 +567,21 @@ export default function SettingsPage() {
       name: accountForm.name,
       accountType: accountForm.accountType,
       institution: accountForm.institution,
-      currentBalance: accountForm.currentBalance,
       isActive: true,
     }
 
     if (editingAccount) {
-      updateAccountMutation.mutate({ id: editingAccount.id, data })
+      // Check if balance changed
+      const balanceChanged = accountForm.currentBalance !== editingAccount.currentBalance
+      updateAccountMutation.mutate({
+        id: editingAccount.id,
+        data,
+        balanceChanged,
+        newBalance: accountForm.currentBalance,
+      })
     } else {
-      createAccountMutation.mutate(data)
+      // For create, include currentBalance (API maps it to initial_balance)
+      createAccountMutation.mutate({ ...data, currentBalance: accountForm.currentBalance })
     }
   }
 
@@ -662,7 +750,7 @@ export default function SettingsPage() {
 
   // Helper function to check if account type is a liability
   const isLiabilityType = (type: string) => {
-    return ['mortgage', 'credit_card', 'student_loan', 'auto_loan', 'personal_loan', 'heloc', 'other_liability'].includes(type)
+    return LIABILITY_TYPES.has(type)
   }
 
   if (isLoading || isProfileLoading || isNotificationsLoading) {
@@ -951,73 +1039,232 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="accounts" className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>Accounts</span>
-                <Button onClick={() => openAccountModal()} size="sm">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Account
-                </Button>
-              </CardTitle>
-              <CardDescription>
-                Manage your bank accounts, investments, and liabilities
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {isAccountsLoading ? (
-                <p className="text-muted-foreground">Loading accounts...</p>
-              ) : !accountsList?.length ? (
-                <p className="text-muted-foreground py-4 text-center">
-                  No accounts configured. Add your first account.
-                </p>
-              ) : (
-                <div className="space-y-4">
-                  {accountsList.map((account) => (
-                    <div
-                      key={account.id}
-                      className="flex items-center justify-between p-4 border rounded-lg"
-                    >
-                      <div className="space-y-1">
-                        <p className="font-medium">{account.name}</p>
-                        <div className="flex gap-4 text-sm text-muted-foreground">
-                          <span>{ACCOUNT_TYPES[account.accountType] || account.accountType}</span>
-                          {account.institution && <span>{account.institution}</span>}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className={`font-semibold ${isLiabilityType(account.accountType) ? 'text-red-600' : 'text-green-600'}`}>
-                            {isLiabilityType(account.accountType) ? '-' : ''}{formatCurrency(parseFloat(account.currentBalance || '0'))}
-                          </p>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openAccountModal(account)}
+          {/* Header with Add button */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="text-lg font-medium">Accounts, Assets & Liabilities</h3>
+              <p className="text-sm text-muted-foreground">
+                Manage your financial accounts, fixed assets, and liabilities
+              </p>
+            </div>
+            <Button onClick={() => openAccountModal()} size="sm">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Account
+            </Button>
+          </div>
+
+          {isAccountsLoading ? (
+            <p className="text-muted-foreground">Loading accounts...</p>
+          ) : (
+            <>
+              {/* Accounts Section - Financial accounts with balances */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Accounts</span>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      Cash, investment, and retirement accounts
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const financialAccounts = accountsList.filter((a) => ACCOUNT_ASSET_TYPES.has(a.accountType))
+                    if (financialAccounts.length === 0) {
+                      return (
+                        <p className="text-muted-foreground py-4 text-center text-sm">
+                          No financial accounts configured
+                        </p>
+                      )
+                    }
+                    return (
+                      <div className="space-y-3">
+                        {financialAccounts.map((account) => (
+                          <div
+                            key={account.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
                           >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (confirm('Delete this account?')) {
-                                deleteAccountMutation.mutate(account.id)
-                              }
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
-                        </div>
+                            <div className="space-y-1">
+                              <p className="font-medium">{account.name}</p>
+                              <div className="flex gap-4 text-sm text-muted-foreground">
+                                <span>{ACCOUNT_TYPES[account.accountType] || account.accountType}</span>
+                                {account.institution && <span>{account.institution}</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="font-semibold text-green-600">
+                                  {formatCurrency(parseFloat(account.currentBalance || '0'))}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openAccountModal(account)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Delete this account?')) {
+                                      deleteAccountMutation.mutate(account.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Fixed Assets Section - Property, vehicles, etc. */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Fixed Assets</span>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      Property, vehicles, and other tangible assets
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const fixedAssets = accountsList.filter((a) => FIXED_ASSET_TYPES.has(a.accountType))
+                    if (fixedAssets.length === 0) {
+                      return (
+                        <p className="text-muted-foreground py-4 text-center text-sm">
+                          No fixed assets configured
+                        </p>
+                      )
+                    }
+                    return (
+                      <div className="space-y-3">
+                        {fixedAssets.map((asset) => (
+                          <div
+                            key={asset.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="space-y-1">
+                              <p className="font-medium">{asset.name}</p>
+                              <div className="flex gap-4 text-sm text-muted-foreground">
+                                <span>{ACCOUNT_TYPES[asset.accountType] || asset.accountType}</span>
+                                {asset.institution && <span>{asset.institution}</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="font-semibold text-green-600">
+                                  {formatCurrency(parseFloat(asset.currentBalance || '0'))}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openAccountModal(asset)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Delete this asset?')) {
+                                      deleteAccountMutation.mutate(asset.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+
+              {/* Liabilities Section */}
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base flex items-center justify-between">
+                    <span>Liabilities</span>
+                    <span className="text-sm font-normal text-muted-foreground">
+                      Loans, credit cards, and other debts
+                    </span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {(() => {
+                    const liabilities = accountsList.filter((a) => LIABILITY_TYPES.has(a.accountType))
+                    if (liabilities.length === 0) {
+                      return (
+                        <p className="text-muted-foreground py-4 text-center text-sm">
+                          No liabilities configured
+                        </p>
+                      )
+                    }
+                    return (
+                      <div className="space-y-3">
+                        {liabilities.map((liability) => (
+                          <div
+                            key={liability.id}
+                            className="flex items-center justify-between p-3 border rounded-lg"
+                          >
+                            <div className="space-y-1">
+                              <p className="font-medium">{liability.name}</p>
+                              <div className="flex gap-4 text-sm text-muted-foreground">
+                                <span>{ACCOUNT_TYPES[liability.accountType] || liability.accountType}</span>
+                                {liability.institution && <span>{liability.institution}</span>}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="text-right">
+                                <p className="font-semibold text-red-600">
+                                  -{formatCurrency(Math.abs(parseFloat(liability.currentBalance || '0')))}
+                                </p>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => openAccountModal(liability)}
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (confirm('Delete this liability?')) {
+                                      deleteAccountMutation.mutate(liability.id)
+                                    }
+                                  }}
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </CardContent>
+              </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="expenses" className="space-y-4">
