@@ -309,7 +309,9 @@ class ScenarioEngine:
         # income data; RecurringFlow income entries are legacy or supplementary.
         has_income_sources = len(incomes) > 0
 
-        for flow in RecurringFlow.objects.filter(household=self.household, is_baseline=True):
+        # Query active flows - use is_active=True to match metrics service behavior
+        # The is_active_on() check below handles date-based filtering
+        for flow in RecurringFlow.objects.filter(household=self.household, is_active=True):
             # Skip flows that are not active on the reference date
             if not flow.is_active_on(reference_date):
                 continue
