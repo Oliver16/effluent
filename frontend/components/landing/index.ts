@@ -1,0 +1,8 @@
+export { Hero } from './Hero'
+export { Problem } from './Problem'
+export { Modules } from './Modules'
+export { HowItWorks } from './HowItWorks'
+export { Security } from './Security'
+export { FAQ } from './FAQ'
+export { FinalCTA } from './FinalCTA'
+export { Footer } from './Footer'

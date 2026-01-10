@@ -272,4 +272,26 @@
     box-shadow: 0 0 20px oklch(from var(--primary) l c h / 30%),
                 0 0 40px oklch(from var(--primary) l c h / 15%);
   }
+
+  /* Landing page animations */
+  .animate-fade-in {
+    animation: fadeIn 0.6s ease-out forwards;
+    opacity: 0;
+  }
+
+  .animate-fade-in-delay {
+    animation: fadeIn 0.6s ease-out 0.3s forwards;
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
