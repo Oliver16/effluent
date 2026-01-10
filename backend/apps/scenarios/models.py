@@ -252,9 +252,18 @@ class LifeEventTemplate(models.Model):
                 'display_order': 1,
                 'suggested_changes': [
                     {
-                        'change_type': ChangeType.MODIFY_INCOME,
-                        'name': 'New Salary',
-                        'description': 'Update your salary to the new amount',
+                        'change_type': ChangeType.REMOVE_INCOME,
+                        'name': 'Leave Current Job',
+                        'description': 'Select the income source from your current job to remove',
+                        'parameters_template': {},
+                        'is_required': True,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
+                    },
+                    {
+                        'change_type': ChangeType.ADD_INCOME,
+                        'name': 'New Job Salary',
+                        'description': 'Enter your new salary amount',
                         'parameters_template': {'amount': 0, 'frequency': 'annually', 'category': 'salary'},
                         'is_required': True,
                     },
@@ -298,9 +307,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.MODIFY_INCOME,
                         'name': 'Salary Increase',
-                        'description': 'Update your salary to the new amount',
+                        'description': 'Select which income source to update and enter the new amount',
                         'parameters_template': {'amount': 0, 'frequency': 'annually', 'category': 'salary'},
                         'is_required': True,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
                     },
                 ],
             },
@@ -314,9 +325,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.REMOVE_INCOME,
                         'name': 'Remove Salary',
-                        'description': 'Remove your current salary income',
+                        'description': 'Select the income source from your job to remove',
                         'parameters_template': {},
                         'is_required': True,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
                     },
                     {
                         'change_type': ChangeType.ADD_INCOME,
@@ -345,9 +358,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.MODIFY_EXPENSE,
                         'name': 'New Rent/Mortgage',
-                        'description': 'Update housing payment for new location',
+                        'description': 'Select your current housing payment to update for new location',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'rent'},
                         'is_required': True,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.LUMP_SUM_EXPENSE,
@@ -359,9 +374,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.MODIFY_EXPENSE,
                         'name': 'Utilities Change',
-                        'description': 'Adjust utility costs for new location',
+                        'description': 'Select your current utility expense to adjust for new location',
                         'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'utilities'},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.LUMP_SUM_EXPENSE,
@@ -403,9 +420,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.REMOVE_EXPENSE,
                         'name': 'Remove Rent',
-                        'description': 'Remove current rent payment',
+                        'description': 'Select your current rent payment to remove',
                         'parameters_template': {},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'expense',
                     },
                     {
                         'change_type': ChangeType.ADD_EXPENSE,
@@ -538,9 +557,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.REMOVE_INCOME,
                         'name': "Remove Spouse's Income",
-                        'description': "Remove spouse's income from household",
+                        'description': "Select spouse's income source to remove from household",
                         'parameters_template': {},
                         'is_required': False,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
                     },
                     {
                         'change_type': ChangeType.ADD_EXPENSE,
@@ -609,9 +630,11 @@ class LifeEventTemplate(models.Model):
                     {
                         'change_type': ChangeType.REMOVE_INCOME,
                         'name': 'Remove Salary',
-                        'description': 'Remove employment income',
+                        'description': 'Select the income source from your job to remove',
                         'parameters_template': {},
                         'is_required': True,
+                        'requires_source_flow': True,
+                        'source_flow_type': 'income',
                     },
                     {
                         'change_type': ChangeType.ADD_INCOME,

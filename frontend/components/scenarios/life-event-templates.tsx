@@ -2,8 +2,9 @@
 
 import { useState, useMemo, useCallback, useRef, useEffect, KeyboardEvent } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { lifeEventTemplates, scenarios } from '@/lib/api';
-import { LifeEventTemplate, LifeEventCategoryGroup, SuggestedChange } from '@/lib/types';
+import { lifeEventTemplates, incomeSources, flows } from '@/lib/api';
+import { LifeEventTemplate, LifeEventCategoryGroup, SuggestedChange, IncomeSourceDetail, RecurringFlow } from '@/lib/types';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -111,6 +112,42 @@ export function LifeEventTemplatesDialog({
     queryFn: lifeEventTemplates.list,
     enabled: open,
   });
+
+  // Fetch income sources for source flow selection
+  const { data: incomeSourcesData } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: incomeSources.list,
+    enabled: open && selectedTemplate?.suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'income'),
+  });
+
+  // Fetch expense flows for source flow selection
+  const { data: flowsData } = useQuery({
+    queryKey: ['flows'],
+    queryFn: flows.list,
+    enabled: open && selectedTemplate?.suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'expense'),
+  });
+
+  // Get available income sources for dropdown
+  const availableIncomeSources = useMemo(() => {
+    if (!incomeSourcesData) return [];
+    return incomeSourcesData.map((source: IncomeSourceDetail) => ({
+      id: `income_source_${source.id}`,
+      name: source.name || 'Income Source',
+      amount: parseFloat(source.grossAnnualSalary || source.grossAnnual || '0'),
+    }));
+  }, [incomeSourcesData]);
+
+  // Get available expense flows for dropdown
+  const availableExpenseFlows = useMemo(() => {
+    if (!flowsData) return [];
+    return flowsData
+      .filter((flow: RecurringFlow) => flow.flowType === 'expense')
+      .map((flow: RecurringFlow) => ({
+        id: flow.id,
+        name: flow.name,
+        amount: parseFloat(String(flow.amount || '0')),
+      }));
+  }, [flowsData]);
 
   // Reset state when dialog opens/closes
   useEffect(() => {
@@ -463,6 +500,35 @@ export function LifeEventTemplatesDialog({
                 {!changeValues[String(idx)]?._skip && (
                   <CardContent className="pt-0 ml-6">
                     <div className="grid gap-3 sm:grid-cols-2">
+                      {/* Source flow selector for MODIFY/REMOVE changes */}
+                      {change.requiresSourceFlow && (
+                        <div className="space-y-1 sm:col-span-2">
+                          <Label htmlFor={`${idx}-source-flow`} className="text-sm">
+                            {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
+                            <span className="text-destructive ml-1">*</span>
+                          </Label>
+                          <Select
+                            value={changeValues[String(idx)]?.source_flow_id as string || ''}
+                            onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
+                          >
+                            <SelectTrigger id={`${idx}-source-flow`}>
+                              <SelectValue placeholder={`Choose ${change.sourceFlowType === 'income' ? 'income source' : 'expense'} to ${change.changeType.includes('remove') ? 'remove' : 'modify'}...`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
+                                <SelectItem key={item.id} value={item.id}>
+                                  {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
+                                </SelectItem>
+                              ))}
+                              {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).length === 0 && (
+                                <SelectItem value="" disabled>
+                                  No {change.sourceFlowType === 'income' ? 'income sources' : 'expenses'} found
+                                </SelectItem>
+                              )}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
                       {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
                         if (key === '_skip') return null;
 
