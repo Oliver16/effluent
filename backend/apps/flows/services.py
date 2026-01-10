@@ -175,7 +175,7 @@ class SystemFlowGenerator:
         taxes_withheld = self._estimate_taxes_withheld(income_source, gross_per_period)
 
         # Create tax expense flow so taxes are visible in the expense breakdown
-        # This ensures the dashboard shows accurate surplus (income - expenses including taxes)
+        # This ensures the control plane shows accurate surplus (income - expenses including taxes)
         if taxes_withheld > 0:
             RecurringFlow.objects.create(
                 household=self.household,

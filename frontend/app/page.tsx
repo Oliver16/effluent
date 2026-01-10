@@ -43,7 +43,7 @@ export default function Home() {
       await updateHouseholdCookie(household.id)
 
       if (isOnboardingComplete(household)) {
-        router.push('/dashboard')
+        router.push('/control-plane')
       } else {
         router.push('/onboarding')
       }

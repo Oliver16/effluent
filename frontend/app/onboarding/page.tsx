@@ -478,7 +478,7 @@ export default function OnboardingPage() {
         const onboardingComplete = household.onboardingCompleted ??
           (household as unknown as { onboarding_completed?: boolean }).onboarding_completed
         if (onboardingComplete) {
-          router.push('/dashboard')
+          router.push('/control-plane')
           return
         }
       }
@@ -606,7 +606,7 @@ export default function OnboardingPage() {
       const result = await onboarding.completeStep(formData)
       if (result.success) {
         if (result.nextStep === 'complete' || !result.nextStep) {
-          router.push('/dashboard')
+          router.push('/control-plane')
         } else {
           await loadCurrentStep()
         }
@@ -2633,7 +2633,7 @@ export default function OnboardingPage() {
               Congratulations! Your financial profile is set up.
             </p>
             <p className="text-muted-foreground">
-              You can now view your dashboard and start modeling scenarios.
+              You can now view your control plane and start modeling scenarios.
             </p>
           </div>
         )
@@ -2692,7 +2692,7 @@ export default function OnboardingPage() {
                 </Button>
               )}
               <Button onClick={handleNext} disabled={isSaving}>
-                {currentStep === 'complete' ? 'Go to Dashboard' : 'Continue'}
+                {currentStep === 'complete' ? 'Go to Control Plane' : 'Continue'}
               </Button>
             </div>
           </CardFooter>

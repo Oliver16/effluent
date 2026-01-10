@@ -33,7 +33,7 @@ interface CommandPaletteItem {
 }
 
 const navigationItems: CommandPaletteItem[] = [
-  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, keywords: ['home', 'overview'] },
+  { name: 'Control Plane', href: '/control-plane', icon: LayoutDashboard, keywords: ['home', 'overview', 'dashboard'] },
   { name: 'Accounts', href: '/accounts', icon: Wallet, keywords: ['bank', 'balance', 'money'] },
   { name: 'Flows', href: '/flows', icon: ArrowRightLeft, keywords: ['income', 'expense', 'recurring'] },
   { name: 'Scenarios', href: '/scenarios', icon: GitBranch, keywords: ['what-if', 'projection'] },

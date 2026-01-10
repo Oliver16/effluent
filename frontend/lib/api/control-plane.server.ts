@@ -1,5 +1,5 @@
 /**
- * Server-side dashboard data fetching
+ * Server-side control plane data fetching
  *
  * Uses cookies() for auth and transforms responses to camelCase.
  * This is a SERVER-ONLY file - uses next/headers.
@@ -27,7 +27,7 @@ function getApiUrl(): string {
   }
 
   // In production, this would cause mixed content issues - fail fast
-  console.error('[Dashboard API] CRITICAL: No API URL configured. Set INTERNAL_API_URL environment variable.');
+  console.error('[Control Plane API] CRITICAL: No API URL configured. Set INTERNAL_API_URL environment variable.');
   throw new Error('INTERNAL_API_URL or NEXT_PUBLIC_API_URL must be set in production');
 }
 
@@ -123,18 +123,18 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
   try {
     const res = await fetch(url, {
       headers,
-      cache: 'no-store', // Always fresh data for dashboard
+      cache: 'no-store', // Always fresh data for control plane
     });
 
     // Handle 401 Unauthorized - try token refresh
     if (res.status === 401 && !isRetry && refreshToken) {
-      console.log(`[Dashboard API] 401 on ${path}, attempting token refresh...`);
+      console.log(`[Control Plane API] 401 on ${path}, attempting token refresh...`);
       const newToken = await refreshAccessToken(refreshToken);
 
       if (newToken) {
         // Note: We can't update cookies in a Server Component, but we can retry with the new token
         // The middleware should have handled this, but this is a fallback
-        console.log(`[Dashboard API] Token refreshed, retrying ${path}...`);
+        console.log(`[Control Plane API] Token refreshed, retrying ${path}...`);
 
         const retryHeaders: Record<string, string> = {
           'Content-Type': 'application/json',
@@ -157,20 +157,20 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
 
         // Retry also failed
         const errorBody = await retryRes.text().catch(() => 'Unable to read response body');
-        console.error(`[Dashboard API Error] ${path} (after token refresh):`, {
+        console.error(`[Control Plane API Error] ${path} (after token refresh):`, {
           status: retryRes.status,
           statusText: retryRes.statusText,
           errorBody: errorBody.substring(0, 500),
         });
         throw new Error(`API error: ${retryRes.status} ${retryRes.statusText}`);
       } else {
-        console.error(`[Dashboard API] Token refresh failed for ${path}`);
+        console.error(`[Control Plane API] Token refresh failed for ${path}`);
       }
     }
 
     if (!res.ok) {
       const errorBody = await res.text().catch(() => 'Unable to read response body');
-      console.error(`[Dashboard API Error] ${path}:`, {
+      console.error(`[Control Plane API Error] ${path}:`, {
         status: res.status,
         statusText: res.statusText,
         hasToken,
@@ -187,7 +187,7 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
   } catch (error) {
     // Log network errors or other failures
     if (error instanceof Error && !error.message.startsWith('API error:')) {
-      console.error(`[Dashboard API Network Error] ${path}:`, {
+      console.error(`[Control Plane API Network Error] ${path}:`, {
         error: error.message,
         hasToken,
         hasRefreshToken,
@@ -210,9 +210,9 @@ function normalizeListResponse<T>(data: T[] | { results: T[] } | undefined): T[]
 }
 
 /**
- * Dashboard data shape
+ * Control plane data shape
  */
-export interface DashboardData {
+export interface ControlPlaneData {
   metrics: MetricSnapshot | null;
   history: MetricSnapshot[];
   accounts: Account[];
@@ -231,9 +231,9 @@ export interface DashboardData {
 }
 
 /**
- * Fetch all dashboard data server-side
+ * Fetch all control plane data server-side
  */
-export async function getDashboardData(): Promise<DashboardData> {
+export async function getControlPlaneData(): Promise<ControlPlaneData> {
   try {
     // Fetch all data in parallel
     const [
@@ -279,7 +279,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       dataQuality: dataQualityData,
     };
   } catch (error) {
-    console.error('Dashboard data fetch error:', error);
+    console.error('Control plane data fetch error:', error);
     throw error;
   }
 }

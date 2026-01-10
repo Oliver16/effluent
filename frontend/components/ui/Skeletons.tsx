@@ -68,9 +68,9 @@ export function ListRowSkeleton({ count = 5 }: { count?: number }) {
   );
 }
 
-export function DashboardSkeleton() {
+export function ControlPlaneSkeleton() {
   return (
-    <div className="space-y-6" aria-busy="true" aria-label="Loading dashboard">
+    <div className="space-y-6" aria-busy="true" aria-label="Loading control plane">
       {/* Header skeleton */}
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div className="space-y-2">
