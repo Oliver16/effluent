@@ -16,7 +16,9 @@ export default function RegisterPage() {
     username: '',
     password: '',
     confirmPassword: '',
+    householdId: '',
   })
+  const [joinExisting, setJoinExisting] = useState(false)
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
 
@@ -38,11 +40,18 @@ export default function RegisterPage() {
 
     try {
       // Register the user
-      await api.post('/api/auth/register/', {
+      const registrationData: Record<string, string> = {
         email: formData.email,
         username: formData.username,
         password: formData.password,
-      })
+      }
+
+      // Include household_id if joining an existing household
+      if (joinExisting && formData.householdId.trim()) {
+        registrationData.household_id = formData.householdId.trim()
+      }
+
+      await api.post('/api/auth/register/', registrationData)
 
       // Redirect to login page
       router.push('/login?registered=true')
@@ -115,6 +124,34 @@ export default function RegisterPage() {
               autoComplete="new-password"
               required
             />
+          </div>
+          <div className="space-y-2">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="joinExisting"
+                checked={joinExisting}
+                onChange={(e) => setJoinExisting(e.target.checked)}
+                className="h-4 w-4 rounded border-gray-300"
+              />
+              <Label htmlFor="joinExisting" className="text-sm font-normal cursor-pointer">
+                Join an existing household
+              </Label>
+            </div>
+            {joinExisting && (
+              <div className="mt-2">
+                <Input
+                  id="householdId"
+                  type="text"
+                  placeholder="Enter household ID"
+                  value={formData.householdId}
+                  onChange={(e) => setFormData({ ...formData, householdId: e.target.value })}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Ask the household owner for the ID from their settings page
+                </p>
+              </div>
+            )}
           </div>
           {error && (
             <p className="text-sm text-red-500 text-center">{error}</p>

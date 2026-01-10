@@ -75,10 +75,11 @@ class ChangePasswordSerializer(serializers.Serializer):
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True, min_length=8)
+    household_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
 
     class Meta:
         model = User
-        fields = ['email', 'username', 'password']
+        fields = ['email', 'username', 'password', 'household_id']
 
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
@@ -90,10 +91,29 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError('A user with this username already exists.')
         return value
 
+    def validate_household_id(self, value):
+        if value:
+            if not Household.objects.filter(id=value).exists():
+                raise serializers.ValidationError('Household not found. Please check the ID and try again.')
+        return value
+
     def create(self, validated_data):
+        household_id = validated_data.pop('household_id', None)
+
         user = User.objects.create_user(
             email=validated_data['email'],
             username=validated_data['username'],
             password=validated_data['password']
         )
+
+        # If joining an existing household, create membership
+        if household_id:
+            household = Household.objects.get(id=household_id)
+            HouseholdMembership.objects.create(
+                user=user,
+                household=household,
+                role='member',
+                is_default=True
+            )
+
         return user
