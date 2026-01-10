@@ -10,7 +10,7 @@ import {
   LineChart,
   Settings,
   LogOut,
-  Lightbulb,
+  CalendarHeart,
   Target,
   FlaskConical,
 } from 'lucide-react'
@@ -20,7 +20,7 @@ const navigation = [
   { name: 'Control Plane', href: '/control-plane', icon: LayoutDashboard },
   { name: 'Accounts', href: '/accounts', icon: Wallet },
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
-  { name: 'Decisions', href: '/decisions', icon: Lightbulb },
+  { name: 'Life Events', href: '/life-events', icon: CalendarHeart },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
   { name: 'Stress Tests', href: '/stress-tests', icon: FlaskConical },
   { name: 'Goals', href: '/goals', icon: Target },

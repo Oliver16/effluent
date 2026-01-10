@@ -783,6 +783,155 @@ class LifeEventTemplate(models.Model):
                     },
                 ],
             },
+            # Simple Financial Changes (migrated from Decisions)
+            {
+                'name': 'Add New Income',
+                'description': 'Add a new income source like a side job, freelance work, or passive income.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'trending-up',
+                'display_order': 10,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.ADD_INCOME,
+                        'name': 'New Income',
+                        'description': 'Enter the details of your new income source',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'other_income'},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Add New Expense',
+                'description': 'Add a new recurring expense like a subscription, insurance, or regular payment.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'credit-card',
+                'display_order': 11,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.ADD_EXPENSE,
+                        'name': 'New Expense',
+                        'description': 'Enter the details of your new recurring expense',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly', 'category': 'miscellaneous'},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Large Purchase',
+                'description': 'Model a one-time large purchase or expense.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'shopping-cart',
+                'display_order': 12,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.LUMP_SUM_EXPENSE,
+                        'name': 'One-Time Purchase',
+                        'description': 'Enter the purchase amount',
+                        'parameters_template': {'amount': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Pay Off Debt Faster',
+                'description': 'Accelerate debt payoff with extra monthly payments.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'check-circle',
+                'display_order': 13,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.PAYOFF_DEBT,
+                        'name': 'Extra Debt Payment',
+                        'description': 'Add extra monthly payments toward debt',
+                        'parameters_template': {'extra_monthly': 0},
+                        'is_required': True,
+                        'requires_source_account': True,
+                        'source_account_type': 'liability',
+                    },
+                ],
+            },
+            {
+                'name': 'Refinance Loan',
+                'description': 'Refinance an existing loan to get a better rate or term.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'refresh-cw',
+                'display_order': 14,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.REFINANCE,
+                        'name': 'Refinance',
+                        'description': 'Enter new loan terms after refinancing',
+                        'parameters_template': {'rate': 0.05, 'term_months': 360, 'closing_costs': 0},
+                        'is_required': True,
+                        'requires_source_account': True,
+                        'source_account_type': 'liability',
+                    },
+                ],
+            },
+            {
+                'name': 'Take Out Loan',
+                'description': 'Model a new loan or line of credit.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'file-text',
+                'display_order': 15,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.ADD_DEBT,
+                        'name': 'New Loan',
+                        'description': 'Enter loan details',
+                        'parameters_template': {'principal': 0, 'rate': 0.07, 'term_months': 60, 'payment': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Start Savings Goal',
+                'description': 'Set up recurring transfers to a savings or investment goal.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'piggy-bank',
+                'display_order': 16,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.SET_SAVINGS_TRANSFER,
+                        'name': 'Monthly Savings',
+                        'description': 'Set up automatic savings transfers',
+                        'parameters_template': {'amount': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Adjust HSA Contribution',
+                'description': 'Change your Health Savings Account contribution rate.',
+                'category': LifeEventCategory.HEALTH,
+                'icon': 'heart-pulse',
+                'display_order': 2,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.MODIFY_HSA,
+                        'name': 'HSA Contribution Change',
+                        'description': 'Enter new HSA contribution percentage',
+                        'parameters_template': {'percentage': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Set Quarterly Tax Estimates',
+                'description': 'Set up quarterly estimated tax payments for self-employment or investment income.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'calendar',
+                'display_order': 17,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.SET_QUARTERLY_ESTIMATES,
+                        'name': 'Quarterly Tax Payments',
+                        'description': 'Enter quarterly estimated tax payment amount',
+                        'parameters_template': {'quarterly_amount': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
         ]
 
 
