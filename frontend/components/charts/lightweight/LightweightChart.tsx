@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useImperativeHandle, forwardRef } from 'react';
 import {
   createChart,
   IChartApi,
@@ -20,6 +20,14 @@ import { formatCurrencyCompact } from '@/lib/format';
 import { useChartTheme, useChartOptions } from './useChartTheme';
 import { toLightweightData } from './useChartData';
 import type { LightweightChartProps, TooltipData } from './types';
+
+/**
+ * Handle type for imperative chart methods
+ */
+export interface LightweightChartHandle {
+  setVisibleRange: (from: string, to: string) => void;
+  fitContent: () => void;
+}
 
 // Map our line style to LW Charts LineStyle enum
 const LINE_STYLE_MAP: Record<string, LineStyle> = {
@@ -62,22 +70,26 @@ function makeSemiTransparent(color: string): string {
   return `${color}40`;
 }
 
-
-export function LightweightChart({
-  data,
-  series,
-  priceLines = [],
-  height = 300,
-  showTimeScale = true,
-  showPriceScale = true,
-  priceScalePosition = 'right',
-  enableCrosshair = true,
-  formatValue = formatCurrencyCompact,
-  formatTime,
-  onCrosshairMove,
-  onTimeRangeChange,
-  className,
-}: LightweightChartProps) {
+export const LightweightChart = forwardRef<LightweightChartHandle, LightweightChartProps>(
+  function LightweightChart(
+    {
+      data,
+      series,
+      priceLines = [],
+      height = 300,
+      showTimeScale = true,
+      showPriceScale = true,
+      priceScalePosition = 'right',
+      enableCrosshair = true,
+      enableZoom = true,
+      formatValue = formatCurrencyCompact,
+      formatTime,
+      onCrosshairMove,
+      onTimeRangeChange,
+      className,
+    },
+    ref
+  ) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRefs = useRef<Map<string, ISeriesApi<SeriesType>>>(new Map());
@@ -92,6 +104,7 @@ export function LightweightChart({
     showPriceScale,
     priceScalePosition,
     enableCrosshair,
+    enableZoom,
   });
 
   // Initialize chart
@@ -379,5 +392,11 @@ export function LightweightChart({
     chart.timeScale().fitContent();
   }, []);
 
+  // Expose imperative methods via ref
+  useImperativeHandle(ref, () => ({
+    setVisibleRange,
+    fitContent,
+  }), [setVisibleRange, fitContent]);
+
   return <div ref={containerRef} className={cn('w-full', className)} style={{ height }} />;
-}
+});

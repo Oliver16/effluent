@@ -233,7 +233,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       serverFetch<MetricSnapshot>('/api/v1/metrics/current/').catch(() => null),
       serverFetch<{ results: MetricSnapshot[] }>('/api/v1/metrics/history/?days=90').catch(() => ({ results: [] })),
       serverFetch<{ results: Account[] } | Account[]>('/api/v1/accounts/').catch(() => ({ results: [] })),
-      serverFetch<{ results: Insight[] }>('/api/v1/insights/').catch(() => ({ results: [] })),
+      serverFetch<{ results: Insight[] } | Insight[]>('/api/v1/insights/').catch(() => []),
       serverFetch<{
         baseline: Scenario;
         health: {
@@ -246,14 +246,15 @@ export async function getDashboardData(): Promise<DashboardData> {
       serverFetch<DataQualityResponse>('/api/v1/metrics/data-quality/').catch(() => null),
     ]);
 
-    // Normalize account data
+    // Normalize account and insights data
     const accountsNormalized = normalizeListResponse(accountsData);
+    const insightsNormalized = normalizeListResponse(insightsData);
 
     return {
       metrics: metricsData,
       history: historyData?.results || [],
       accounts: accountsNormalized,
-      insights: insightsData?.results || [],
+      insights: insightsNormalized,
       baseline: baselineData ? {
         scenario: baselineData.baseline,
         projections: baselineData.baseline?.projections || [],

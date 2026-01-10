@@ -1,9 +1,27 @@
 'use client';
 
+/**
+ * @deprecated This Recharts-based GoalLine is deprecated.
+ * Use the Lightweight Charts compatible version instead:
+ *
+ * ```tsx
+ * import { createGoalLine } from '@/components/charts/lightweight/GoalLine';
+ *
+ * const goalLines = [
+ *   createGoalLine('goal-id', 'Goal Label', 100000, 'good'),
+ * ];
+ *
+ * <LightweightChart priceLines={goalLines} ... />
+ * ```
+ */
+
 import { ReferenceLine, Label } from 'recharts';
 import { formatCurrencyCompact } from '@/lib/format';
 import { StatusTone } from '@/lib/design-tokens';
 
+/**
+ * @deprecated Use createGoalLine from '@/components/charts/lightweight/GoalLine' instead.
+ */
 interface GoalLineProps {
   /** Y-axis value for the line */
   value: number;
@@ -15,6 +33,9 @@ interface GoalLineProps {
   showValue?: boolean;
 }
 
+/**
+ * @deprecated Use createGoalLine from '@/components/charts/lightweight/GoalLine' instead.
+ */
 export function GoalLine({
   value,
   label,
