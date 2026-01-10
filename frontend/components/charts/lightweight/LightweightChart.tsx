@@ -62,6 +62,7 @@ function makeSemiTransparent(color: string): string {
   return `${color}40`;
 }
 
+
 export function LightweightChart({
   data,
   series,
