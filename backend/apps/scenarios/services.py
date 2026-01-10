@@ -239,7 +239,10 @@ class ScenarioEngine:
         liabilities = {}
 
         # Determine the reference date for checking active flows
-        reference_date = as_of_date or self.scenario.start_date
+        # For live baselines (as_of_date=None), use today's date to match metrics service
+        # behavior. This ensures flows created today are included in the projection.
+        # For pinned baselines, use the specified as_of_date.
+        reference_date = as_of_date or date.today()
 
         for acct in Account.objects.filter(household=self.household, is_active=True):
             # Get appropriate snapshot based on as_of_date
