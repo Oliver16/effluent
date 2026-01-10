@@ -16,6 +16,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Check, ChevronLeft, ChevronRight, Loader2, Calendar, CheckCircle, ArrowRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { SURFACE, STATUS_COLORS } from '@/lib/design-tokens'
 
 interface LifeEventWizardProps {
   template: LifeEventTemplate
@@ -48,7 +49,8 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>(() => {
     // Initialize change values from template
     const values: Record<string, ChangeValue> = {}
-    template.suggestedChanges.forEach((change, idx) => {
+    const changes = suggestedChanges || []
+    changes.forEach((change, idx) => {
       values[String(idx)] = {
         _skip: !change.isRequired,
         ...change.parametersTemplate,
@@ -56,6 +58,9 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
     })
     return values
   })
+
+  // Get suggested changes with fallback
+  const suggestedChanges = template.suggestedChanges || []
   const [result, setResult] = useState<WizardResult | null>(null)
 
   // Steps: 1. Overview & Date, 2. Configure Changes, 3. Review & Create
@@ -69,14 +74,14 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const { data: incomeSourcesData } = useQuery({
     queryKey: ['income-sources'],
     queryFn: incomeSources.list,
-    enabled: template.suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'income'),
+    enabled: suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'income'),
   })
 
   // Fetch expense flows for source flow selection
   const { data: flowsData } = useQuery({
     queryKey: ['flows'],
     queryFn: flows.list,
-    enabled: template.suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'expense'),
+    enabled: suggestedChanges.some(c => c.requiresSourceFlow && c.sourceFlowType === 'expense'),
   })
 
   const availableIncomeSources = useMemo(() => {
@@ -170,10 +175,10 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   if (result) {
     return (
       <div className="max-w-2xl mx-auto">
-        <Card className="border-green-200 bg-green-50/50">
+        <Card className={SURFACE.cardGood}>
           <CardHeader className="text-center pb-4">
-            <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-              <CheckCircle className="h-8 w-8 text-green-600" />
+            <div className={cn("mx-auto w-16 h-16 rounded-full flex items-center justify-center mb-4", STATUS_COLORS.good.bg)}>
+              <CheckCircle className={cn("h-8 w-8", STATUS_COLORS.good.text)} />
             </div>
             <CardTitle className="text-2xl">Scenario Created</CardTitle>
             <CardDescription className="text-base">
@@ -243,7 +248,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                   className={cn(
                     'flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium',
                     isCurrent && 'bg-primary text-primary-foreground',
-                    isCompleted && 'bg-green-500 text-white',
+                    isCompleted && 'bg-emerald-500 text-white',
                     !isCurrent && !isCompleted && 'bg-muted text-muted-foreground'
                   )}
                 >
@@ -298,7 +303,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
               <div className="bg-muted/50 rounded-lg p-4">
                 <h4 className="font-medium mb-2">This event includes:</h4>
                 <div className="flex flex-wrap gap-2">
-                  {template.suggestedChanges.map((change, idx) => (
+                  {suggestedChanges.map((change, idx) => (
                     <Badge key={idx} variant={change.isRequired ? 'default' : 'secondary'}>
                       {change.name}
                     </Badge>
@@ -321,7 +326,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
             <CardContent>
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-4">
-                  {template.suggestedChanges.map((change, idx) => (
+                  {suggestedChanges.map((change, idx) => (
                     <Card
                       key={idx}
                       className={cn(
@@ -456,18 +461,18 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">Changes to Apply</span>
-                  <span className="font-medium">{selectedChangesCount} of {template.suggestedChanges.length}</span>
+                  <span className="font-medium">{selectedChangesCount} of {suggestedChanges.length}</span>
                 </div>
               </div>
 
               <div>
                 <h4 className="font-medium mb-3">Selected Changes:</h4>
                 <div className="space-y-2">
-                  {template.suggestedChanges.map((change, idx) => {
+                  {suggestedChanges.map((change, idx) => {
                     if (changeValues[String(idx)]?._skip) return null
                     return (
                       <div key={idx} className="flex items-center gap-2 text-sm">
-                        <Check className="h-4 w-4 text-green-500" />
+                        <Check className="h-4 w-4 text-emerald-500" />
                         <span>{change.name}</span>
                       </div>
                     )
