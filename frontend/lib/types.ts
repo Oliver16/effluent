@@ -125,6 +125,7 @@ export interface Account {
   liabilityDetails?: LiabilityDetails
   latestBalance?: BalanceSnapshot
   snapshots?: BalanceSnapshot[]
+  balanceUpdatedAt?: string
   createdAt?: string
   updatedAt?: string
 }
