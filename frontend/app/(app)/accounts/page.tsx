@@ -461,8 +461,8 @@ export default function AccountsPage() {
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {account.updatedAt ? (
-                        <FreshnessIndicator lastUpdated={account.updatedAt} />
+                      {account.balanceUpdatedAt ? (
+                        <FreshnessIndicator lastUpdated={account.balanceUpdatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -554,8 +554,8 @@ export default function AccountsPage() {
                       {asset.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {asset.updatedAt ? (
-                        <FreshnessIndicator lastUpdated={asset.updatedAt} />
+                      {asset.balanceUpdatedAt ? (
+                        <FreshnessIndicator lastUpdated={asset.balanceUpdatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -647,8 +647,8 @@ export default function AccountsPage() {
                       {account.institution || '—'}
                     </TableCell>
                     <TableCell className={cn(densityStyles.cell)}>
-                      {account.updatedAt ? (
-                        <FreshnessIndicator lastUpdated={account.updatedAt} />
+                      {account.balanceUpdatedAt ? (
+                        <FreshnessIndicator lastUpdated={account.balanceUpdatedAt} />
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}

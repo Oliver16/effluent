@@ -42,6 +42,7 @@ class AccountSerializer(serializers.ModelSerializer):
     )
     current_market_value = serializers.SerializerMethodField()
     current_cost_basis = serializers.SerializerMethodField()
+    balance_updated_at = serializers.SerializerMethodField()
 
     class Meta:
         model = Account
@@ -49,8 +50,15 @@ class AccountSerializer(serializers.ModelSerializer):
             'id', 'name', 'account_type', 'institution', 'account_number_last4',
             'is_active', 'display_order', 'asset_group', 'owner', 'employer_name',
             'notes', 'current_balance', 'current_market_value', 'current_cost_basis',
-            'created_at'
+            'balance_updated_at', 'created_at'
         ]
+
+    def get_balance_updated_at(self, obj):
+        """Return the timestamp of the most recent balance snapshot."""
+        snapshot = obj.latest_snapshot
+        if snapshot:
+            return snapshot.recorded_at
+        return None
 
     def get_current_market_value(self, obj):
         snapshot = obj.latest_snapshot
