@@ -9,11 +9,12 @@ from django.utils import timezone
 import uuid
 
 from .models import Household, HouseholdMember, HouseholdMembership
+from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
 from .serializers import (
     HouseholdSerializer, HouseholdDetailSerializer,
     HouseholdMemberSerializer,
     UserProfileSerializer, UserSettingsSerializer, ChangePasswordSerializer,
-    UserRegistrationSerializer
+    UserRegistrationSerializer, TokenRefreshSerializer
 )
 from apps.accounts.models import Account
 from apps.accounts.serializers import AccountDetailSerializer
@@ -113,6 +114,11 @@ class UserRegistrationView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({'status': 'user_created'}, status=status.HTTP_201_CREATED)
+
+
+class TokenRefreshView(BaseTokenRefreshView):
+    """Custom token refresh view that handles deleted users gracefully."""
+    serializer_class = TokenRefreshSerializer
 
 
 class NotificationSettingsView(APIView):
