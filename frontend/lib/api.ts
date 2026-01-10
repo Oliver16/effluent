@@ -245,6 +245,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}, isRetr
     throw new ApiError(response.status, error.detail || 'Request failed', error.errors)
   }
 
+  // Handle 204 No Content (common for DELETE requests)
+  if (response.status === 204) {
+    return undefined as T
+  }
+
   return response.json()
 }
 
