@@ -665,10 +665,17 @@ impact.
 }
 
 /**
- * Get a metric definition by its key
+ * Get a metric definition by its key (e.g., 'liquidityMonths')
  */
 export function getMetricDefinition(key: string): MetricDefinition | undefined {
   return METRIC_DEFINITIONS[key]
+}
+
+/**
+ * Get a metric definition by its ID (e.g., 'metrics/liquidity-months')
+ */
+export function getMetricDefinitionById(id: string): MetricDefinition | undefined {
+  return Object.values(METRIC_DEFINITIONS).find((m) => m.id === id)
 }
 
 /**

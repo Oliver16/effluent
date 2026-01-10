@@ -33,6 +33,27 @@ By the end of this tour, you'll understand:
     level: 'intro',
   },
 
+  'tour/dashboard/surplus': {
+    id: 'tour/dashboard/surplus',
+    title: 'Monthly Surplus',
+    short:
+      'Your monthly surplus shows whether you\'re spending more or less than you earn.',
+    body: `
+Your **monthly surplus** is the difference between your income and expenses each month:
+
+- **Positive surplus**: You're earning more than you spend—this money can go toward savings, investments, or paying down debt
+- **Negative surplus (deficit)**: You're spending more than you earn—this depletes savings and may indicate unsustainable spending
+
+This is your "financial engine"—a positive surplus builds wealth, while a deficit consumes it.
+
+**Tip**: Even small improvements to surplus compound dramatically over time. An extra $200/month in surplus is $2,400/year toward your goals.
+    `,
+    tags: ['tour', 'dashboard', 'surplus', 'cashflow'],
+    related: ['metrics/savings-rate', 'metrics/burn-rate'],
+    modules: ['dashboard'],
+    level: 'intro',
+  },
+
   'tour/dashboard/net-worth-chart': {
     id: 'tour/dashboard/net-worth-chart',
     title: 'Net Worth Projection',

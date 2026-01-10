@@ -32,6 +32,7 @@ export type {
 export {
   METRIC_DEFINITIONS,
   getMetricDefinition,
+  getMetricDefinitionById,
   getMetricsByModule,
   searchMetrics,
 } from './metrics'

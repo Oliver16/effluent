@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { useTour } from './TourProvider'
 import { getTourContent } from '@/lib/help/tour-content'
-import { getMetricDefinition } from '@/lib/help/metrics'
+import { getMetricDefinitionById } from '@/lib/help/metrics'
 import type { HelpContent, MetricDefinition } from '@/lib/help/types'
 
 // -----------------------------------------------------------------------------
@@ -409,10 +409,9 @@ export function TourOverlay() {
   // First try tour content
   content = getTourContent(currentStep.contentId)
 
-  // Then try metric definition
+  // Then try metric definition by ID (e.g., 'metrics/liquidity-months')
   if (!content) {
-    const metricKey = currentStep.contentId.replace('metrics/', '')
-    content = getMetricDefinition(metricKey)
+    content = getMetricDefinitionById(currentStep.contentId)
   }
 
   if (!content) {
