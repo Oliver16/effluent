@@ -9,7 +9,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 decimal.getcontext().prec = 28
 decimal.getcontext().rounding = ROUND_HALF_UP
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
+SECRET_KEY = os.environ.get('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError(
+        "SECRET_KEY environment variable is not set. "
+        "Set a strong secret key in production."
+    )
 
 INSTALLED_APPS = [
     'django.contrib.admin',

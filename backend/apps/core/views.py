@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from django.db import transaction
 from django.utils.text import slugify
 from django.utils import timezone
 import uuid
@@ -52,8 +53,9 @@ class HouseholdViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def set_default(self, request, pk=None):
         household = self.get_object()
-        HouseholdMembership.objects.filter(user=request.user).update(is_default=False)
-        HouseholdMembership.objects.filter(user=request.user, household=household).update(is_default=True)
+        with transaction.atomic():
+            HouseholdMembership.objects.filter(user=request.user).update(is_default=False)
+            HouseholdMembership.objects.filter(user=request.user, household=household).update(is_default=True)
         return Response({'status': 'set as default'})
 
 
@@ -115,6 +117,7 @@ class NotificationSettingsView(APIView):
         }
 
     def get(self, request):
+        from django.db import DatabaseError
         try:
             settings = request.user.get_settings()
             # Build response directly from model fields to avoid serializer issues
@@ -125,11 +128,12 @@ class NotificationSettingsView(APIView):
                 'critical_alerts': getattr(settings, 'critical_alerts', True),
                 'two_factor_enabled': getattr(settings, 'two_factor_enabled', False),
             })
-        except Exception:
-            # Return default settings if there's any error
+        except DatabaseError:
+            # Return default settings if there's a database error (e.g., missing table during migrations)
             return Response(self._get_default_settings())
 
     def patch(self, request):
+        from django.db import DatabaseError
         defaults = self._get_default_settings()
         try:
             settings = request.user.get_settings()
@@ -146,8 +150,8 @@ class NotificationSettingsView(APIView):
                 serializer.is_valid(raise_exception=True)
                 serializer.save()
                 return Response(serializer.data)
-        except Exception:
-            # Return the request data merged with defaults if save fails
+        except DatabaseError:
+            # Return the request data merged with defaults if there's a database error
             defaults.update(request.data)
             return Response(defaults)
 
