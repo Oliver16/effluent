@@ -2,7 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db import transaction
 from django.utils.text import slugify
 from django.utils import timezone
@@ -106,6 +106,7 @@ class ChangePasswordView(APIView):
 
 class UserRegistrationView(APIView):
     """Handle user registration."""
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = UserRegistrationSerializer(data=request.data)
