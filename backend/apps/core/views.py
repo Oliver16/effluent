@@ -12,7 +12,8 @@ from .models import Household, HouseholdMember, HouseholdMembership
 from .serializers import (
     HouseholdSerializer, HouseholdDetailSerializer,
     HouseholdMemberSerializer,
-    UserProfileSerializer, UserSettingsSerializer, ChangePasswordSerializer
+    UserProfileSerializer, UserSettingsSerializer, ChangePasswordSerializer,
+    UserRegistrationSerializer
 )
 from apps.accounts.models import Account
 from apps.accounts.serializers import AccountDetailSerializer
@@ -101,6 +102,16 @@ class ChangePasswordView(APIView):
         request.user.set_password(serializer.validated_data['new_password'])
         request.user.save(update_fields=['password'])
         return Response({'status': 'password_updated'})
+
+
+class UserRegistrationView(APIView):
+    """Handle user registration."""
+
+    def post(self, request):
+        serializer = UserRegistrationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response({'status': 'user_created'}, status=status.HTTP_201_CREATED)
 
 
 class NotificationSettingsView(APIView):

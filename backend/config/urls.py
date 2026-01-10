@@ -6,7 +6,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 # Import views
 from apps.core.views import (
-    UserProfileView, ChangePasswordView,
+    UserProfileView, ChangePasswordView, UserRegistrationView,
     HouseholdViewSet, HouseholdMemberViewSet,
     NotificationSettingsView, TwoFactorSettingsView, SessionsView, DataExportView
 )
@@ -68,6 +68,7 @@ urlpatterns = [
     # Auth
     path('api/auth/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/auth/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('api/auth/register/', UserRegistrationView.as_view(), name='user_register'),
 
     # API v1
     path('api/v1/', include(router.urls)),
