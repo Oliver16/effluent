@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Sparkles, GitBranch, Zap } from 'lucide-react';
+import { Plus, CalendarHeart, GitBranch, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -29,9 +29,9 @@ export function NewMenu({ showStressTests = false }: NewMenuProps) {
         <DropdownMenuLabel>Create</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href="/decisions" className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" />
-            Model a Decision
+          <Link href="/life-events" className="flex items-center gap-2">
+            <CalendarHeart className="h-4 w-4" />
+            Model a Life Event
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>

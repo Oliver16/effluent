@@ -47,6 +47,11 @@ import {
   Loader2,
   Search,
   X,
+  CreditCard,
+  ShoppingCart,
+  RefreshCw,
+  FileText,
+  HeartPulse,
 } from 'lucide-react';
 
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
@@ -78,6 +83,11 @@ const TEMPLATE_ICONS: Record<string, React.ReactNode> = {
   gift: <Gift className="h-5 w-5" />,
   activity: <Activity className="h-5 w-5" />,
   calendar: <Calendar className="h-5 w-5" />,
+  'credit-card': <CreditCard className="h-5 w-5" />,
+  'shopping-cart': <ShoppingCart className="h-5 w-5" />,
+  'refresh-cw': <RefreshCw className="h-5 w-5" />,
+  'file-text': <FileText className="h-5 w-5" />,
+  'heart-pulse': <HeartPulse className="h-5 w-5" />,
 };
 
 interface LifeEventTemplatesDialogProps {

@@ -33,6 +33,14 @@ class LiabilityInfo:
 
 
 @dataclass
+class EmployerMatchInfo:
+    """Employer 401k match configuration."""
+    match_percentage: Decimal = Decimal('0')  # e.g., 0.50 = 50% match
+    limit_percentage: Decimal = Decimal('0')  # e.g., 0.06 = match up to 6% of salary
+    limit_annual: Decimal | None = None  # annual cap on match
+
+
+@dataclass
 class MonthlyState:
     """State at a point in time."""
     date: date
@@ -44,6 +52,8 @@ class MonthlyState:
     transfers: list = field(default_factory=list)  # transfer flows (move money between accounts)
     contribution_rates: dict = field(default_factory=dict)  # 401k, HSA percentages
     applied_changes: set = field(default_factory=set)  # Track one-time changes applied
+    employer_match: EmployerMatchInfo = field(default_factory=EmployerMatchInfo)  # Employer 401k match config
+    employer_match_ytd: Decimal = field(default_factory=lambda: Decimal('0'))  # Track YTD employer match for annual limits
 
     @property
     def total_assets(self) -> Decimal:
@@ -345,6 +355,8 @@ class ScenarioEngine:
 
         # Initialize contribution rates from pre-tax deductions
         contribution_rates = {'401k': Decimal('0'), 'hsa': Decimal('0')}
+        employer_match = EmployerMatchInfo()
+
         # Safely query deductions - query may fail if no income sources exist
         deductions = PreTaxDeduction.objects.filter(
             income_source__household=self.household,
@@ -354,6 +366,13 @@ class ScenarioEngine:
             if deduction.deduction_type in ('traditional_401k', 'roth_401k'):
                 if deduction.amount_type == 'percentage':
                     contribution_rates['401k'] = deduction.amount
+                # Load employer match configuration
+                if deduction.employer_match_percentage:
+                    employer_match = EmployerMatchInfo(
+                        match_percentage=deduction.employer_match_percentage,
+                        limit_percentage=deduction.employer_match_limit_percentage or Decimal('0'),
+                        limit_annual=deduction.employer_match_limit_annual,
+                    )
             elif deduction.deduction_type == 'hsa':
                 if deduction.amount_type == 'percentage':
                     contribution_rates['hsa'] = deduction.amount
@@ -368,6 +387,8 @@ class ScenarioEngine:
             transfers=transfers,
             contribution_rates=contribution_rates,
             applied_changes=set(),
+            employer_match=employer_match,
+            employer_match_ytd=Decimal('0'),
         )
 
     def _apply_change(self, state: MonthlyState, change: ScenarioChange, current_date: date) -> MonthlyState:
@@ -1021,6 +1042,50 @@ class ScenarioEngine:
                 if liquid_asset:
                     state.assets[liquid_asset].balance = max(Decimal('0'), state.assets[liquid_asset].balance - amount)
                 state.liabilities[target_id].balance = max(Decimal('0'), state.liabilities[target_id].balance - amount)
+
+        # Calculate and add employer 401k match to retirement account
+        if state.employer_match.match_percentage > 0:
+            # Reset YTD tracking at year boundary
+            if state.month > 0 and state.month % 12 == 0:
+                state.employer_match_ytd = Decimal('0')
+
+            # Calculate gross monthly salary income
+            gross_monthly_salary = sum(
+                inc['monthly'] for inc in state.incomes
+                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly')
+            )
+
+            if gross_monthly_salary > 0:
+                # Get employee contribution rate
+                contribution_rate = state.contribution_rates.get('401k', Decimal('0'))
+
+                # Calculate employee contribution this month
+                employee_contribution = gross_monthly_salary * contribution_rate
+
+                # Calculate matchable contribution (limited by employer's limit percentage)
+                if state.employer_match.limit_percentage > 0:
+                    max_matchable = gross_monthly_salary * state.employer_match.limit_percentage
+                    matchable_contribution = min(employee_contribution, max_matchable)
+                else:
+                    matchable_contribution = employee_contribution
+
+                # Calculate employer match
+                employer_match_amount = matchable_contribution * state.employer_match.match_percentage
+
+                # Apply annual limit if set
+                if state.employer_match.limit_annual:
+                    remaining_annual = state.employer_match.limit_annual - state.employer_match_ytd
+                    employer_match_amount = min(employer_match_amount, max(Decimal('0'), remaining_annual))
+                    state.employer_match_ytd += employer_match_amount
+
+                # Add employer match to retirement account (free money!)
+                if employer_match_amount > 0:
+                    retirement_acct = next(
+                        (k for k, a in state.assets.items() if a.is_retirement),
+                        None
+                    )
+                    if retirement_acct:
+                        state.assets[retirement_acct].balance += employer_match_amount
 
         # Reduce debt balances based on payments
         for lid, liab in list(state.liabilities.items()):
