@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { HeaderHelpButton } from '@/components/help'
 import { Target, Lightbulb, AlertTriangle, CheckCircle, AlertCircle } from 'lucide-react'
 import { GoalStatusResult } from '@/lib/types'
 
@@ -92,6 +93,7 @@ export function DashboardHeader({ goalStatus, isLoading }: DashboardHeaderProps)
       </div>
 
       <div className="flex items-center gap-2">
+        <HeaderHelpButton module="dashboard" />
         <Button variant="outline" size="sm" asChild>
           <Link href="/goals">
             <Target className="h-4 w-4 mr-2" />

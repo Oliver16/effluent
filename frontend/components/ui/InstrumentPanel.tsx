@@ -1,8 +1,8 @@
 import { cn } from '@/lib/utils';
 import { SURFACE, TYPOGRAPHY } from '@/lib/design-tokens';
-import { ReactNode } from 'react';
+import { ReactNode, HTMLAttributes } from 'react';
 
-interface InstrumentPanelProps {
+interface InstrumentPanelProps extends HTMLAttributes<HTMLElement> {
   /** Panel title */
   title: string;
   /** Optional subtitle */
@@ -15,8 +15,6 @@ interface InstrumentPanelProps {
   footer?: ReactNode;
   /** Remove padding from content area (for full-bleed charts) */
   noPadding?: boolean;
-  /** Additional classes */
-  className?: string;
 }
 
 export function InstrumentPanel({
@@ -27,9 +25,10 @@ export function InstrumentPanel({
   footer,
   noPadding = false,
   className,
+  ...props
 }: InstrumentPanelProps) {
   return (
-    <section className={cn(SURFACE.instrument, className)}>
+    <section className={cn(SURFACE.instrument, className)} {...props}>
       {/* Header */}
       <header className="flex items-start justify-between gap-4 border-b border-border/50 px-4 py-3">
         <div className="min-w-0">

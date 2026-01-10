@@ -239,6 +239,8 @@ export function NorthStarCards({
             tone={netWorth.tone}
             statusLabel={netWorth.statusLabel}
             icon={netWorth.icon}
+            metricKey="netWorth"
+            rawValue={netWorth.numValue}
             delta={
               netWorth.delta
                 ? {
@@ -259,6 +261,8 @@ export function NorthStarCards({
             tone={surplus.tone}
             statusLabel={surplus.statusLabel}
             icon={surplus.icon}
+            metricKey="monthlySurplus"
+            rawValue={surplus.numValue}
             delta={
               surplus.delta
                 ? {
@@ -279,6 +283,8 @@ export function NorthStarCards({
             tone={liquidity.tone}
             statusLabel={liquidity.statusLabel}
             icon={liquidity.icon}
+            metricKey="liquidityMonths"
+            rawValue={liquidity.numValue}
             delta={
               liquidity.delta
                 ? {

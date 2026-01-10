@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { AppShell } from '@/components/layout/app-shell'
+import { TourProvider, TourOverlay } from '@/components/help'
 import { households } from '@/lib/api'
 import { updateHouseholdCookie } from '@/lib/auth'
 import { isOnboardingComplete } from '@/lib/utils'
@@ -72,5 +73,10 @@ export default function AppLayout({
     return null
   }
 
-  return <AppShell>{children}</AppShell>
+  return (
+    <TourProvider>
+      <AppShell>{children}</AppShell>
+      <TourOverlay />
+    </TourProvider>
+  )
 }

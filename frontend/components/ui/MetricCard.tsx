@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils';
 import { SURFACE, TYPOGRAPHY, STATUS_COLORS, StatusTone } from '@/lib/design-tokens';
 import { StatusBadge } from './StatusBadge';
 import { DeltaPill } from './DeltaPill';
+import { MetricExplainer } from '@/components/help';
 import { LucideIcon } from 'lucide-react';
 
 interface MetricCardProps {
@@ -25,6 +26,10 @@ interface MetricCardProps {
   onClick?: () => void;
   /** Additional classes */
   className?: string;
+  /** Metric key for help explanation (e.g., 'liquidityMonths', 'savingsRate') */
+  metricKey?: string;
+  /** Raw numeric value for contextual interpretation */
+  rawValue?: number;
 }
 
 export function MetricCard({
@@ -36,6 +41,8 @@ export function MetricCard({
   icon: Icon,
   onClick,
   className,
+  metricKey,
+  rawValue,
 }: MetricCardProps) {
   const isInteractive = !!onClick;
   const colors = STATUS_COLORS[tone];
@@ -64,6 +71,13 @@ export function MetricCard({
             </div>
           )}
           <span className={TYPOGRAPHY.metricLabel}>{label}</span>
+          {metricKey && (
+            <MetricExplainer
+              metricKey={metricKey}
+              currentValue={rawValue}
+              size="sm"
+            />
+          )}
         </div>
         {statusLabel && <StatusBadge tone={tone} label={statusLabel} />}
       </div>

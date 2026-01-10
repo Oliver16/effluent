@@ -1,5 +1,13 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, HTMLAttributes } from 'react';
 import { cn } from '@/lib/utils';
+
+interface SectionCardProps extends HTMLAttributes<HTMLElement> {
+  title?: string;
+  description?: string;
+  right?: ReactNode;
+  children: ReactNode;
+  dense?: boolean;
+}
 
 export function SectionCard({
   title,
@@ -8,16 +16,13 @@ export function SectionCard({
   children,
   className,
   dense = false,
-}: {
-  title?: string;
-  description?: string;
-  right?: ReactNode;
-  children: ReactNode;
-  className?: string;
-  dense?: boolean;
-}) {
+  ...props
+}: SectionCardProps) {
   return (
-    <section className={cn('rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm', className)}>
+    <section
+      className={cn('rounded-xl border border-border/60 bg-card text-card-foreground shadow-sm', className)}
+      {...props}
+    >
       {(title || right) ? (
         <header className={cn('flex items-start justify-between gap-4 border-b border-border/50', dense ? 'p-3' : 'p-4')}>
           <div className="space-y-0.5">
