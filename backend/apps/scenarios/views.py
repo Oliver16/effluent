@@ -534,12 +534,34 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             # Remove internal flags
             parameters.pop('_skip', None)
 
+            # Extract source_flow_id if provided (for MODIFY_INCOME, REMOVE_INCOME, etc.)
+            source_flow_id = None
+            if 'source_flow_id' in user_values:
+                source_flow_id = user_values.get('source_flow_id')
+                parameters.pop('source_flow_id', None)  # Don't duplicate in parameters
+
+            # Also check for source_income_flow_id or source_expense_flow_id
+            if 'source_income_flow_id' in user_values:
+                source_flow_id = user_values.get('source_income_flow_id')
+                parameters.pop('source_income_flow_id', None)
+            if 'source_expense_flow_id' in user_values:
+                source_flow_id = user_values.get('source_expense_flow_id')
+                parameters.pop('source_expense_flow_id', None)
+
+            # Extract source_account_id if provided (for asset/debt changes)
+            source_account_id = None
+            if 'source_account_id' in user_values:
+                source_account_id = user_values.get('source_account_id')
+                parameters.pop('source_account_id', None)
+
             change = ScenarioChange.objects.create(
                 scenario=scenario,
                 change_type=change_template['change_type'],
                 name=change_template['name'],
                 description=change_template.get('description', ''),
                 effective_date=effective_date,
+                source_flow_id=source_flow_id,
+                source_account_id=source_account_id,
                 parameters=parameters,
                 display_order=idx,
                 is_enabled=True,

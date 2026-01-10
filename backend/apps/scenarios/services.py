@@ -1062,6 +1062,26 @@ class ScenarioEngine:
         savings_rate = state.net_cash_flow / state.total_income if state.total_income > 0 else Decimal('0')
         liquidity = state.liquid_assets / total_exp if total_exp > 0 else Decimal('999')
 
+        # Build income breakdown aggregating by category
+        income_breakdown = {}
+        for i in state.incomes:
+            cat = i['category']
+            monthly = i['monthly'].quantize(Decimal('0.01'))
+            if cat in income_breakdown:
+                income_breakdown[cat] = str(Decimal(income_breakdown[cat]) + monthly)
+            else:
+                income_breakdown[cat] = str(monthly)
+
+        # Build expense breakdown aggregating by category
+        expense_breakdown = {}
+        for e in state.expenses:
+            cat = e['category']
+            monthly = e['monthly'].quantize(Decimal('0.01'))
+            if cat in expense_breakdown:
+                expense_breakdown[cat] = str(Decimal(expense_breakdown[cat]) + monthly)
+            else:
+                expense_breakdown[cat] = str(monthly)
+
         return ScenarioProjection(
             scenario=self.scenario,
             projection_date=proj_date,
@@ -1077,8 +1097,8 @@ class ScenarioEngine:
             dscr=min(dscr, Decimal('999')).quantize(Decimal('0.001')),
             savings_rate=savings_rate.quantize(Decimal('0.0001')),
             liquidity_months=min(liquidity, Decimal('999')).quantize(Decimal('0.01')),
-            income_breakdown={i['category']: str(i['monthly'].quantize(Decimal('0.01'))) for i in state.incomes},
-            expense_breakdown={e['category']: str(e['monthly'].quantize(Decimal('0.01'))) for e in state.expenses},
+            income_breakdown=income_breakdown,
+            expense_breakdown=expense_breakdown,
             asset_breakdown=state.get_asset_breakdown(),
             liability_breakdown=state.get_liability_breakdown(),
         )

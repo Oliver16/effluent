@@ -388,6 +388,8 @@ export interface SuggestedChange {
   description: string
   parametersTemplate: Record<string, unknown>
   isRequired: boolean
+  requiresSourceFlow?: boolean
+  sourceFlowType?: 'income' | 'expense'
 }
 
 export interface LifeEventTemplate {
