@@ -1,4 +1,5 @@
 import os
+import warnings
 
 from .base import *
 
@@ -11,9 +12,12 @@ def _parse_env_list(value: str) -> list[str]:
 # Parse ALLOWED_HOSTS, filtering out empty strings
 ALLOWED_HOSTS = _parse_env_list(os.environ.get('ALLOWED_HOSTS', ''))
 
-# Fallback if empty
+# Require ALLOWED_HOSTS in production - no insecure fallback
 if not ALLOWED_HOSTS:
-    ALLOWED_HOSTS = ['localhost']
+    raise ValueError(
+        "ALLOWED_HOSTS environment variable is not set. "
+        "Set this to your production domain(s) as a comma-separated list."
+    )
 
 # Parse CORS origins, filtering out empty strings
 CORS_ALLOWED_ORIGINS = _parse_env_list(os.environ.get('CORS_ORIGINS', ''))

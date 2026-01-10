@@ -11,6 +11,7 @@ from .serializers import (
     PreTaxDeductionSerializer, PostTaxDeductionSerializer, SelfEmploymentTaxSerializer
 )
 from .services import PaycheckCalculator
+from .constants import CONTRIBUTION_LIMITS
 from apps.scenarios.reality_events import emit_taxes_changed
 
 
@@ -320,7 +321,7 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
     suggestions = []
 
     # Check 401k contribution room
-    max_401k = Decimal('23000')  # 2024 limit
+    max_401k = CONTRIBUTION_LIMITS['401k_employee']
     current_401k = Decimal('0')
 
     for source in sources:
@@ -343,7 +344,7 @@ def _get_tax_strategy_suggestions(gross: Decimal, pretax: Decimal, sources) -> l
         })
 
     # Check HSA contribution
-    max_hsa = Decimal('4150')  # 2024 individual limit
+    max_hsa = CONTRIBUTION_LIMITS['hsa_individual']
     current_hsa = Decimal('0')
 
     for source in sources:

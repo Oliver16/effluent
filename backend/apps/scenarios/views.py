@@ -83,6 +83,13 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         horizon_months = request.data.get('horizon_months')
         include_drivers = request.data.get('include_drivers', True)
 
+        # Ensure household is available
+        if not request.household:
+            return Response(
+                {'error': 'No household context available'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         # Validate constraints (TASK-15: max 4 scenarios, max 360 months)
         if len(scenario_ids) > ScenarioComparisonService.MAX_SCENARIOS:
             return Response(
@@ -90,11 +97,24 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        if horizon_months and horizon_months > ScenarioComparisonService.MAX_HORIZON_MONTHS:
-            return Response(
-                {'error': f'Maximum horizon is {ScenarioComparisonService.MAX_HORIZON_MONTHS} months'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if horizon_months is not None:
+            try:
+                horizon_months = int(horizon_months)
+            except (TypeError, ValueError):
+                return Response(
+                    {'error': 'horizon_months must be a positive integer'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if horizon_months < 1:
+                return Response(
+                    {'error': 'horizon_months must be at least 1'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            if horizon_months > ScenarioComparisonService.MAX_HORIZON_MONTHS:
+                return Response(
+                    {'error': f'Maximum horizon is {ScenarioComparisonService.MAX_HORIZON_MONTHS} months'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
 
         # Fetch scenarios with ownership validation
         scenarios = list(Scenario.objects.filter(
@@ -471,8 +491,20 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         scenario_id = request.data.get('scenario_id')
-        effective_date = request.data.get('effective_date', str(date.today()))
+        effective_date_str = request.data.get('effective_date')
         change_values = request.data.get('change_values', {})  # User-provided values
+
+        # Parse effective_date - use today if not provided
+        if effective_date_str:
+            try:
+                effective_date = date.fromisoformat(effective_date_str)
+            except ValueError:
+                return Response(
+                    {'error': 'Invalid date format. Use YYYY-MM-DD.'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        else:
+            effective_date = date.today()
 
         try:
             scenario = Scenario.objects.get(
