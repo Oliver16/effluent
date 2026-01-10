@@ -155,31 +155,65 @@ class AssetGroup(HouseholdOwnedModel):
     def __str__(self):
         return f"{self.household.name} - {self.name}"
 
+    def _get_latest_snapshots_for_accounts(self, account_type_filter) -> dict:
+        """
+        Batch-fetch latest snapshots for accounts of given types.
+
+        Uses a single query with subquery to get the latest snapshot per account,
+        avoiding N+1 query issues.
+
+        Returns:
+            Dict mapping account_id to BalanceSnapshot
+        """
+        from django.db.models import OuterRef, Subquery
+
+        # Get accounts of the specified types
+        accounts = self.accounts.filter(account_type__in=account_type_filter)
+        account_ids = list(accounts.values_list('id', flat=True))
+
+        if not account_ids:
+            return {}
+
+        # Subquery to get the latest snapshot ID for each account
+        latest_snapshot_subquery = BalanceSnapshot.objects.filter(
+            account_id=OuterRef('account_id')
+        ).order_by('-as_of_date', '-recorded_at').values('id')[:1]
+
+        # Fetch all latest snapshots in one query
+        latest_snapshots = BalanceSnapshot.objects.filter(
+            account_id__in=account_ids
+        ).annotate(
+            is_latest=Subquery(latest_snapshot_subquery)
+        ).filter(
+            id=models.F('is_latest')
+        )
+
+        return {snap.account_id: snap for snap in latest_snapshots}
+
     @property
     def total_cost_basis(self) -> Decimal:
+        snapshot_map = self._get_latest_snapshots_for_accounts(ASSET_TYPES)
         total = Decimal('0')
-        for account in self.accounts.filter(account_type__in=ASSET_TYPES):
-            snapshot = account.latest_snapshot
-            if snapshot and snapshot.cost_basis:
+        for account_id, snapshot in snapshot_map.items():
+            if snapshot.cost_basis:
                 total += snapshot.cost_basis
         return total
 
     @property
     def total_market_value(self) -> Decimal:
+        snapshot_map = self._get_latest_snapshots_for_accounts(ASSET_TYPES)
         total = Decimal('0')
-        for account in self.accounts.filter(account_type__in=ASSET_TYPES):
-            snapshot = account.latest_snapshot
-            if snapshot and snapshot.market_value:
+        for account_id, snapshot in snapshot_map.items():
+            if snapshot.market_value:
                 total += snapshot.market_value
         return total
 
     @property
     def total_debt(self) -> Decimal:
+        snapshot_map = self._get_latest_snapshots_for_accounts(LIABILITY_TYPES)
         total = Decimal('0')
-        for account in self.accounts.filter(account_type__in=LIABILITY_TYPES):
-            snapshot = account.latest_snapshot
-            if snapshot:
-                total += abs(snapshot.balance)
+        for account_id, snapshot in snapshot_map.items():
+            total += abs(snapshot.balance)
         return total
 
     @property

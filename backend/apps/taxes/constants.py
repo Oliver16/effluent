@@ -1,6 +1,27 @@
+from datetime import date
 from decimal import Decimal
+import os
 
-TAX_YEAR = 2026
+
+def get_current_tax_year() -> int:
+    """
+    Get the current tax year.
+
+    Returns the current calendar year, which is typically the tax year
+    for income earned in that year. Can be overridden via environment
+    variable TAX_YEAR_OVERRIDE for testing or special cases.
+    """
+    override = os.environ.get('TAX_YEAR_OVERRIDE')
+    if override:
+        try:
+            return int(override)
+        except ValueError:
+            pass
+    return date.today().year
+
+
+# Dynamic tax year - uses current year by default, can be overridden via env var
+TAX_YEAR = get_current_tax_year()
 
 # Standard Deductions
 STANDARD_DEDUCTIONS = {

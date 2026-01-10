@@ -213,10 +213,14 @@ class BaselineScenarioService:
                 household=household
             ).order_by('-as_of_date').first()
 
-            # Get previous snapshot for trend calculation
-            previous_snapshot = MetricSnapshot.objects.filter(
-                household=household
-            ).order_by('-as_of_date')[1:2].first() if latest_snapshot else None
+            # Get previous snapshot for trend calculation (the one before latest)
+            if latest_snapshot:
+                previous_snapshot = MetricSnapshot.objects.filter(
+                    household=household,
+                    as_of_date__lt=latest_snapshot.as_of_date
+                ).order_by('-as_of_date').first()
+            else:
+                previous_snapshot = None
 
         # Calculate trends
         def get_trend(current, previous, higher_is_better=True):

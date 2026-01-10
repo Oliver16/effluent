@@ -153,13 +153,21 @@ class NotificationSettingsView(APIView):
         except DatabaseError:
             # Return the request data merged with defaults if there's a database error
             defaults.update(request.data)
-            return Response(defaults)
+            return Response(
+                {
+                    'error': 'database_error',
+                    'message': 'Unable to save settings due to a database error. Please try again later.',
+                    'current_settings': defaults,
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
 
 class TwoFactorSettingsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        from django.db import DatabaseError
         enabled = bool(request.data.get('enabled'))
         try:
             settings = request.user.get_settings()
@@ -176,15 +184,22 @@ class TwoFactorSettingsView(APIView):
                 'critical_alerts': getattr(settings, 'critical_alerts', True),
                 'two_factor_enabled': getattr(settings, 'two_factor_enabled', enabled),
             })
-        except Exception:
-            # Return default settings with the new 2FA value
-            return Response({
-                'weekly_summary': True,
-                'insight_alerts': True,
-                'balance_reminders': True,
-                'critical_alerts': True,
-                'two_factor_enabled': enabled,
-            })
+        except DatabaseError:
+            # Return error response with current/default settings
+            return Response(
+                {
+                    'error': 'database_error',
+                    'message': 'Unable to save 2FA settings. Please try again later.',
+                    'current_settings': {
+                        'weekly_summary': True,
+                        'insight_alerts': True,
+                        'balance_reminders': True,
+                        'critical_alerts': True,
+                        'two_factor_enabled': False,
+                    },
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
 
 
 class SessionsView(APIView):

@@ -255,12 +255,18 @@ class ScenarioComparisonService:
         """
         Estimate investment returns for a projection.
 
-        This is approximated as the change in retirement/investment assets
-        minus any contributions (which would be in net cash flow).
+        Uses the scenario's investment_return_rate to calculate monthly returns
+        on retirement/investment assets.
         """
-        # For now, use a simple approximation based on retirement assets
-        # A more sophisticated implementation would track contributions separately
-        return projection.retirement_assets * Decimal('0.005')  # Approx monthly return
+        # Get the scenario's annual investment return rate
+        scenario = projection.scenario
+        annual_rate = float(scenario.investment_return_rate)
+
+        # Convert annual rate to monthly: (1 + annual)^(1/12) - 1
+        monthly_rate = (1 + annual_rate) ** (1 / 12) - 1
+
+        # Apply to retirement/investment assets
+        return projection.retirement_assets * Decimal(str(monthly_rate))
 
     def compare_multiple(
         self,

@@ -10,6 +10,7 @@ Key design:
 - Maintains linkage via system_source_model and system_source_id
 """
 
+import logging
 from datetime import date
 from decimal import Decimal
 from typing import Optional
@@ -20,6 +21,16 @@ from apps.core.models import Household
 from apps.accounts.models import Account, AccountType, LiabilityDetails, SYSTEM_ACCOUNT_TYPES
 from apps.taxes.models import IncomeSource, PreTaxDeduction, W2Withholding
 from .models import RecurringFlow, FlowType, Frequency, ExpenseCategory, IncomeCategory
+
+logger = logging.getLogger(__name__)
+
+
+class FlowGenerationError(Exception):
+    """Raised when flow generation fails."""
+    def __init__(self, message: str, household_id: str = None, partial_state: dict = None):
+        super().__init__(message)
+        self.household_id = household_id
+        self.partial_state = partial_state or {}
 
 
 # Current version of flow calculation logic - increment when logic changes
@@ -69,19 +80,39 @@ class SystemFlowGenerator:
 
         This is idempotent - deletes only system-generated flows and recreates them.
         User-created flows are untouched.
+
+        Raises:
+            FlowGenerationError: If flow generation fails
         """
-        with transaction.atomic():
-            # Delete existing system-generated flows
-            RecurringFlow.objects.filter(
-                household=self.household,
-                is_system_generated=True
-            ).delete()
+        logger.info(f"Starting flow generation for household {self.household.id}")
 
-            # Generate flows from income sources
-            self._generate_income_flows()
+        try:
+            with transaction.atomic():
+                # Delete existing system-generated flows
+                deleted_count, _ = RecurringFlow.objects.filter(
+                    household=self.household,
+                    is_system_generated=True
+                ).delete()
+                logger.debug(f"Deleted {deleted_count} existing system flows for household {self.household.id}")
 
-            # Generate flows from liabilities (mortgage, loan payments)
-            self._generate_liability_payment_flows()
+                # Generate flows from income sources
+                self._generate_income_flows()
+
+                # Generate flows from liabilities (mortgage, loan payments)
+                self._generate_liability_payment_flows()
+
+                logger.info(f"Successfully generated flows for household {self.household.id}")
+
+        except Exception as e:
+            logger.error(
+                f"Flow generation failed for household {self.household.id}: {e}",
+                exc_info=True
+            )
+            # Transaction automatically rolls back on exception
+            raise FlowGenerationError(
+                f"Failed to generate flows: {str(e)}",
+                household_id=str(self.household.id),
+            ) from e
 
     def _get_or_create_payroll_clearing_account(self) -> Account:
         """Get or create the payroll clearing system account."""
@@ -509,13 +540,33 @@ class SystemFlowGenerator:
         return category_map.get(account_type, ExpenseCategory.OTHER_DEBT)
 
 
-def generate_system_flows_for_household(household_id) -> None:
+def generate_system_flows_for_household(household_id) -> dict:
     """
     Generate all system flows for a household.
 
     This is the main entry point for flow generation.
     Safe to call repeatedly - idempotent.
+
+    Args:
+        household_id: UUID of the household
+
+    Returns:
+        Dict with generation status
+
+    Raises:
+        Household.DoesNotExist: If household not found
+        FlowGenerationError: If generation fails
     """
-    household = Household.objects.get(id=household_id)
+    try:
+        household = Household.objects.get(id=household_id)
+    except Household.DoesNotExist:
+        logger.error(f"Household {household_id} not found for flow generation")
+        raise
+
     generator = SystemFlowGenerator(household)
     generator.generate_all_flows()
+
+    return {
+        'status': 'success',
+        'household_id': str(household_id),
+    }
