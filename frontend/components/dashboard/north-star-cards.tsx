@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Percent,
   CreditCard,
+  Scale,
 } from 'lucide-react';
 
 interface NorthStarCardsProps {
@@ -103,6 +104,20 @@ const METRIC_CARDS: MetricCardConfig[] = [
     getDefaultStatusLabel: (v) =>
       v >= 0.2 ? 'Strong' : v >= 0.1 ? 'Moderate' : 'Low',
     goodDirection: 'up',
+  },
+  {
+    key: 'dtiRatio',
+    title: 'DTI Ratio',
+    code: 'DI',
+    goalType: null,
+    icon: Scale,
+    getValue: (m) => m.dtiRatio,
+    formatValue: (v) => formatPercent(parseFloat(v) || 0),
+    getDefaultStatus: (v) =>
+      v <= 0.36 ? 'good' : v <= 0.43 ? 'warning' : 'critical',
+    getDefaultStatusLabel: (v) =>
+      v <= 0.36 ? 'Healthy' : v <= 0.43 ? 'Elevated' : 'High',
+    goodDirection: 'down',
   },
   {
     key: 'totalDebt',
