@@ -128,6 +128,16 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Extend projections if horizon exceeds current projection_months
+        if horizon_months:
+            for scenario in scenarios:
+                if scenario.projection_months < horizon_months:
+                    # Update scenario's projection_months and recompute
+                    scenario.projection_months = horizon_months
+                    scenario.save(update_fields=['projection_months'])
+                    engine = ScenarioEngine(scenario)
+                    engine.compute_projection()
+
         # Build basic comparison results
         comparisons = []
         for scenario in scenarios:
