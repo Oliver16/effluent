@@ -11,10 +11,21 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import Household
+from apps.flows.services import generate_system_flows_for_household
 from .models import RealityChangeEvent, RealityChangeEventType, RealityChangeEventStatus
 from .baseline import BaselineScenarioService
 
 logger = logging.getLogger(__name__)
+
+
+# Event types that should trigger system flow regeneration before baseline refresh.
+# These events indicate changes to income, taxes, or accounts that affect expense flows
+# (e.g., tax withholding, liability payments, insurance premiums).
+FLOW_AFFECTING_EVENT_TYPES = {
+    RealityChangeEventType.TAXES_CHANGED,
+    RealityChangeEventType.ACCOUNTS_CHANGED,
+    RealityChangeEventType.ONBOARDING_COMPLETED,
+}
 
 
 def emit_reality_change(
@@ -94,6 +105,18 @@ def process_reality_changes(batch_size: int = 100) -> dict:
 
         try:
             with transaction.atomic():
+                # Check if any events require system flow regeneration
+                needs_flow_regen = any(
+                    e.event_type in FLOW_AFFECTING_EVENT_TYPES for e in events
+                )
+
+                # Regenerate system flows if needed (e.g., tax withholding expenses)
+                # This must happen BEFORE baseline refresh so the projection sees
+                # the updated expense flows
+                if needs_flow_regen:
+                    logger.info(f"Regenerating system flows for household {household_id}")
+                    generate_system_flows_for_household(household_id)
+
                 # Refresh baseline for this household
                 BaselineScenarioService.refresh_baseline(household)
 
