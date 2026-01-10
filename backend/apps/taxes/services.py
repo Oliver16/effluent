@@ -73,8 +73,9 @@ class PaycheckCalculator:
 
         # Post-tax
         posttax = sum(
-            d.calculate_per_period(gross)
-            for d in self.income_source.posttax_deductions.filter(is_active=True)
+            (d.calculate_per_period(gross)
+             for d in self.income_source.posttax_deductions.filter(is_active=True)),
+            Decimal('0')
         )
 
         net_pay = gross - total_pretax - total_taxes - posttax
