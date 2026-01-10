@@ -101,6 +101,7 @@ export function useChartOptions(
     showPriceScale?: boolean;
     priceScalePosition?: 'left' | 'right';
     enableCrosshair?: boolean;
+    enableZoom?: boolean;
   }
 ): DeepPartial<ChartOptions> {
   const {
@@ -109,6 +110,7 @@ export function useChartOptions(
     showPriceScale = true,
     priceScalePosition = 'right',
     enableCrosshair = true,
+    enableZoom = true,
   } = options ?? {};
 
   return useMemo(
@@ -164,9 +166,9 @@ export function useChartOptions(
         borderColor: theme.borderColor,
         scaleMargins: { top: 0.1, bottom: 0.1 },
       },
-      handleScroll: { mouseWheel: true, pressedMouseMove: true },
-      handleScale: { mouseWheel: true, pinch: true },
+      handleScroll: enableZoom ? { mouseWheel: true, pressedMouseMove: true } : false,
+      handleScale: enableZoom ? { mouseWheel: true, pinch: true } : false,
     }),
-    [theme, height, showTimeScale, showPriceScale, priceScalePosition, enableCrosshair]
+    [theme, height, showTimeScale, showPriceScale, priceScalePosition, enableCrosshair, enableZoom]
   );
 }

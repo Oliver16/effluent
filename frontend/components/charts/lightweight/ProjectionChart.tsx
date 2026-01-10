@@ -1,32 +1,22 @@
 'use client';
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { formatCurrencyCompact, formatMonthYear } from '@/lib/format';
-import { LightweightChart } from './LightweightChart';
+import { LW_CHART_COLORS } from '@/lib/design-tokens';
+import { LightweightChart, LightweightChartHandle } from './LightweightChart';
 import { ChartTooltip } from './ChartTooltip';
 import { ChartControls } from './ChartControls';
 import { ChartLegend } from './ChartLegend';
+import { getTimeRangeFromPreset } from './useChartData';
 import type {
   ProjectionChartProps,
   SeriesConfig,
   PriceLineConfig,
   TooltipData,
   TimeRangePreset,
+  ChartDataPoint,
 } from './types';
-
-// Chart color constants
-const CHART_SERIES_COLORS = {
-  primary: {
-    line: 'rgb(139, 92, 246)', // violet-500
-    fill: 'rgba(139, 92, 246, 0.15)',
-  },
-  secondary: {
-    line: 'rgb(156, 163, 175)', // gray-400
-    fill: 'rgba(156, 163, 175, 0.1)',
-  },
-  good: 'rgb(16, 185, 129)', // emerald-500
-} as const;
 
 export function ProjectionChart({
   data,
@@ -40,6 +30,7 @@ export function ProjectionChart({
   className,
 }: ProjectionChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const chartRef = useRef<LightweightChartHandle>(null);
   const [tooltipData, setTooltipData] = useState<TooltipData | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRangePreset>(initialRange);
   const [seriesVisibility, setSeriesVisibility] = useState<Record<string, boolean>>({
@@ -47,7 +38,7 @@ export function ProjectionChart({
     baseline: true,
   });
 
-  // Build series configuration
+  // Build series configuration using design tokens
   const series = useMemo<SeriesConfig[]>(() => {
     const result: SeriesConfig[] = [
       {
@@ -55,8 +46,8 @@ export function ProjectionChart({
         name: scenarioName,
         type: 'area',
         dataKey: 'value',
-        color: CHART_SERIES_COLORS.primary.line,
-        fillColor: CHART_SERIES_COLORS.primary.fill,
+        color: LW_CHART_COLORS.primary.line,
+        fillColor: LW_CHART_COLORS.primary.fill,
         lineWidth: 2,
         visible: seriesVisibility.scenario,
       },
@@ -68,8 +59,8 @@ export function ProjectionChart({
         name: baselineName,
         type: 'area',
         dataKey: 'baseline',
-        color: CHART_SERIES_COLORS.secondary.line,
-        fillColor: CHART_SERIES_COLORS.secondary.fill,
+        color: LW_CHART_COLORS.secondary.line,
+        fillColor: LW_CHART_COLORS.secondary.fill,
         lineWidth: 1.5,
         lineStyle: 'dashed',
         visible: seriesVisibility.baseline,
@@ -92,13 +83,13 @@ export function ProjectionChart({
     }));
   }, [data, baselineData]);
 
-  // Convert goals to price lines
+  // Convert goals to price lines using design tokens
   const priceLines = useMemo<PriceLineConfig[]>(() => {
     return goals.map((goal) => ({
       id: goal.id,
       label: goal.label,
       value: goal.value,
-      color: goal.color ?? CHART_SERIES_COLORS.good,
+      color: goal.color ?? LW_CHART_COLORS.good,
       lineStyle: 'dashed',
       lineWidth: 1,
       axisLabelVisible: true,
@@ -113,10 +104,22 @@ export function ProjectionChart({
     }));
   }, []);
 
-  // Handle time range change
+  // Handle time range change and apply to chart
   const handleTimeRangeChange = useCallback((range: TimeRangePreset) => {
     setTimeRange(range);
   }, []);
+
+  // Apply time range to chart when it changes
+  useEffect(() => {
+    if (!chartRef.current || chartData.length === 0) return;
+
+    if (timeRange === 'ALL') {
+      chartRef.current.fitContent();
+    } else {
+      const { from, to } = getTimeRangeFromPreset(timeRange, chartData as ChartDataPoint[]);
+      chartRef.current.setVisibleRange(from, to);
+    }
+  }, [timeRange, chartData]);
 
   // Format time for tooltip
   const formatTime = useCallback((time: string) => {
@@ -141,6 +144,7 @@ export function ProjectionChart({
       {/* Chart container */}
       <div ref={containerRef} className="relative">
         <LightweightChart
+          ref={chartRef}
           data={chartData}
           series={series}
           priceLines={priceLines}

@@ -406,8 +406,9 @@ export const metrics = {
 
 // Insights endpoints
 export const insights = {
-  insights: () => api.get<{ results: Insight[] }>('/api/v1/insights/')
-    .then(data => ({ results: toCamelCase<Insight[]>(data.results || []) })),
+  insights: () => api.get<{ results: Insight[] } | Insight[]>('/api/v1/insights/')
+    .then(normalizeListResponse)
+    .then(data => ({ results: toCamelCase<Insight[]>(data) })),
   dismissInsight: (id: string) => api.post<Insight>(`/api/v1/insights/${id}/dismiss/`).then(data => toCamelCase<Insight>(data)),
 }
 

@@ -5,27 +5,39 @@ import type { ChartDataPoint, ComparisonDataPoint, TimeRangePreset } from './typ
 import type { SingleValueData, Time } from 'lightweight-charts';
 
 /**
- * Transform projection data to Lightweight Charts format
+ * Transform projection data to Lightweight Charts format.
+ * Prefers projectionDate from backend when available, falls back to startDate + monthNumber.
  */
 export function useProjectionChartData(
   data: Array<{
     monthNumber: number;
     netWorth: string | number;
+    projectionDate?: string; // Prefer this when available (from backend)
     totalIncome?: string | number;
     totalExpenses?: string | number;
     netCashFlow?: string | number;
   }>,
-  startDate: Date | string
+  startDate?: Date | string // Optional fallback when projectionDate not available
 ): ChartDataPoint[] {
   return useMemo(() => {
-    const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+    // Use fallback startDate only if projectionDate is not available
+    const fallbackStart = startDate
+      ? typeof startDate === 'string' ? new Date(startDate) : startDate
+      : new Date();
 
     return data.map((point) => {
-      const date = new Date(start);
-      date.setMonth(date.getMonth() + point.monthNumber);
+      // Prefer backend's projectionDate when available
+      let time: string;
+      if (point.projectionDate) {
+        time = point.projectionDate;
+      } else {
+        const date = new Date(fallbackStart);
+        date.setMonth(date.getMonth() + point.monthNumber);
+        time = date.toISOString().split('T')[0];
+      }
 
       return {
-        time: date.toISOString().split('T')[0], // YYYY-MM-DD
+        time,
         value: typeof point.netWorth === 'string' ? parseFloat(point.netWorth) : point.netWorth,
       };
     });
@@ -33,21 +45,42 @@ export function useProjectionChartData(
 }
 
 /**
- * Transform comparison data (baseline + scenario)
+ * Transform comparison data (baseline + scenario).
+ * Merges by monthNumber (not index) to handle different array lengths.
+ * Prefers projectionDate from backend when available.
  */
 export function useComparisonChartData(
-  baselineData: Array<{ monthNumber: number; netWorth: string | number }>,
-  scenarioData: Array<{ monthNumber: number; netWorth: string | number }>,
-  startDate: Date | string
+  baselineData: Array<{ monthNumber: number; netWorth: string | number; projectionDate?: string }>,
+  scenarioData: Array<{ monthNumber: number; netWorth: string | number; projectionDate?: string }>,
+  startDate?: Date | string // Optional fallback when projectionDate not available
 ): ComparisonDataPoint[] {
   return useMemo(() => {
-    const start = typeof startDate === 'string' ? new Date(startDate) : startDate;
+    // Use fallback startDate only if projectionDate is not available
+    const fallbackStart = startDate
+      ? typeof startDate === 'string' ? new Date(startDate) : startDate
+      : new Date();
 
-    // Assume both arrays have same length and monthNumber alignment
-    return baselineData.map((baseline, i) => {
-      const scenario = scenarioData[i];
-      const date = new Date(start);
-      date.setMonth(date.getMonth() + baseline.monthNumber);
+    // Create a map of scenario data by monthNumber for proper alignment
+    const scenarioMap = new Map<number, { netWorth: string | number; projectionDate?: string }>();
+    scenarioData.forEach((point) => {
+      scenarioMap.set(point.monthNumber, { netWorth: point.netWorth, projectionDate: point.projectionDate });
+    });
+
+    // Merge by monthNumber (not index) to handle different array lengths
+    return baselineData.map((baseline) => {
+      const scenario = scenarioMap.get(baseline.monthNumber);
+
+      // Prefer backend's projectionDate when available
+      let time: string;
+      if (baseline.projectionDate) {
+        time = baseline.projectionDate;
+      } else if (scenario?.projectionDate) {
+        time = scenario.projectionDate;
+      } else {
+        const date = new Date(fallbackStart);
+        date.setMonth(date.getMonth() + baseline.monthNumber);
+        time = date.toISOString().split('T')[0];
+      }
 
       const baselineValue =
         typeof baseline.netWorth === 'string' ? parseFloat(baseline.netWorth) : baseline.netWorth;
@@ -58,7 +91,7 @@ export function useComparisonChartData(
         : baselineValue;
 
       return {
-        time: date.toISOString().split('T')[0],
+        time,
         baseline: baselineValue,
         scenario: scenarioValue,
       };
