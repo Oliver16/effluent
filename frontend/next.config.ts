@@ -13,8 +13,9 @@ const nextConfig: NextConfig = {
     if (!apiUrl) {
       console.warn(
         '\x1b[33m⚠️  Neither INTERNAL_API_URL nor NEXT_PUBLIC_API_URL is set. API routing will be disabled.\n' +
-        '   Set INTERNAL_API_URL to your internal backend URL (e.g., http://backend:8000)\n' +
-        '   to enable /api/* request proxying.\x1b[0m'
+        '   Set INTERNAL_API_URL to your internal backend URL to enable /api/* request proxying.\n' +
+        '   Docker: INTERNAL_API_URL=http://backend:8000 (HTTP is fine for internal Docker networking)\n' +
+        '   Local:  INTERNAL_API_URL=http://localhost:8000\x1b[0m'
       )
       return []
     }

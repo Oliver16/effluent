@@ -48,9 +48,28 @@ import type {
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
 // Server-side requests use the configured URL directly
-const API_BASE = typeof window === 'undefined'
-  ? (process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL || '')
-  : ''
+function getApiBase(): string {
+  // Client-side: always use same-origin routing via Next.js rewrites
+  if (typeof window !== 'undefined') {
+    return '';
+  }
+
+  // Server-side: use configured URL
+  const url = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
+  if (url) return url;
+
+  // In development, allow empty string (will use relative URLs)
+  if (process.env.NODE_ENV === 'development') {
+    return '';
+  }
+
+  // In production without config, log warning but don't throw
+  // (some server components may not need API access)
+  console.warn('[API] No INTERNAL_API_URL configured for server-side requests');
+  return '';
+}
+
+const API_BASE = getApiBase();
 
 interface RequestOptions extends RequestInit {
   data?: unknown
