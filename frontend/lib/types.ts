@@ -593,7 +593,8 @@ export interface Goal {
   targetMeta?: Record<string, unknown>
   isPrimary: boolean
   isActive: boolean
-  currentStatus: GoalStatus
+  // Status fields are populated from the separate /goals/status/ endpoint
+  currentStatus?: GoalStatus
   currentStatusDisplay?: string
   currentValue?: string | null
   lastEvaluatedAt?: string | null
