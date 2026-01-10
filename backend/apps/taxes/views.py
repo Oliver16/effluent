@@ -19,7 +19,11 @@ class IncomeSourceViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return IncomeSource.objects.filter(household=self.request.household)
+        return IncomeSource.objects.filter(
+            household=self.request.household
+        ).select_related('household', 'household_member').prefetch_related(
+            'w2_withholding', 'pretax_deductions', 'posttax_deductions'
+        )
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -223,7 +227,8 @@ class TaxSummaryView(APIView):
         income_sources = IncomeSource.objects.filter(
             household=household,
             is_active=True
-        ).prefetch_related(
+        ).select_related('household', 'household_member').prefetch_related(
+            'w2_withholding',
             'pretax_deductions',
             'posttax_deductions',
             'self_employment_tax'

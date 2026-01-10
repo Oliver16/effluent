@@ -19,12 +19,14 @@ from django.db import transaction
 from apps.core.models import Household
 from apps.accounts.models import Account, AccountType, LiabilityDetails, SYSTEM_ACCOUNT_TYPES
 from apps.taxes.models import IncomeSource, PreTaxDeduction, W2Withholding
+from apps.taxes.services import PaycheckCalculator
 from .models import RecurringFlow, FlowType, Frequency, ExpenseCategory, IncomeCategory
 
 
 # Current version of flow calculation logic - increment when logic changes
 # v2: Added tax withholding as visible expense flow
-CALCULATION_VERSION = 2
+# v3: Use PaycheckCalculator for accurate tax calculations instead of flat 25% estimate
+CALCULATION_VERSION = 3
 
 # Pay frequency to flow frequency mapping
 PAY_FREQ_TO_FLOW_FREQ = {
@@ -116,7 +118,7 @@ class SystemFlowGenerator:
         income_sources = IncomeSource.objects.filter(
             household=self.household,
             is_active=True
-        ).select_related('household_member').prefetch_related(
+        ).select_related('household_member', 'household').prefetch_related(
             'w2_withholding', 'pretax_deductions'
         )
 
@@ -413,42 +415,24 @@ class SystemFlowGenerator:
         self, income_source: IncomeSource, gross_per_period: Decimal
     ) -> Decimal:
         """
-        Estimate taxes withheld per pay period.
+        Calculate taxes withheld per pay period using the PaycheckCalculator.
 
-        This is a simplified estimate. For full accuracy, would need to implement
-        complete federal and state withholding calculations.
+        Uses the proper tax calculation logic including:
+        - Federal income tax with brackets, standard deduction, W-4 adjustments
+        - Social Security (6.2% up to wage base)
+        - Medicare (1.45% + 0.9% additional over threshold)
+        - State income tax
         """
-        # Check if W-2 income with withholding config
+        # Only calculate taxes for W-2 income
         if income_source.income_type not in ['w2', 'w2_hourly']:
             return Decimal('0')
 
-        # Get withholding config if exists
-        try:
-            withholding = income_source.w2_withholding
-        except W2Withholding.DoesNotExist:
-            withholding = None
+        # Use PaycheckCalculator for accurate tax calculation
+        calculator = PaycheckCalculator(income_source)
+        breakdown = calculator.calculate_paycheck()
 
-        # Simple estimate: ~25% effective tax rate for W-2 income
-        # This could be enhanced with proper tax bracket calculations
-        estimated_rate = Decimal('0.25')
-
-        # Adjust for dependents if withholding config exists
-        if withholding:
-            dependent_reduction = (
-                withholding.child_tax_credit_dependents * 2000 +
-                withholding.other_dependents * 500
-            )
-            # Convert annual dependent credit to per-period reduction
-            periods = PERIODS_PER_YEAR.get(
-                PAY_FREQ_TO_FLOW_FREQ.get(income_source.pay_frequency, Frequency.BIWEEKLY),
-                26
-            )
-            per_period_credit = Decimal(str(dependent_reduction)) / Decimal(str(periods))
-
-            base_tax = gross_per_period * estimated_rate
-            return max(Decimal('0'), base_tax - per_period_credit)
-
-        return gross_per_period * estimated_rate
+        # Return total taxes (federal + FICA + state)
+        return breakdown.total_taxes
 
     def _generate_liability_payment_flows(self):
         """Generate expense flows for liability payments (mortgages, loans, etc.)."""
