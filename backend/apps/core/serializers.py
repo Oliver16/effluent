@@ -1,3 +1,4 @@
+from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer as BaseTokenRefreshSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
@@ -10,7 +11,7 @@ class TokenRefreshSerializer(BaseTokenRefreshSerializer):
     def validate(self, attrs):
         try:
             return super().validate(attrs)
-        except User.DoesNotExist:
+        except ObjectDoesNotExist:
             raise InvalidToken('User no longer exists')
 
 
