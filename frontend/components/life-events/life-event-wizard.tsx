@@ -107,9 +107,11 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const createMutation = useMutation({
     mutationFn: async () => {
       // First, create a new scenario
+      // start_date is required - use effectiveDate or today
       const scenario = await scenarios.create({
         name: scenarioName,
         description: `Created from life event: ${template.name}`,
+        startDate: effectiveDate || new Date().toISOString().split('T')[0],
       })
 
       // Then apply the life event template to the scenario
