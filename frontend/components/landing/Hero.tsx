@@ -21,17 +21,17 @@ export function Hero() {
 
       <div className="relative z-10 max-w-4xl mx-auto text-center animate-fade-in">
         {/* Main headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-5 tracking-tight">
           A financial control plane for your household.
         </h1>
 
         {/* Subheadline */}
-        <p className="text-lg sm:text-xl text-slate-300 mb-8 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-lg text-slate-300 mb-8 max-w-xl mx-auto">
           Operational interface for your finances — a living model with instrumentation, confidence, and scenario control.
         </p>
 
         {/* Hero bullets */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10 text-sm text-slate-400">
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-8 text-sm text-slate-400">
           <div className="flex items-center gap-2">
             <GitBranch className="w-4 h-4 text-primary" />
             <span>Baseline model + scenarios</span>
@@ -49,7 +49,7 @@ export function Hero() {
         </div>
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
           <Button
             asChild
             size="xl"
@@ -73,17 +73,12 @@ export function Hero() {
         <InstrumentStrip />
 
         {/* Screenshot placeholder panel */}
-        <div className="mt-16 relative animate-fade-in-delay">
-          <div className="relative mx-auto max-w-3xl rounded-xl border border-slate-700/50 bg-slate-900/80 p-2 shadow-2xl backdrop-blur-sm">
-            <div className="rounded-lg bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
-              <div className="text-center text-slate-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm font-medium">Dashboard Preview</p>
-              </div>
+        <div className="mt-12 relative animate-fade-in-delay">
+          <div className="relative mx-auto max-w-2xl rounded-lg border border-slate-700/50 bg-slate-900/80 p-1.5 shadow-xl backdrop-blur-sm">
+            <div className="rounded bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
+              <Activity className="w-8 h-8 text-slate-600" />
             </div>
           </div>
-          {/* Glow effect */}
-          <div className="absolute inset-0 -z-10 blur-3xl opacity-20 bg-gradient-to-r from-primary via-transparent to-primary" />
         </div>
       </div>
     </section>
