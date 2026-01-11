@@ -219,6 +219,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
             # Handle changes that can be converted to persistent data
             if change.change_type == ChangeType.ADD_EXPENSE:
+                # Support both old 'category' field and new 'expense_category' field
+                expense_cat = params.get('expense_category') or params.get('category', 'miscellaneous')
                 flow = RecurringFlow.objects.create(
                     household=request.household,
                     name=change.name,
@@ -226,9 +228,10 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     flow_type=FlowType.EXPENSE,
                     amount=params.get('amount', 0),
                     frequency=params.get('frequency', 'monthly'),
-                    expense_category=params.get('category', 'miscellaneous'),
+                    expense_category=expense_cat,
                     start_date=change.effective_date,
                     end_date=change.end_date,
+                    linked_account_id=params.get('linked_account_id'),
                     is_baseline=True,
                     is_active=True,
                 )
@@ -239,6 +242,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 })
 
             elif change.change_type == ChangeType.ADD_INCOME:
+                # Support both old 'category' field and new 'income_category' field
+                income_cat = params.get('income_category') or params.get('category', 'other_income')
                 flow = RecurringFlow.objects.create(
                     household=request.household,
                     name=change.name,
@@ -246,9 +251,11 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     flow_type=FlowType.INCOME,
                     amount=params.get('amount', 0),
                     frequency=params.get('frequency', 'monthly'),
-                    income_category=params.get('category', 'other_income'),
+                    income_category=income_cat,
                     start_date=change.effective_date,
                     end_date=change.end_date,
+                    linked_account_id=params.get('linked_account_id'),
+                    household_member_id=params.get('household_member_id'),
                     is_baseline=True,
                     is_active=True,
                 )
