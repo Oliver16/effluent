@@ -87,17 +87,19 @@ class GoalSolveOptionsSerializer(serializers.Serializer):
     """Serializer for goal solve request options."""
     allowed_interventions = serializers.ListField(
         child=serializers.ChoiceField(choices=[
-            'reduce_expenses', 'increase_income', 'payoff_debt',
-            'refinance', 'increase_401k', 'pause_401k'
+            'reduce_expenses', 'increase_income', 'accelerate_debt',
+            'increase_retirement', 'payoff_debt', 'refinance',
+            'increase_401k', 'pause_401k'
         ]),
         default=['reduce_expenses', 'increase_income']
     )
     bounds = serializers.DictField(
-        child=serializers.DecimalField(max_digits=12, decimal_places=2),
+        child=serializers.CharField(),  # Accept strings - solver converts to Decimal
         default=dict
     )
     start_date = serializers.DateField(required=False)
     projection_months = serializers.IntegerField(default=24, min_value=6, max_value=120)
+    optimize_combined = serializers.BooleanField(default=True)
 
 
 class GoalApplySolutionSerializer(serializers.Serializer):

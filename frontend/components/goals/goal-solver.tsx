@@ -18,11 +18,10 @@ interface GoalSolverProps {
 }
 
 const interventionOptions = [
-  { id: 'reduce_expenses', label: 'Reduce expenses' },
-  { id: 'increase_income', label: 'Increase income' },
-  { id: 'payoff_debt', label: 'Accelerate debt payoff' },
-  { id: 'increase_401k', label: 'Increase 401(k) contributions' },
-  { id: 'pause_401k', label: 'Temporarily pause retirement savings' },
+  { id: 'reduce_expenses', label: 'Reduce expenses', description: 'Cut discretionary spending' },
+  { id: 'increase_income', label: 'Increase income', description: 'Earn more through raises or side income' },
+  { id: 'accelerate_debt', label: 'Accelerate debt payoff', description: 'Pay extra toward debt each month' },
+  { id: 'increase_retirement', label: 'Increase retirement savings', description: 'Boost 401(k)/IRA contributions' },
 ]
 
 export function GoalSolver({ goal, onClose }: GoalSolverProps) {
@@ -32,13 +31,22 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
   const [error, setError] = useState<string | null>(null)
   const [applying, setApplying] = useState(false)
 
-  // Solver options
-  const [selectedInterventions, setSelectedInterventions] = useState<string[]>([
-    'reduce_expenses',
-    'increase_income',
-  ])
+  // Solver options - set defaults based on goal type
+  const getDefaultInterventions = () => {
+    if (goal.goalType === 'debt_free_date') {
+      return ['accelerate_debt']
+    }
+    if (goal.goalType === 'retirement_age') {
+      return ['increase_retirement', 'reduce_expenses']
+    }
+    return ['reduce_expenses', 'increase_income']
+  }
+
+  const [selectedInterventions, setSelectedInterventions] = useState<string[]>(getDefaultInterventions())
   const [maxExpenseReduction, setMaxExpenseReduction] = useState('1000')
   const [maxIncomeIncrease, setMaxIncomeIncrease] = useState('2000')
+  const [maxDebtAcceleration, setMaxDebtAcceleration] = useState('1000')
+  const [maxRetirementIncrease, setMaxRetirementIncrease] = useState('1000')
   const [projectionMonths, setProjectionMonths] = useState('24')
 
   const handleToggleIntervention = (id: string) => {
@@ -56,8 +64,11 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
       bounds: {
         maxReduceExpensesMonthly: maxExpenseReduction,
         maxIncreaseIncomeMonthly: maxIncomeIncrease,
+        maxAccelerateDebtMonthly: maxDebtAcceleration,
+        maxIncreaseRetirementMonthly: maxRetirementIncrease,
       },
       projectionMonths: parseInt(projectionMonths, 10),
+      optimizeCombined: selectedInterventions.length > 1,
     }
 
     try {
@@ -136,32 +147,66 @@ export function GoalSolver({ goal, onClose }: GoalSolverProps) {
             <div className="space-y-3">
               <Label>Constraints</Label>
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="max-expense" className="text-xs text-muted-foreground">
-                    Max expense reduction ($/mo)
-                  </Label>
-                  <Input
-                    id="max-expense"
-                    type="number"
-                    value={maxExpenseReduction}
-                    onChange={(e) => setMaxExpenseReduction(e.target.value)}
-                    min="0"
-                    step="100"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="max-income" className="text-xs text-muted-foreground">
-                    Max income increase ($/mo)
-                  </Label>
-                  <Input
-                    id="max-income"
-                    type="number"
-                    value={maxIncomeIncrease}
-                    onChange={(e) => setMaxIncomeIncrease(e.target.value)}
-                    min="0"
-                    step="100"
-                  />
-                </div>
+                {selectedInterventions.includes('reduce_expenses') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max-expense" className="text-xs text-muted-foreground">
+                      Max expense reduction ($/mo)
+                    </Label>
+                    <Input
+                      id="max-expense"
+                      type="number"
+                      value={maxExpenseReduction}
+                      onChange={(e) => setMaxExpenseReduction(e.target.value)}
+                      min="0"
+                      step="100"
+                    />
+                  </div>
+                )}
+                {selectedInterventions.includes('increase_income') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max-income" className="text-xs text-muted-foreground">
+                      Max income increase ($/mo)
+                    </Label>
+                    <Input
+                      id="max-income"
+                      type="number"
+                      value={maxIncomeIncrease}
+                      onChange={(e) => setMaxIncomeIncrease(e.target.value)}
+                      min="0"
+                      step="100"
+                    />
+                  </div>
+                )}
+                {selectedInterventions.includes('accelerate_debt') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max-debt" className="text-xs text-muted-foreground">
+                      Max extra debt payment ($/mo)
+                    </Label>
+                    <Input
+                      id="max-debt"
+                      type="number"
+                      value={maxDebtAcceleration}
+                      onChange={(e) => setMaxDebtAcceleration(e.target.value)}
+                      min="0"
+                      step="100"
+                    />
+                  </div>
+                )}
+                {selectedInterventions.includes('increase_retirement') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="max-retirement" className="text-xs text-muted-foreground">
+                      Max extra retirement savings ($/mo)
+                    </Label>
+                    <Input
+                      id="max-retirement"
+                      type="number"
+                      value={maxRetirementIncrease}
+                      onChange={(e) => setMaxRetirementIncrease(e.target.value)}
+                      min="0"
+                      step="100"
+                    />
+                  </div>
+                )}
               </div>
             </div>
 

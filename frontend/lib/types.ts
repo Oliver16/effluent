@@ -640,6 +640,7 @@ export interface GoalSolveOptions {
   bounds?: Record<string, string>
   startDate?: string
   projectionMonths?: number
+  optimizeCombined?: boolean
 }
 
 export interface GoalPlanStep {
