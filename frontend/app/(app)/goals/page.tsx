@@ -49,7 +49,9 @@ import {
   PiggyBank,
   DollarSign,
   Clock,
+  Sparkles,
 } from 'lucide-react'
+import { GoalSolver } from '@/components/goals/goal-solver'
 
 const GOAL_TYPE_CONFIG: Record<GoalType, { label: string; icon: React.ReactNode; unit: string; description: string }> = {
   emergency_fund_months: {
@@ -125,6 +127,7 @@ export default function GoalsSettingsPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingGoal, setEditingGoal] = useState<Goal | null>(null)
   const [deleteConfirmGoal, setDeleteConfirmGoal] = useState<Goal | null>(null)
+  const [solvingGoal, setSolvingGoal] = useState<Goal | null>(null)
 
   const { toast } = useToast()
   const queryClient = useQueryClient()
@@ -321,6 +324,15 @@ export default function GoalsSettingsPage() {
                     </div>
                     <div className="flex items-center gap-2">
                       <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setSolvingGoal(goal)}
+                        className="gap-1"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Solve
+                      </Button>
+                      <Button
                         variant="ghost"
                         size="icon"
                         onClick={() => handleOpenDialog(goal)}
@@ -515,6 +527,21 @@ export default function GoalsSettingsPage() {
               {deleteMutation.isPending ? 'Deleting...' : 'Delete'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goal Solver Dialog */}
+      <Dialog
+        open={!!solvingGoal}
+        onOpenChange={() => setSolvingGoal(null)}
+      >
+        <DialogContent className="max-w-lg p-0 overflow-hidden">
+          {solvingGoal && (
+            <GoalSolver
+              goal={solvingGoal}
+              onClose={() => setSolvingGoal(null)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>

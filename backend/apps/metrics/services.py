@@ -388,7 +388,7 @@ class InsightGenerator:
         self.household = household
 
     def generate_insights(self, snapshot: MetricSnapshot) -> list[Insight]:
-        """Generate insights based on metric thresholds."""
+        """Generate insights based on metric thresholds and goals."""
         insights = []
 
         # Ensure default thresholds exist
@@ -407,6 +407,67 @@ class InsightGenerator:
 
         # Generate positive insights
         insights.extend(self._generate_positive_insights(snapshot))
+
+        # Generate goal-based insights
+        insights.extend(self._generate_goal_insights(snapshot))
+
+        return insights
+
+    def _generate_goal_insights(self, snapshot: MetricSnapshot) -> list[Insight]:
+        """Generate insights based on goal status."""
+        from apps.goals.models import Goal
+        from apps.goals.services import GoalEvaluator
+
+        insights = []
+
+        # Get active goals
+        goals = Goal.objects.filter(
+            household=self.household,
+            is_active=True
+        )
+
+        if not goals.exists():
+            return insights
+
+        # Evaluate goals
+        evaluator = GoalEvaluator(self.household)
+        goal_statuses = evaluator.evaluate_goals()
+
+        for status in goal_statuses:
+            if status.status == 'critical':
+                insights.append(Insight.objects.create(
+                    household=self.household,
+                    severity='critical',
+                    category='Goals',
+                    title=f'Goal at Risk: {status.goal_name}',
+                    description=f'Your {status.goal_name} goal is significantly off track. Current: {status.current_value}, Target: {status.target_value} {status.target_unit}.',
+                    recommendation=status.recommendation,
+                    metric_name=f'goal_{status.goal_type}',
+                    metric_value=Decimal(status.current_value) if status.current_value.replace('.', '').replace('-', '').isdigit() else Decimal('0'),
+                ))
+            elif status.status == 'warning':
+                insights.append(Insight.objects.create(
+                    household=self.household,
+                    severity='warning',
+                    category='Goals',
+                    title=f'Goal Needs Attention: {status.goal_name}',
+                    description=f'Your {status.goal_name} goal needs attention. Current: {status.current_value}, Target: {status.target_value} {status.target_unit}.',
+                    recommendation=status.recommendation,
+                    metric_name=f'goal_{status.goal_type}',
+                    metric_value=Decimal(status.current_value) if status.current_value.replace('.', '').replace('-', '').isdigit() else Decimal('0'),
+                ))
+            elif status.status == 'good' and status.percentage_complete and Decimal(status.percentage_complete) >= Decimal('100'):
+                # Goal achieved - positive insight
+                insights.append(Insight.objects.create(
+                    household=self.household,
+                    severity='positive',
+                    category='Goals',
+                    title=f'Goal Achieved: {status.goal_name}',
+                    description=f'Congratulations! You have achieved your {status.goal_name} goal.',
+                    recommendation=status.recommendation,
+                    metric_name=f'goal_{status.goal_type}',
+                    metric_value=Decimal(status.current_value) if status.current_value.replace('.', '').replace('-', '').isdigit() else Decimal('0'),
+                ))
 
         return insights
 
