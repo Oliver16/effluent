@@ -18,6 +18,7 @@ import type {
 // API base URL for server-side requests
 // In production, INTERNAL_API_URL must be set. The http:// fallback is only for local development.
 // IMPORTANT: Only use INTERNAL_API_URL - NEXT_PUBLIC_API_URL could leak HTTP URLs to browsers.
+// NOTE: This function is called at runtime, not build time, to avoid Docker build failures.
 function getApiUrl(): string {
   if (process.env.INTERNAL_API_URL) {
     return process.env.INTERNAL_API_URL;
@@ -41,15 +42,14 @@ function getApiUrl(): string {
   throw new Error('INTERNAL_API_URL must be set in production');
 }
 
-const API_URL = getApiUrl();
-
 /**
  * Attempt to refresh the access token using the refresh token.
  * Returns the new access token or null if refresh failed.
  */
 async function refreshAccessToken(refreshToken: string): Promise<string | null> {
+  const apiUrl = getApiUrl();
   try {
-    const response = await fetch(`${API_URL}/api/auth/token/refresh/`, {
+    const response = await fetch(`${apiUrl}/api/auth/token/refresh/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh: refreshToken }),
@@ -104,6 +104,7 @@ function toCamelCase<T>(obj: unknown): T {
  * Handles 401 errors by attempting token refresh
  */
 async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
+  const apiUrl = getApiUrl();
   const cookieStore = await cookies();
 
   // Get auth tokens from cookies
@@ -128,7 +129,7 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
     headers['X-Household-ID'] = householdId;
   }
 
-  const url = `${API_URL}${path}`;
+  const url = `${apiUrl}${path}`;
 
   try {
     const res = await fetch(url, {
@@ -186,7 +187,7 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
         hasToken,
         hasRefreshToken,
         hasHouseholdId,
-        apiUrl: API_URL,
+        apiUrl,
         errorBody: errorBody.substring(0, 500),
       });
       throw new Error(`API error: ${res.status} ${res.statusText}`);
@@ -202,7 +203,7 @@ async function serverFetch<T>(path: string, isRetry = false): Promise<T> {
         hasToken,
         hasRefreshToken,
         hasHouseholdId,
-        apiUrl: API_URL,
+        apiUrl,
       });
     }
     throw error;
