@@ -54,13 +54,44 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const [selectedScenarioId, setSelectedScenarioId] = useState<string>('')
   // Get suggested changes with fallback
   const suggestedChanges = template.suggestedChanges || []
+
+  // Compute choice groups - changes with the same choiceGroup are mutually exclusive
+  const choiceGroups = useMemo(() => {
+    const groups: Record<string, { indices: number[]; changes: SuggestedChange[] }> = {}
+    suggestedChanges.forEach((change, idx) => {
+      if (change.choiceGroup) {
+        if (!groups[change.choiceGroup]) {
+          groups[change.choiceGroup] = { indices: [], changes: [] }
+        }
+        groups[change.choiceGroup].indices.push(idx)
+        groups[change.choiceGroup].changes.push(change)
+      }
+    })
+    return groups
+  }, [suggestedChanges])
+
+  // Track which option is selected in each choice group
+  const [choiceGroupSelections, setChoiceGroupSelections] = useState<Record<string, number>>(() => {
+    // Initialize with first option of each choice group selected
+    const selections: Record<string, number> = {}
+    Object.keys(choiceGroups).forEach(groupName => {
+      selections[groupName] = choiceGroups[groupName].indices[0]
+    })
+    return selections
+  })
+
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>(() => {
     // Initialize change values from template
     const values: Record<string, ChangeValue> = {}
     const changes = suggestedChanges || []
     changes.forEach((change, idx) => {
+      // For choice group items, only the first option in each group is enabled by default
+      const isInChoiceGroup = !!change.choiceGroup
+      const isFirstInGroup = isInChoiceGroup &&
+        Object.values(choiceGroups).some(g => g.indices[0] === idx)
+
       values[String(idx)] = {
-        _skip: !change.isRequired,
+        _skip: isInChoiceGroup ? !isFirstInGroup : !change.isRequired,
         ...change.parametersTemplate,
       }
     })
@@ -178,6 +209,29 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
         [field]: value,
       },
     }))
+  }
+
+  // Handle choice group selection - when one option is selected, skip others in same group
+  const handleChoiceGroupSelect = (groupName: string, selectedIdx: number) => {
+    const group = choiceGroups[groupName]
+    if (!group) return
+
+    setChoiceGroupSelections(prev => ({
+      ...prev,
+      [groupName]: selectedIdx
+    }))
+
+    // Update changeValues to skip all other options in this group
+    setChangeValues(prev => {
+      const updated = { ...prev }
+      group.indices.forEach(idx => {
+        updated[String(idx)] = {
+          ...updated[String(idx)],
+          _skip: idx !== selectedIdx
+        }
+      })
+      return updated
+    })
   }
 
   const handleNext = () => {
@@ -420,110 +474,236 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
             <CardContent>
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-4">
-                  {suggestedChanges.map((change, idx) => (
-                    <Card
-                      key={idx}
-                      className={cn(
-                        'transition-opacity',
-                        changeValues[String(idx)]?._skip && 'opacity-50'
-                      )}
-                    >
+                  {/* Render choice groups first */}
+                  {Object.entries(choiceGroups).map(([groupName, group]) => {
+                    // Determine description based on choice group name
+                    const groupDescriptions: Record<string, string> = {
+                      'primary_care': 'Select how you want to handle childcare',
+                      'work_status': 'Select how this will affect your employment',
+                    }
+                    const description = groupDescriptions[groupName] || 'Select one of the following options'
+
+                    return (
+                    <Card key={`group-${groupName}`} className="border-primary/20">
                       <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <Checkbox
-                              id={`change-${idx}`}
-                              checked={!changeValues[String(idx)]?._skip}
-                              onCheckedChange={(checked) =>
-                                handleChangeValue(idx, '_skip', !checked)
-                              }
-                              disabled={change.isRequired}
-                            />
-                            <Label htmlFor={`change-${idx}`} className="font-medium cursor-pointer">
-                              {change.name}
-                            </Label>
-                            {change.isRequired && (
-                              <Badge variant="destructive" className="text-xs">
-                                Required
-                              </Badge>
-                            )}
-                          </div>
+                        <div className="flex items-center gap-2">
+                          <CardTitle className="text-base">Choose one option</CardTitle>
+                          <Badge variant="outline" className="text-xs">Required</Badge>
                         </div>
-                        <CardDescription className="ml-6">{change.description}</CardDescription>
+                        <CardDescription>
+                          {description}
+                        </CardDescription>
                       </CardHeader>
-
-                      {!changeValues[String(idx)]?._skip && (
-                        <CardContent className="pt-0 ml-6">
-                          <div className="grid gap-3 sm:grid-cols-2">
-                            {/* Source flow selector */}
-                            {change.requiresSourceFlow && (
-                              <div className="space-y-1 sm:col-span-2">
-                                <Label className="text-sm">
-                                  {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
-                                  <span className="text-destructive ml-1">*</span>
-                                </Label>
-                                <Select
-                                  value={changeValues[String(idx)]?.source_flow_id as string || ''}
-                                  onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
-                                >
-                                  <SelectTrigger>
-                                    <SelectValue placeholder={`Choose ${change.sourceFlowType}...`} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
-                                      <SelectItem key={item.id} value={item.id}>
-                                        {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                              </div>
-                            )}
-
-                            {/* Dynamic parameter fields */}
-                            {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
-                              if (key === '_skip') return null
-
-                              const value = changeValues[String(idx)]?.[key] ?? defaultValue
-                              const label = key
-                                .replace(/_/g, ' ')
-                                .replace(/\b\w/g, (c) => c.toUpperCase())
-
-                              // Determine input type
-                              const isNumeric =
-                                key.includes('amount') ||
-                                key.includes('payment') ||
-                                key.includes('principal') ||
-                                key.includes('value') ||
-                                key.includes('costs') ||
-                                key.includes('price') ||
-                                key.includes('rate') ||
-                                key.includes('percentage') ||
-                                key.includes('months') ||
-                                key.includes('term')
-
-                              return (
-                                <div key={key} className="space-y-1">
-                                  <Label className="text-sm">{label}</Label>
-                                  <Input
-                                    type={isNumeric ? 'number' : 'text'}
-                                    value={String(value)}
-                                    onChange={(e) => {
-                                      const newValue = isNumeric
-                                        ? parseFloat(e.target.value) || 0
-                                        : e.target.value
-                                      handleChangeValue(idx, key, newValue)
-                                    }}
-                                    placeholder={`Enter ${label.toLowerCase()}`}
-                                  />
+                      <CardContent>
+                        <RadioGroup
+                          value={String(choiceGroupSelections[groupName])}
+                          onValueChange={(value) => handleChoiceGroupSelect(groupName, parseInt(value))}
+                          className="space-y-3"
+                        >
+                          {group.indices.map((idx) => {
+                            const change = suggestedChanges[idx]
+                            const isSelected = choiceGroupSelections[groupName] === idx
+                            return (
+                              <div key={idx} className="space-y-2">
+                                <div className="flex items-start space-x-3">
+                                  <RadioGroupItem value={String(idx)} id={`choice-${idx}`} className="mt-1" />
+                                  <div className="flex-1">
+                                    <Label htmlFor={`choice-${idx}`} className="font-medium cursor-pointer">
+                                      {change.name}
+                                    </Label>
+                                    <p className="text-sm text-muted-foreground">{change.description}</p>
+                                  </div>
                                 </div>
-                              )
-                            })}
-                          </div>
-                        </CardContent>
-                      )}
+
+                                {/* Show fields for selected option */}
+                                {isSelected && (
+                                  <div className="ml-6 mt-2 p-3 bg-muted/50 rounded-lg">
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                      {/* Source flow selector */}
+                                      {change.requiresSourceFlow && (
+                                        <div className="space-y-1 sm:col-span-2">
+                                          <Label className="text-sm">
+                                            {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
+                                            <span className="text-destructive ml-1">*</span>
+                                          </Label>
+                                          <Select
+                                            value={changeValues[String(idx)]?.source_flow_id as string || ''}
+                                            onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder={`Choose ${change.sourceFlowType}...`} />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
+                                                <SelectItem key={item.id} value={item.id}>
+                                                  {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
+
+                                      {/* Dynamic parameter fields */}
+                                      {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
+                                        if (key === '_skip') return null
+
+                                        const value = changeValues[String(idx)]?.[key] ?? defaultValue
+                                        const label = key
+                                          .replace(/_/g, ' ')
+                                          .replace(/\b\w/g, (c) => c.toUpperCase())
+
+                                        const isNumeric =
+                                          key.includes('amount') ||
+                                          key.includes('payment') ||
+                                          key.includes('principal') ||
+                                          key.includes('value') ||
+                                          key.includes('costs') ||
+                                          key.includes('price') ||
+                                          key.includes('rate') ||
+                                          key.includes('percentage') ||
+                                          key.includes('months') ||
+                                          key.includes('term')
+
+                                        return (
+                                          <div key={key} className="space-y-1">
+                                            <Label className="text-sm">{label}</Label>
+                                            <Input
+                                              type={isNumeric ? 'number' : 'text'}
+                                              value={String(value)}
+                                              onChange={(e) => {
+                                                const newValue = isNumeric
+                                                  ? parseFloat(e.target.value) || 0
+                                                  : e.target.value
+                                                handleChangeValue(idx, key, newValue)
+                                              }}
+                                              placeholder={`Enter ${label.toLowerCase()}`}
+                                            />
+                                          </div>
+                                        )
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </RadioGroup>
+                      </CardContent>
                     </Card>
-                  ))}
+                    )
+                  })}
+
+                  {/* Render regular changes (not in choice groups) */}
+                  {suggestedChanges.map((change, idx) => {
+                    // Skip changes that are in a choice group
+                    if (change.choiceGroup) return null
+
+                    return (
+                      <Card
+                        key={idx}
+                        className={cn(
+                          'transition-opacity',
+                          changeValues[String(idx)]?._skip && 'opacity-50'
+                        )}
+                      >
+                        <CardHeader className="pb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Checkbox
+                                id={`change-${idx}`}
+                                checked={!changeValues[String(idx)]?._skip}
+                                onCheckedChange={(checked) =>
+                                  handleChangeValue(idx, '_skip', !checked)
+                                }
+                                disabled={change.isRequired}
+                              />
+                              <Label htmlFor={`change-${idx}`} className="font-medium cursor-pointer">
+                                {change.name}
+                              </Label>
+                              {change.isRequired && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Required
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <CardDescription className="ml-6">{change.description}</CardDescription>
+                        </CardHeader>
+
+                        {!changeValues[String(idx)]?._skip && (
+                          <CardContent className="pt-0 ml-6">
+                            <div className="grid gap-3 sm:grid-cols-2">
+                              {/* Source flow selector */}
+                              {change.requiresSourceFlow && (
+                                <div className="space-y-1 sm:col-span-2">
+                                  <Label className="text-sm">
+                                    {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
+                                    <span className="text-destructive ml-1">*</span>
+                                  </Label>
+                                  <Select
+                                    value={changeValues[String(idx)]?.source_flow_id as string || ''}
+                                    onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
+                                  >
+                                    <SelectTrigger>
+                                      <SelectValue placeholder={`Choose ${change.sourceFlowType}...`} />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
+                                        <SelectItem key={item.id} value={item.id}>
+                                          {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
+                              )}
+
+                              {/* Dynamic parameter fields */}
+                              {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
+                                if (key === '_skip') return null
+
+                                const value = changeValues[String(idx)]?.[key] ?? defaultValue
+                                const label = key
+                                  .replace(/_/g, ' ')
+                                  .replace(/\b\w/g, (c) => c.toUpperCase())
+
+                                // Determine input type
+                                const isNumeric =
+                                  key.includes('amount') ||
+                                  key.includes('payment') ||
+                                  key.includes('principal') ||
+                                  key.includes('value') ||
+                                  key.includes('costs') ||
+                                  key.includes('price') ||
+                                  key.includes('rate') ||
+                                  key.includes('percentage') ||
+                                  key.includes('months') ||
+                                  key.includes('term')
+
+                                return (
+                                  <div key={key} className="space-y-1">
+                                    <Label className="text-sm">{label}</Label>
+                                    <Input
+                                      type={isNumeric ? 'number' : 'text'}
+                                      value={String(value)}
+                                      onChange={(e) => {
+                                        const newValue = isNumeric
+                                          ? parseFloat(e.target.value) || 0
+                                          : e.target.value
+                                        handleChangeValue(idx, key, newValue)
+                                      }}
+                                      placeholder={`Enter ${label.toLowerCase()}`}
+                                    />
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </CardContent>
+                        )}
+                      </Card>
+                    )
+                  })}
                 </div>
               </ScrollArea>
             </CardContent>

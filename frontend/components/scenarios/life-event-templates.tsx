@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Checkbox } from '@/components/ui/checkbox';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { SURFACE } from '@/lib/design-tokens';
@@ -112,10 +113,27 @@ export function LifeEventTemplatesDialog({
     new Date().toISOString().split('T')[0]
   );
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>({});
+  const [choiceGroupSelections, setChoiceGroupSelections] = useState<Record<string, number>>({});
   const [searchQuery, setSearchQuery] = useState('');
   const [focusedIndex, setFocusedIndex] = useState(0);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const templateListRef = useRef<HTMLDivElement>(null);
+
+  // Compute choice groups from selected template
+  const choiceGroups = useMemo(() => {
+    if (!selectedTemplate) return {};
+    const groups: Record<string, { indices: number[]; changes: SuggestedChange[] }> = {};
+    selectedTemplate.suggestedChanges.forEach((change, idx) => {
+      if (change.choiceGroup) {
+        if (!groups[change.choiceGroup]) {
+          groups[change.choiceGroup] = { indices: [], changes: [] };
+        }
+        groups[change.choiceGroup].indices.push(idx);
+        groups[change.choiceGroup].changes.push(change);
+      }
+    });
+    return groups;
+  }, [selectedTemplate]);
 
   const { data: templatesData, isLoading } = useQuery({
     queryKey: ['life-event-templates'],
@@ -313,15 +331,62 @@ export function LifeEventTemplatesDialog({
 
   const handleSelectTemplate = (template: LifeEventTemplate) => {
     setSelectedTemplate(template);
+
+    // Compute choice groups for this template
+    const templateChoiceGroups: Record<string, { indices: number[] }> = {};
+    template.suggestedChanges.forEach((change, idx) => {
+      if (change.choiceGroup) {
+        if (!templateChoiceGroups[change.choiceGroup]) {
+          templateChoiceGroups[change.choiceGroup] = { indices: [] };
+        }
+        templateChoiceGroups[change.choiceGroup].indices.push(idx);
+      }
+    });
+
+    // Initialize choice group selections (first option of each group)
+    const initialSelections: Record<string, number> = {};
+    Object.keys(templateChoiceGroups).forEach(groupName => {
+      initialSelections[groupName] = templateChoiceGroups[groupName].indices[0];
+    });
+    setChoiceGroupSelections(initialSelections);
+
     // Initialize change values from template
     const initialValues: Record<string, ChangeValue> = {};
     template.suggestedChanges.forEach((change, idx) => {
+      // For choice group items, only the first option in each group is enabled
+      const isInChoiceGroup = !!change.choiceGroup;
+      const isFirstInGroup = isInChoiceGroup &&
+        Object.values(templateChoiceGroups).some(g => g.indices[0] === idx);
+
       initialValues[String(idx)] = {
-        _skip: !change.isRequired,
+        _skip: isInChoiceGroup ? !isFirstInGroup : !change.isRequired,
         ...change.parametersTemplate,
       };
     });
     setChangeValues(initialValues);
+  };
+
+  // Handle choice group selection - when one option is selected, skip others in same group
+  const handleChoiceGroupSelect = (groupName: string, selectedIdx: number) => {
+    const group = choiceGroups[groupName];
+    if (!group) return;
+
+    setChoiceGroupSelections(prev => ({
+      ...prev,
+      [groupName]: selectedIdx
+    }));
+
+    // Update changeValues to skip all other options in this group
+    setChangeValues(prev => {
+      const updated = { ...prev };
+      group.indices.forEach(idx => {
+        updated[String(idx)] = {
+          ...updated[String(idx)],
+          _skip: idx !== selectedIdx
+        };
+      });
+      return updated;
+    });
   };
 
   const handleChangeValue = (changeIdx: number, field: string, value: unknown) => {
@@ -521,136 +586,263 @@ export function LifeEventTemplatesDialog({
         <ScrollArea className="h-[350px]">
           <div className="space-y-4 pr-4">
             <h4 className="font-medium">Changes to Apply</h4>
-            {selectedTemplate.suggestedChanges.map((change, idx) => (
-              <Card key={idx} className={cn(
-                changeValues[String(idx)]?._skip && 'opacity-50'
-              )}>
+
+            {/* Render choice groups first */}
+            {Object.entries(choiceGroups).map(([groupName, group]) => {
+              // Determine description based on choice group name
+              const groupDescriptions: Record<string, string> = {
+                'primary_care': 'Select how you want to handle childcare',
+                'work_status': 'Select how this will affect your employment',
+              };
+              const description = groupDescriptions[groupName] || 'Select one of the following options';
+
+              return (
+              <Card key={`group-${groupName}`} className="border-primary/20">
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id={`change-${idx}`}
-                        checked={!changeValues[String(idx)]?._skip}
-                        onCheckedChange={(checked) =>
-                          handleChangeValue(idx, '_skip', !checked)
-                        }
-                      />
-                      <Label htmlFor={`change-${idx}`} className="font-medium cursor-pointer">
-                        {change.name}
-                        {change.isRequired && (
-                          <Badge variant="destructive" className="ml-2 text-xs">
-                            Required
-                          </Badge>
-                        )}
-                      </Label>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base">Choose one option</CardTitle>
+                    <Badge variant="outline" className="text-xs">Required</Badge>
                   </div>
-                  <CardDescription className="ml-6">{change.description}</CardDescription>
+                  <CardDescription>
+                    {description}
+                  </CardDescription>
                 </CardHeader>
-                {!changeValues[String(idx)]?._skip && (
-                  <CardContent className="pt-0 ml-6">
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      {/* Source flow selector for MODIFY/REMOVE changes */}
-                      {change.requiresSourceFlow && (
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label htmlFor={`${idx}-source-flow`} className="text-sm">
-                            {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
-                            <span className="text-destructive ml-1">*</span>
-                          </Label>
-                          <Select
-                            value={changeValues[String(idx)]?.source_flow_id as string || ''}
-                            onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
-                          >
-                            <SelectTrigger id={`${idx}-source-flow`}>
-                              <SelectValue placeholder={`Choose ${change.sourceFlowType === 'income' ? 'income source' : 'expense'} to ${change.changeType.includes('remove') ? 'remove' : 'modify'}...`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
-                                  {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
-                                </SelectItem>
-                              ))}
-                              {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).length === 0 && (
-                                <SelectItem value="" disabled>
-                                  No {change.sourceFlowType === 'income' ? 'income sources' : 'expenses'} found
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      {/* Source account selector for SELL_ASSET/PAYOFF_DEBT changes */}
-                      {change.requiresSourceAccount && (
-                        <div className="space-y-1 sm:col-span-2">
-                          <Label htmlFor={`${idx}-source-account`} className="text-sm">
-                            {change.sourceAccountType === 'asset' ? 'Select Asset' : 'Select Debt'}
-                            <span className="text-destructive ml-1">*</span>
-                          </Label>
-                          <Select
-                            value={changeValues[String(idx)]?.source_account_id as string || ''}
-                            onValueChange={(value) => handleChangeValue(idx, 'source_account_id', value)}
-                          >
-                            <SelectTrigger id={`${idx}-source-account`}>
-                              <SelectValue placeholder={`Choose ${change.sourceAccountType === 'asset' ? 'asset' : 'debt'} to ${change.changeType.includes('sell') ? 'sell' : 'pay off'}...`} />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).map((item) => (
-                                <SelectItem key={item.id} value={item.id}>
-                                  {item.name} (${Number(item.balance).toLocaleString()})
-                                </SelectItem>
-                              ))}
-                              {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).length === 0 && (
-                                <SelectItem value="" disabled>
-                                  No {change.sourceAccountType === 'asset' ? 'assets' : 'debts'} found
-                                </SelectItem>
-                              )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      )}
-                      {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
-                        if (key === '_skip') return null;
-
-                        const value = changeValues[String(idx)]?.[key] ?? defaultValue;
-                        const label = key
-                          .replace(/_/g, ' ')
-                          .replace(/\b\w/g, (c) => c.toUpperCase());
-
-                        // Determine input type based on key and value
-                        let inputType = 'text';
-                        if (key.includes('amount') || key.includes('payment') || key.includes('principal') || key.includes('value') || key.includes('costs') || key.includes('price')) {
-                          inputType = 'number';
-                        } else if (key.includes('rate') || key.includes('percentage')) {
-                          inputType = 'number';
-                        } else if (key.includes('months') || key.includes('term')) {
-                          inputType = 'number';
-                        }
-
-                        return (
-                          <div key={key} className="space-y-1">
-                            <Label htmlFor={`${idx}-${key}`} className="text-sm">
-                              {label}
-                            </Label>
-                            <Input
-                              id={`${idx}-${key}`}
-                              type={inputType}
-                              value={String(value)}
-                              onChange={(e) => {
-                                const newValue = inputType === 'number'
-                                  ? parseFloat(e.target.value) || 0
-                                  : e.target.value;
-                                handleChangeValue(idx, key, newValue);
-                              }}
-                              placeholder={`Enter ${label.toLowerCase()}`}
-                            />
+                <CardContent>
+                  <RadioGroup
+                    value={String(choiceGroupSelections[groupName])}
+                    onValueChange={(value) => handleChoiceGroupSelect(groupName, parseInt(value))}
+                    className="space-y-3"
+                  >
+                    {group.indices.map((idx) => {
+                      const change = selectedTemplate!.suggestedChanges[idx];
+                      const isSelected = choiceGroupSelections[groupName] === idx;
+                      return (
+                        <div key={idx} className="space-y-2">
+                          <div className="flex items-start space-x-3">
+                            <RadioGroupItem value={String(idx)} id={`choice-${idx}`} className="mt-1" />
+                            <div className="flex-1">
+                              <Label htmlFor={`choice-${idx}`} className="font-medium cursor-pointer">
+                                {change.name}
+                              </Label>
+                              <p className="text-sm text-muted-foreground">{change.description}</p>
+                            </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </CardContent>
-                )}
+
+                          {/* Show fields for selected option */}
+                          {isSelected && (
+                            <div className="ml-6 mt-2 p-3 bg-muted/50 rounded-lg">
+                              <div className="grid gap-3 sm:grid-cols-2">
+                                {/* Source flow selector */}
+                                {change.requiresSourceFlow && (
+                                  <div className="space-y-1 sm:col-span-2">
+                                    <Label htmlFor={`${idx}-source-flow`} className="text-sm">
+                                      {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
+                                      <span className="text-destructive ml-1">*</span>
+                                    </Label>
+                                    <Select
+                                      value={changeValues[String(idx)]?.source_flow_id as string || ''}
+                                      onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
+                                    >
+                                      <SelectTrigger id={`${idx}-source-flow`}>
+                                        <SelectValue placeholder={`Choose ${change.sourceFlowType === 'income' ? 'income source' : 'expense'}...`} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
+                                          <SelectItem key={item.id} value={item.id}>
+                                            {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
+                                          </SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                )}
+
+                                {/* Dynamic parameter fields */}
+                                {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
+                                  if (key === '_skip') return null;
+
+                                  const value = changeValues[String(idx)]?.[key] ?? defaultValue;
+                                  const label = key
+                                    .replace(/_/g, ' ')
+                                    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+                                  let inputType = 'text';
+                                  if (key.includes('amount') || key.includes('payment') || key.includes('principal') || key.includes('value') || key.includes('costs') || key.includes('price')) {
+                                    inputType = 'number';
+                                  } else if (key.includes('rate') || key.includes('percentage')) {
+                                    inputType = 'number';
+                                  } else if (key.includes('months') || key.includes('term')) {
+                                    inputType = 'number';
+                                  }
+
+                                  return (
+                                    <div key={key} className="space-y-1">
+                                      <Label htmlFor={`${idx}-${key}`} className="text-sm">
+                                        {label}
+                                      </Label>
+                                      <Input
+                                        id={`${idx}-${key}`}
+                                        type={inputType}
+                                        value={String(value)}
+                                        onChange={(e) => {
+                                          const newValue = inputType === 'number'
+                                            ? parseFloat(e.target.value) || 0
+                                            : e.target.value;
+                                          handleChangeValue(idx, key, newValue);
+                                        }}
+                                        placeholder={`Enter ${label.toLowerCase()}`}
+                                      />
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </RadioGroup>
+                </CardContent>
               </Card>
-            ))}
+              );
+            })}
+
+            {/* Render regular changes (not in choice groups) */}
+            {selectedTemplate.suggestedChanges.map((change, idx) => {
+              // Skip changes that are in a choice group
+              if (change.choiceGroup) return null;
+
+              return (
+                <Card key={idx} className={cn(
+                  changeValues[String(idx)]?._skip && 'opacity-50'
+                )}>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id={`change-${idx}`}
+                          checked={!changeValues[String(idx)]?._skip}
+                          onCheckedChange={(checked) =>
+                            handleChangeValue(idx, '_skip', !checked)
+                          }
+                        />
+                        <Label htmlFor={`change-${idx}`} className="font-medium cursor-pointer">
+                          {change.name}
+                          {change.isRequired && (
+                            <Badge variant="destructive" className="ml-2 text-xs">
+                              Required
+                            </Badge>
+                          )}
+                        </Label>
+                      </div>
+                    </div>
+                    <CardDescription className="ml-6">{change.description}</CardDescription>
+                  </CardHeader>
+                  {!changeValues[String(idx)]?._skip && (
+                    <CardContent className="pt-0 ml-6">
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {/* Source flow selector for MODIFY/REMOVE changes */}
+                        {change.requiresSourceFlow && (
+                          <div className="space-y-1 sm:col-span-2">
+                            <Label htmlFor={`${idx}-source-flow`} className="text-sm">
+                              {change.sourceFlowType === 'income' ? 'Select Income Source' : 'Select Expense'}
+                              <span className="text-destructive ml-1">*</span>
+                            </Label>
+                            <Select
+                              value={changeValues[String(idx)]?.source_flow_id as string || ''}
+                              onValueChange={(value) => handleChangeValue(idx, 'source_flow_id', value)}
+                            >
+                              <SelectTrigger id={`${idx}-source-flow`}>
+                                <SelectValue placeholder={`Choose ${change.sourceFlowType === 'income' ? 'income source' : 'expense'} to ${change.changeType.includes('remove') ? 'remove' : 'modify'}...`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name} {item.amount > 0 && `($${Number(item.amount).toLocaleString()}/yr)`}
+                                  </SelectItem>
+                                ))}
+                                {(change.sourceFlowType === 'income' ? availableIncomeSources : availableExpenseFlows).length === 0 && (
+                                  <SelectItem value="" disabled>
+                                    No {change.sourceFlowType === 'income' ? 'income sources' : 'expenses'} found
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {/* Source account selector for SELL_ASSET/PAYOFF_DEBT changes */}
+                        {change.requiresSourceAccount && (
+                          <div className="space-y-1 sm:col-span-2">
+                            <Label htmlFor={`${idx}-source-account`} className="text-sm">
+                              {change.sourceAccountType === 'asset' ? 'Select Asset' : 'Select Debt'}
+                              <span className="text-destructive ml-1">*</span>
+                            </Label>
+                            <Select
+                              value={changeValues[String(idx)]?.source_account_id as string || ''}
+                              onValueChange={(value) => handleChangeValue(idx, 'source_account_id', value)}
+                            >
+                              <SelectTrigger id={`${idx}-source-account`}>
+                                <SelectValue placeholder={`Choose ${change.sourceAccountType === 'asset' ? 'asset' : 'debt'} to ${change.changeType.includes('sell') ? 'sell' : 'pay off'}...`} />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).map((item) => (
+                                  <SelectItem key={item.id} value={item.id}>
+                                    {item.name} (${Number(item.balance).toLocaleString()})
+                                  </SelectItem>
+                                ))}
+                                {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).length === 0 && (
+                                  <SelectItem value="" disabled>
+                                    No {change.sourceAccountType === 'asset' ? 'assets' : 'debts'} found
+                                  </SelectItem>
+                                )}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        )}
+                        {Object.entries(change.parametersTemplate).map(([key, defaultValue]) => {
+                          if (key === '_skip') return null;
+
+                          const value = changeValues[String(idx)]?.[key] ?? defaultValue;
+                          const label = key
+                            .replace(/_/g, ' ')
+                            .replace(/\b\w/g, (c) => c.toUpperCase());
+
+                          // Determine input type based on key and value
+                          let inputType = 'text';
+                          if (key.includes('amount') || key.includes('payment') || key.includes('principal') || key.includes('value') || key.includes('costs') || key.includes('price')) {
+                            inputType = 'number';
+                          } else if (key.includes('rate') || key.includes('percentage')) {
+                            inputType = 'number';
+                          } else if (key.includes('months') || key.includes('term')) {
+                            inputType = 'number';
+                          }
+
+                          return (
+                            <div key={key} className="space-y-1">
+                              <Label htmlFor={`${idx}-${key}`} className="text-sm">
+                                {label}
+                              </Label>
+                              <Input
+                                id={`${idx}-${key}`}
+                                type={inputType}
+                                value={String(value)}
+                                onChange={(e) => {
+                                  const newValue = inputType === 'number'
+                                    ? parseFloat(e.target.value) || 0
+                                    : e.target.value;
+                                  handleChangeValue(idx, key, newValue);
+                                }}
+                                placeholder={`Enter ${label.toLowerCase()}`}
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
+              );
+            })}
           </div>
         </ScrollArea>
       </div>
