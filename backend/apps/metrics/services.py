@@ -345,6 +345,7 @@ class MetricsCalculator:
     def _calculate_investment_rate(self, income: Decimal) -> Decimal:
         """Ratio of investment contributions to income."""
         from apps.taxes.models import PreTaxDeduction
+        from apps.taxes.constants import PAY_PERIODS
 
         if income == 0:
             return Decimal('0')
@@ -369,16 +370,11 @@ class MetricsCalculator:
                 gross_per_period = deduction.income_source.gross_per_period
                 amount_per_period = deduction.calculate_per_period(gross_per_period)
 
-                # Convert to monthly based on pay frequency
+                # Convert to monthly using PAY_PERIODS constant for consistency
                 pay_frequency = deduction.income_source.pay_frequency
-                if pay_frequency == 'weekly':
-                    total_monthly_investment += amount_per_period * Decimal('52') / Decimal('12')
-                elif pay_frequency == 'biweekly':
-                    total_monthly_investment += amount_per_period * Decimal('26') / Decimal('12')
-                elif pay_frequency == 'semimonthly':
-                    total_monthly_investment += amount_per_period * Decimal('24') / Decimal('12')
-                else:  # monthly
-                    total_monthly_investment += amount_per_period
+                periods_per_year = PAY_PERIODS.get(pay_frequency, 12)  # Default to monthly
+                monthly_multiplier = Decimal(str(periods_per_year)) / Decimal('12')
+                total_monthly_investment += amount_per_period * monthly_multiplier
 
         return total_monthly_investment / income
 
