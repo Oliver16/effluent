@@ -22,6 +22,10 @@ class FieldType(models.TextChoices):
     DATE = 'date', 'Date'
     TOGGLE = 'toggle', 'Toggle'
     TEXT = 'text', 'Text'
+    # Account selection fields - filter by asset/liability
+    ACCOUNT_SELECT = 'account_select', 'Account Select'
+    DEBT_SELECT = 'debt_select', 'Debt Select'  # Alias for liability accounts
+    ASSET_SELECT = 'asset_select', 'Asset Select'
 
 
 class DecisionTemplate(models.Model):

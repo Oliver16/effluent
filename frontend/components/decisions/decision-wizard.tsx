@@ -5,10 +5,10 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { decisions } from '@/lib/api'
-import { DecisionTemplate, DecisionStep, DecisionField, DecisionRunResponse } from '@/lib/types'
+import { decisions, accounts as accountsApi } from '@/lib/api'
+import { DecisionTemplate, DecisionStep, DecisionField, DecisionRunResponse, Account } from '@/lib/types'
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -52,6 +52,9 @@ function buildSchema(steps: DecisionStep[]) {
           break
         case 'select':
         case 'text':
+        case 'account_select':
+        case 'debt_select':
+        case 'asset_select':
         default:
           if (field.required) {
             fieldSchema = z.string().min(1, `${field.label} is required`)
@@ -95,6 +98,22 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
 
   const schema = useMemo(() => buildSchema(steps), [steps])
   const defaults = useMemo(() => buildDefaults(steps), [steps])
+
+  // Check if template needs accounts (has account_select, debt_select, or asset_select fields)
+  const needsAccounts = useMemo(() => {
+    return steps.some(step =>
+      step.fields.some(f =>
+        f.type === 'account_select' || f.type === 'debt_select' || f.type === 'asset_select'
+      )
+    )
+  }, [steps])
+
+  // Fetch accounts if needed
+  const { data: accountsData } = useQuery({
+    queryKey: ['accounts'],
+    queryFn: () => accountsApi.list(),
+    enabled: needsAccounts,
+  })
 
   const form = useForm({
     resolver: zodResolver(schema),
@@ -223,6 +242,7 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
                     field={field}
                     form={form}
                     watchValues={watchValues}
+                    accounts={accountsData?.results || []}
                   />
                 ))}
               </form>

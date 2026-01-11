@@ -1,7 +1,7 @@
 'use client'
 
 import { UseFormReturn } from 'react-hook-form'
-import { DecisionField } from '@/lib/types'
+import { DecisionField, Account } from '@/lib/types'
 import {
   FormField,
   FormItem,
@@ -24,12 +24,34 @@ interface WizardFieldProps {
   field: DecisionField
   form: UseFormReturn<Record<string, unknown>>
   watchValues: Record<string, unknown>
+  accounts?: Account[]  // For account/debt/asset select fields
 }
 
-export function WizardField({ field, form, watchValues }: WizardFieldProps) {
+export function WizardField({ field, form, watchValues, accounts = [] }: WizardFieldProps) {
   // Check showIf condition
   if (field.showIf && !watchValues[field.showIf]) {
     return null
+  }
+
+  // Filter accounts based on field type
+  const getFilteredAccounts = () => {
+    if (field.type === 'debt_select') {
+      // Show only liability accounts (debts)
+      return accounts.filter(a =>
+        !['checking', 'savings', 'money_market', 'brokerage', 'ira',
+          'roth_ira', '401k', '403b', 'hsa', 'crypto', 'real_estate',
+          'vehicle', 'other_asset'].includes(a.accountType)
+      )
+    }
+    if (field.type === 'asset_select') {
+      // Show only asset accounts
+      return accounts.filter(a =>
+        ['checking', 'savings', 'money_market', 'brokerage', 'ira',
+          'roth_ira', '401k', '403b', 'hsa', 'crypto', 'real_estate',
+          'vehicle', 'other_asset'].includes(a.accountType)
+      )
+    }
+    return accounts
   }
 
   const renderInput = () => {
@@ -193,6 +215,52 @@ export function WizardField({ field, form, watchValues }: WizardFieldProps) {
                     <FormDescription>{field.helperText}</FormDescription>
                   )}
                 </div>
+              </FormItem>
+            )}
+          />
+        )
+
+      case 'account_select':
+      case 'debt_select':
+      case 'asset_select':
+        const filteredAccounts = getFilteredAccounts()
+        const placeholder = field.type === 'debt_select'
+          ? 'Select a debt account...'
+          : field.type === 'asset_select'
+            ? 'Select an asset...'
+            : 'Select an account...'
+        return (
+          <FormField
+            control={form.control}
+            name={field.key}
+            render={({ field: formField }) => (
+              <FormItem>
+                <FormLabel>{field.label}{field.required && ' *'}</FormLabel>
+                <Select
+                  onValueChange={formField.onChange}
+                  value={formField.value as string || ''}
+                >
+                  <FormControl>
+                    <SelectTrigger>
+                      <SelectValue placeholder={field.placeholder || placeholder} />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {filteredAccounts.length > 0 ? (
+                      filteredAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.name} (${Number(account.currentBalance).toLocaleString()})
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="" disabled>
+                        No {field.type === 'debt_select' ? 'debt' : field.type === 'asset_select' ? 'asset' : ''} accounts found
+                      </SelectItem>
+                    )}
+                  </SelectContent>
+                </Select>
+                {field.helperText && <FormDescription>{field.helperText}</FormDescription>}
+                <FormMessage />
               </FormItem>
             )}
           />

@@ -467,6 +467,9 @@ export type DecisionFieldType =
   | 'date'
   | 'toggle'
   | 'text'
+  | 'account_select'
+  | 'debt_select'
+  | 'asset_select'
 
 export interface DecisionFieldOption {
   value: string
