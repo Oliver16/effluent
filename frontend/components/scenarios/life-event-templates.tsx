@@ -588,7 +588,15 @@ export function LifeEventTemplatesDialog({
             <h4 className="font-medium">Changes to Apply</h4>
 
             {/* Render choice groups first */}
-            {Object.entries(choiceGroups).map(([groupName, group]) => (
+            {Object.entries(choiceGroups).map(([groupName, group]) => {
+              // Determine description based on choice group name
+              const groupDescriptions: Record<string, string> = {
+                'primary_care': 'Select how you want to handle childcare',
+                'work_status': 'Select how this will affect your employment',
+              };
+              const description = groupDescriptions[groupName] || 'Select one of the following options';
+
+              return (
               <Card key={`group-${groupName}`} className="border-primary/20">
                 <CardHeader className="pb-2">
                   <div className="flex items-center gap-2">
@@ -596,7 +604,7 @@ export function LifeEventTemplatesDialog({
                     <Badge variant="outline" className="text-xs">Required</Badge>
                   </div>
                   <CardDescription>
-                    Select how you want to handle childcare
+                    {description}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -696,7 +704,8 @@ export function LifeEventTemplatesDialog({
                   </RadioGroup>
                 </CardContent>
               </Card>
-            ))}
+              );
+            })}
 
             {/* Render regular changes (not in choice groups) */}
             {selectedTemplate.suggestedChanges.map((change, idx) => {

@@ -475,7 +475,15 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
               <ScrollArea className="h-[500px] pr-4">
                 <div className="space-y-4">
                   {/* Render choice groups first */}
-                  {Object.entries(choiceGroups).map(([groupName, group]) => (
+                  {Object.entries(choiceGroups).map(([groupName, group]) => {
+                    // Determine description based on choice group name
+                    const groupDescriptions: Record<string, string> = {
+                      'primary_care': 'Select how you want to handle childcare',
+                      'work_status': 'Select how this will affect your employment',
+                    }
+                    const description = groupDescriptions[groupName] || 'Select one of the following options'
+
+                    return (
                     <Card key={`group-${groupName}`} className="border-primary/20">
                       <CardHeader className="pb-2">
                         <div className="flex items-center gap-2">
@@ -483,7 +491,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                           <Badge variant="outline" className="text-xs">Required</Badge>
                         </div>
                         <CardDescription>
-                          Select how you want to handle childcare
+                          {description}
                         </CardDescription>
                       </CardHeader>
                       <CardContent>
@@ -583,7 +591,8 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                         </RadioGroup>
                       </CardContent>
                     </Card>
-                  ))}
+                    )
+                  })}
 
                   {/* Render regular changes (not in choice groups) */}
                   {suggestedChanges.map((change, idx) => {
