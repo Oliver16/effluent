@@ -477,6 +477,15 @@ class ScenarioEngine:
             payment = Decimal(str(params.get('payment', 0)))
             term = int(params.get('term_months', 0))
 
+            # If payment not provided, calculate it using amortization formula
+            if payment == 0 and principal > 0 and term > 0:
+                if rate > 0:
+                    monthly_rate = rate / 12
+                    payment = principal * (monthly_rate * (1 + monthly_rate) ** term) / ((1 + monthly_rate) ** term - 1)
+                else:
+                    payment = principal / term
+                payment = payment.quantize(Decimal('0.01'))
+
             state.liabilities[debt_id] = LiabilityInfo(
                 balance=principal,
                 account_type='personal_loan',
@@ -485,7 +494,7 @@ class ScenarioEngine:
                 term_months=term,
                 name=change.name,
             )
-            # Add payment as expense
+            # Add payment as expense with explicit debt ID mapping
             state.expenses.append({
                 'id': f'payment_{debt_id}',
                 'name': f'{change.name} Payment',
@@ -493,6 +502,7 @@ class ScenarioEngine:
                 'amount': payment,
                 'frequency': 'monthly',
                 'monthly': payment,
+                '_target_debt_id': debt_id,  # Explicit mapping
             })
 
         elif change.change_type == ChangeType.MODIFY_DEBT:
@@ -509,25 +519,53 @@ class ScenarioEngine:
                 if 'payment' in params:
                     new_payment = Decimal(str(params['payment']))
                     liab.payment = new_payment
-                    # Update the payment expense
+                    # Update the payment expense - check explicit mapping or ID-based matching
                     for exp in state.expenses:
-                        if exp['id'] == f'payment_{debt_id}' or debt_id in exp.get('id', ''):
+                        if exp.get('_target_debt_id') == debt_id or exp['id'] == f'payment_{debt_id}' or debt_id in exp.get('id', ''):
                             exp['amount'] = new_payment
                             exp['monthly'] = new_payment
+                            exp['_target_debt_id'] = debt_id  # Ensure explicit mapping
                             break
 
         elif change.change_type == ChangeType.PAYOFF_DEBT:
             # Add extra payment to existing debt
             debt_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
             extra = Decimal(str(params.get('extra_monthly', 0)))
-            state.expenses.append({
-                'id': f'extra_{debt_id}_{change.id}',
-                'name': f'{change.name} Extra Payment',
-                'category': 'other_debt',
-                'amount': extra,
-                'frequency': 'monthly',
-                'monthly': extra,
-            })
+
+            # Validate that the debt exists in state
+            if debt_id and debt_id in state.liabilities:
+                liab = state.liabilities[debt_id]
+                # Use a unique expense ID that can be matched back to the debt
+                state.expenses.append({
+                    'id': f'extra_{debt_id}_{change.id}',
+                    'name': f'{change.name or liab.name} Extra Payment',
+                    'category': 'other_debt',
+                    'amount': extra,
+                    'frequency': 'monthly',
+                    'monthly': extra,
+                    '_target_debt_id': debt_id,  # Explicit mapping for debt payoff
+                })
+            elif debt_id:
+                # Debt ID provided but not found - still add expense but warn
+                state.expenses.append({
+                    'id': f'extra_{debt_id}_{change.id}',
+                    'name': f'{change.name} Extra Payment',
+                    'category': 'other_debt',
+                    'amount': extra,
+                    'frequency': 'monthly',
+                    'monthly': extra,
+                    '_target_debt_id': debt_id,
+                })
+            else:
+                # No debt ID - generic extra payment (legacy behavior)
+                state.expenses.append({
+                    'id': f'extra_payment_{change.id}',
+                    'name': f'{change.name} Extra Payment',
+                    'category': 'other_debt',
+                    'amount': extra,
+                    'frequency': 'monthly',
+                    'monthly': extra,
+                })
 
         elif change.change_type == ChangeType.REFINANCE:
             # Refinance existing debt with new terms
@@ -559,10 +597,12 @@ class ScenarioEngine:
                 # Update/replace the payment expense
                 old_payment_found = False
                 for exp in state.expenses:
-                    if debt_id in exp.get('id', ''):
+                    # Check explicit mapping or ID-based matching
+                    if exp.get('_target_debt_id') == debt_id or debt_id in exp.get('id', ''):
                         exp['amount'] = liab.payment
                         exp['monthly'] = liab.payment
                         exp['name'] = f'{liab.name} (Refinanced)'
+                        exp['_target_debt_id'] = debt_id  # Ensure explicit mapping
                         old_payment_found = True
                         break
 
@@ -574,6 +614,7 @@ class ScenarioEngine:
                         'amount': liab.payment,
                         'frequency': 'monthly',
                         'monthly': liab.payment,
+                        '_target_debt_id': debt_id,  # Explicit mapping
                     })
 
         elif change.change_type == ChangeType.ADD_ASSET:
@@ -1094,21 +1135,32 @@ class ScenarioEngine:
                 monthly_interest = liab.balance * (liab.rate / 12) if liab.rate > 0 else Decimal('0')
                 principal_payment = liab.payment - monthly_interest
 
-                # Find any extra payments for this debt
-                extra_payment = sum(
-                    e['monthly'] for e in state.expenses
-                    if 'extra' in e.get('id', '') and lid in e.get('id', '')
-                )
+                # Find any extra payments for this debt using explicit mapping first, then fallback to ID matching
+                extra_payment = Decimal('0')
+                for e in state.expenses:
+                    # Prefer explicit mapping via _target_debt_id
+                    target_debt = e.get('_target_debt_id')
+                    if target_debt and target_debt == lid:
+                        extra_payment += e['monthly']
+                    # Fallback to ID-based matching for legacy/scenario_debt entries
+                    elif not target_debt and 'extra' in e.get('id', '') and lid in e.get('id', ''):
+                        extra_payment += e['monthly']
+
                 principal_payment += extra_payment
 
                 # Reduce balance
                 liab.balance = max(Decimal('0'), liab.balance - principal_payment)
 
-                # If paid off, remove the payment expense
+                # If paid off, remove the payment expense and extra payments
                 if liab.balance == 0:
                     state.expenses = [
                         e for e in state.expenses
-                        if lid not in e.get('id', '')
+                        if not (
+                            # Remove expenses targeting this debt explicitly
+                            e.get('_target_debt_id') == lid or
+                            # Remove expenses with this debt ID in their ID (payment_, extra_, etc.)
+                            lid in e.get('id', '')
+                        )
                     ]
 
         state.month += 1

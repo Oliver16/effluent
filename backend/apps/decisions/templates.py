@@ -18,6 +18,9 @@ SELECT = FieldType.SELECT
 DATE = FieldType.DATE
 TOGGLE = FieldType.TOGGLE
 TEXT = FieldType.TEXT
+DEBT_SELECT = FieldType.DEBT_SELECT
+ASSET_SELECT = FieldType.ASSET_SELECT
+ACCOUNT_SELECT = FieldType.ACCOUNT_SELECT
 
 
 def get_default_templates():
@@ -311,18 +314,11 @@ def get_default_templates():
                         'description': 'Which debt do you want to pay off faster?',
                         'fields': [
                             {
-                                'key': 'debt_name',
-                                'type': TEXT,
-                                'label': 'Debt name',
-                                'placeholder': 'e.g., Credit Card, Student Loan',
+                                'key': 'source_account_id',
+                                'type': DEBT_SELECT,
+                                'label': 'Select debt account',
                                 'required': True,
-                            },
-                            {
-                                'key': 'current_balance',
-                                'type': CURRENCY,
-                                'label': 'Current balance',
-                                'required': True,
-                                'helperText': 'How much do you currently owe?',
+                                'helperText': 'Choose the debt you want to pay off faster',
                             },
                         ],
                     },
@@ -352,9 +348,11 @@ def get_default_templates():
                 'changes': [
                     {
                         'change_type': ChangeType.PAYOFF_DEBT,
-                        'name_template': 'Extra payments on {debt_name}',
-                        'description_template': 'Paying extra {extra_monthly}/month on {debt_name}',
+                        'name_template': 'Extra payments on debt',
+                        'description_template': 'Paying extra {extra_monthly}/month',
                         'effective_date_field': 'start_date',
+                        # source_account_id is handled specially by the compiler
+                        'source_account_id_field': 'source_account_id',
                         'parameters': {
                             'extra_monthly': '{extra_monthly}',
                         },
@@ -374,32 +372,14 @@ def get_default_templates():
                     {
                         'id': 'current_loan',
                         'title': 'Current Loan',
-                        'description': 'Tell us about your current loan',
+                        'description': 'Select the loan you want to refinance',
                         'fields': [
                             {
-                                'key': 'loan_name',
-                                'type': TEXT,
-                                'label': 'Loan name',
-                                'placeholder': 'e.g., Home Mortgage, Auto Loan',
+                                'key': 'source_account_id',
+                                'type': DEBT_SELECT,
+                                'label': 'Select loan to refinance',
                                 'required': True,
-                            },
-                            {
-                                'key': 'current_balance',
-                                'type': CURRENCY,
-                                'label': 'Current balance',
-                                'required': True,
-                            },
-                            {
-                                'key': 'current_rate',
-                                'type': PERCENT,
-                                'label': 'Current interest rate',
-                                'required': True,
-                            },
-                            {
-                                'key': 'current_payment',
-                                'type': CURRENCY,
-                                'label': 'Current monthly payment',
-                                'required': True,
+                                'helperText': 'Choose the loan you want to refinance',
                             },
                         ],
                     },
@@ -450,9 +430,11 @@ def get_default_templates():
                 'changes': [
                     {
                         'change_type': ChangeType.REFINANCE,
-                        'name_template': 'Refinance {loan_name}',
-                        'description_template': 'Refinanced from {current_rate}% to {new_rate}%',
+                        'name_template': 'Refinance loan',
+                        'description_template': 'Refinanced to {new_rate}% for {new_term_months} months',
                         'effective_date_field': 'refinance_date',
+                        # source_account_id is handled specially by the compiler
+                        'source_account_id_field': 'source_account_id',
                         'parameters': {
                             'rate': '{new_rate}',
                             'term_months': '{new_term_months}',
