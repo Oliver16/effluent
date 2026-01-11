@@ -1,7 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FieldConfig } from './change-field-config';
-import { Account, RecurringFlow, HouseholdMember } from '@/lib/types';
+import { Account, RecurringFlow, HouseholdMember, IncomeSourceDetail } from '@/lib/types';
 
 interface ChangeFieldProps {
   fieldName: string;
@@ -11,13 +11,39 @@ interface ChangeFieldProps {
   accounts?: Account[];
   flows?: RecurringFlow[];
   members?: HouseholdMember[];
+  incomeSources?: IncomeSourceDetail[];
 }
 
 /**
  * Renders a single form field based on its configuration
  */
-export function ChangeField({ fieldName, config, value, onChange, accounts = [], flows = [], members = [] }: ChangeFieldProps) {
+export function ChangeField({ fieldName, config, value, onChange, accounts = [], flows = [], members = [], incomeSources = [] }: ChangeFieldProps) {
   const { label, placeholder, type, options, flowType } = config;
+
+  // Income source selector
+  if (type === 'income_source_select') {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={fieldName}>{label}</Label>
+        <select
+          id={fieldName}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Create new income source</option>
+          {incomeSources.map((source) => (
+            <option key={source.id} value={source.id}>
+              {source.name} ({source.incomeType}) - ${parseFloat(source.grossAnnual).toLocaleString()}/yr
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Select existing source to link, or leave empty to create new during adoption
+        </p>
+      </div>
+    );
+  }
 
   // Member selector
   if (type === 'member_select') {

@@ -5,11 +5,23 @@
 export interface FieldConfig {
   label: string;
   placeholder?: string;
-  type: 'text' | 'number' | 'select' | 'account_select' | 'flow_select' | 'member_select';
+  type: 'text' | 'number' | 'select' | 'account_select' | 'flow_select' | 'member_select' | 'income_source_select';
   options?: Array<{ value: string; label: string }>;
   isPercentage?: boolean;
   flowType?: 'income' | 'expense'; // For flow_select, filter by type
 }
+
+// Income types for tax treatment (maps to backend IncomeSource.income_type)
+export const INCOME_TYPES = [
+  { value: 'w2', label: 'W-2 Employment' },
+  { value: 'w2_hourly', label: 'W-2 Hourly' },
+  { value: 'self_employed', label: 'Self-Employment (1099)' },
+  { value: 'rental', label: 'Rental Income' },
+  { value: 'investment', label: 'Investment Income' },
+  { value: 'retirement', label: 'Retirement/Pension' },
+  { value: 'social_security', label: 'Social Security' },
+  { value: 'other', label: 'Other Income' },
+];
 
 // Income categories matching backend IncomeCategory enum
 export const INCOME_CATEGORIES = [
@@ -106,6 +118,12 @@ export const FIELD_CONFIGS: Record<string, FieldConfig> = {
   source_income_flow_id: { label: 'Income Source', type: 'flow_select', flowType: 'income' },
   source_expense_flow_id: { label: 'Expense Source', type: 'flow_select', flowType: 'expense' },
   household_member_id: { label: 'Household Member', type: 'member_select' },
+  income_source_id: { label: 'Existing Income Source (optional)', type: 'income_source_select' },
+  income_type: {
+    label: 'Income Type (for taxes)',
+    type: 'select',
+    options: INCOME_TYPES,
+  },
   income_category: {
     label: 'Category',
     type: 'select',
@@ -131,7 +149,7 @@ export const FIELD_CONFIGS: Record<string, FieldConfig> = {
 };
 
 export const CHANGE_TYPES = [
-  { value: 'add_income', label: 'Add Income', fields: ['amount', 'frequency', 'income_category', 'household_member_id', 'linked_account_id'] },
+  { value: 'add_income', label: 'Add Income', fields: ['amount', 'frequency', 'income_type', 'income_category', 'household_member_id', 'income_source_id', 'linked_account_id'] },
   { value: 'modify_income', label: 'Modify Income', fields: ['source_income_flow_id', 'amount', 'frequency', 'income_category'] },
   { value: 'remove_income', label: 'Remove Income', fields: ['source_income_flow_id'] },
   { value: 'add_expense', label: 'Add Expense', fields: ['amount', 'frequency', 'expense_category', 'linked_account_id'] },

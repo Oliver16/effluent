@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { accounts as accountsApi, flows as flowsApi, members as membersApi, scenarios, normalizeListResponse } from '@/lib/api';
+import { accounts as accountsApi, flows as flowsApi, members as membersApi, incomeSources as incomeSourcesApi, scenarios, normalizeListResponse } from '@/lib/api';
 import {
   Dialog,
   DialogContent,
@@ -50,9 +50,16 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
     enabled: open,
   });
 
+  const { data: incomeSourcesData } = useQuery({
+    queryKey: ['income-sources'],
+    queryFn: () => incomeSourcesApi.list(),
+    enabled: open,
+  });
+
   const accounts = accountsData?.results || [];
   const flows = flowsData || [];
   const members = membersData || [];
+  const incomeSources = incomeSourcesData || [];
 
   const mutation = useMutation({
     mutationFn: (data: Record<string, unknown>) => scenarios.addChange(data),
@@ -175,6 +182,7 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
                 accounts={accounts}
                 flows={flows}
                 members={members}
+                incomeSources={incomeSources}
               />
             );
           })}
