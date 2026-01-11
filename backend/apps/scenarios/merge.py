@@ -96,6 +96,7 @@ def merge_scenarios(
     target: Scenario,
     dedupe: bool = True,
     recompute: bool = True,
+    sync_horizon: bool = True,
 ) -> dict:
     """
     Merge changes from source scenario into target scenario.
@@ -110,6 +111,7 @@ def merge_scenarios(
         target: Scenario to copy changes into
         dedupe: Skip duplicate changes based on signature
         recompute: Recompute target projections after merge
+        sync_horizon: Upgrade target projection_months to match source if lower
 
     Returns:
         Dict with merge results including:
@@ -120,9 +122,10 @@ def merge_scenarios(
         - skipped: list of skipped changes with reasons
         - warnings: list of potential conflict warnings
         - projection_recomputed: bool
+        - horizon_synced: bool (if target horizon was upgraded)
 
     Raises:
-        ValueError: If validation fails (ownership, self-merge, baseline target)
+        ValueError: If validation fails (ownership, self-merge, archived target)
     """
     # Validation
     if source.household_id != household.id:
@@ -132,9 +135,16 @@ def merge_scenarios(
     if source.id == target.id:
         raise ValueError("Cannot merge scenario into itself")
     if target.is_baseline:
-        raise ValueError("Cannot merge into baseline scenario")
+        raise ValueError("Cannot merge into baseline scenario. Use 'Adopt' to apply scenario changes as real flows.")
     if target.is_archived:
         raise ValueError("Cannot merge into archived scenario")
+
+    # Sync projection horizon if requested
+    horizon_synced = False
+    if sync_horizon and source.projection_months > target.projection_months:
+        target.projection_months = source.projection_months
+        target.save(update_fields=['projection_months'])
+        horizon_synced = True
 
     # Get source changes (only direct, not inherited from parent)
     source_changes = list(source.changes.filter(is_enabled=True).order_by('display_order'))
@@ -210,6 +220,7 @@ def merge_scenarios(
         'skipped': changes_skipped,
         'warnings': warnings,
         'projection_recomputed': projection_recomputed,
+        'horizon_synced': horizon_synced,
     }
 
 

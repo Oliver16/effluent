@@ -93,6 +93,12 @@ class BaselineScenarioService:
         if baseline.baseline_mode == BaselineMode.PINNED and not force:
             return baseline
 
+        # Upgrade projection_months if below current default
+        # This ensures baselines created with older defaults get updated
+        if baseline.projection_months < cls.DEFAULT_PROJECTION_MONTHS:
+            baseline.projection_months = cls.DEFAULT_PROJECTION_MONTHS
+            baseline.save(update_fields=['projection_months'])
+
         # Compute projection using ScenarioEngine
         engine = ScenarioEngine(baseline)
 
