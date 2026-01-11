@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Activity, GitBranch, Gauge, FileText } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 export function Hero() {
   return (
@@ -21,35 +21,26 @@ export function Hero() {
 
       <div className="relative z-10 max-w-4xl mx-auto text-center animate-fade-in">
         {/* Main headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight">
+        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-5 tracking-tight">
           A financial control plane for your household.
         </h1>
 
-        {/* Subheadline */}
-        <p className="text-lg sm:text-xl text-slate-300 mb-8 max-w-2xl mx-auto leading-relaxed">
-          Operational interface for your finances — a living model with instrumentation, confidence, and scenario control.
+        {/* Subheadline - tighter, less jargon */}
+        <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
+          Most finance apps show you the past. This one helps you see what's coming—and decide what to do about it.
         </p>
 
-        {/* Hero bullets */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-10 text-sm text-slate-400">
-          <div className="flex items-center gap-2">
-            <GitBranch className="w-4 h-4 text-primary" />
-            <span>Baseline model + scenarios</span>
-          </div>
-          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-primary" />
-            <span>Confidence strip</span>
-          </div>
-          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" />
-            <span>Explainable metrics</span>
-          </div>
+        {/* Hero bullets - simplified */}
+        <div className="flex items-center justify-center gap-6 mb-8 text-sm text-slate-500">
+          <span>Model your baseline</span>
+          <span className="hidden sm:inline text-slate-700">·</span>
+          <span>Run scenarios</span>
+          <span className="hidden sm:inline text-slate-700">·</span>
+          <span>Track confidence</span>
         </div>
 
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
           <Button
             asChild
             size="xl"
@@ -73,17 +64,12 @@ export function Hero() {
         <InstrumentStrip />
 
         {/* Screenshot placeholder panel */}
-        <div className="mt-16 relative animate-fade-in-delay">
-          <div className="relative mx-auto max-w-3xl rounded-xl border border-slate-700/50 bg-slate-900/80 p-2 shadow-2xl backdrop-blur-sm">
-            <div className="rounded-lg bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
-              <div className="text-center text-slate-500">
-                <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm font-medium">Dashboard Preview</p>
-              </div>
+        <div className="mt-12 relative animate-fade-in-delay">
+          <div className="relative mx-auto max-w-2xl rounded-lg border border-slate-700/50 bg-slate-900/80 p-1.5 shadow-xl backdrop-blur-sm">
+            <div className="rounded bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
+              <Activity className="w-8 h-8 text-slate-600" />
             </div>
           </div>
-          {/* Glow effect */}
-          <div className="absolute inset-0 -z-10 blur-3xl opacity-20 bg-gradient-to-r from-primary via-transparent to-primary" />
         </div>
       </div>
     </section>

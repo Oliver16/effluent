@@ -1,12 +1,9 @@
 import type { Metadata } from 'next'
 import {
   Hero,
-  Problem,
   Modules,
-  HowItWorks,
   Security,
   FAQ,
-  FinalCTA,
   Footer,
 } from '@/components/landing'
 
@@ -39,12 +36,9 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-background">
       <Hero />
-      <Problem />
       <Modules />
-      <HowItWorks />
       <Security />
       <FAQ />
-      <FinalCTA />
       <Footer />
     </main>
   )

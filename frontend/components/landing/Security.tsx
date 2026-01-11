@@ -10,19 +10,14 @@ const features = [
 export function Security() {
   return (
     <section className="px-4 py-10">
-      <div className="max-w-3xl mx-auto">
-        <div className="rounded-xl border border-border bg-card/50 p-6 animate-fade-in">
-          <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
-            Security
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {features.map(({ icon: Icon, label }) => (
-              <div key={label} className="flex items-center gap-3 text-sm text-foreground">
-                <Icon className="w-4 h-4 text-primary shrink-0" />
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-muted-foreground">
+          {features.map(({ icon: Icon, label }) => (
+            <div key={label} className="flex items-center gap-1.5">
+              <Icon className="w-3.5 h-3.5" />
+              <span>{label}</span>
+            </div>
+          ))}
         </div>
       </div>
     </section>
