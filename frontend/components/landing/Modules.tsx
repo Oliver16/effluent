@@ -16,8 +16,8 @@ const modules = [
   {
     icon: GitBranch,
     title: 'Scenarios',
-    subtitle: 'Control surfaces for decisions.',
-    bullets: ['Branch baseline safely', 'Compare deltas across outcomes'],
+    subtitle: 'Life-event driven what-if modeling.',
+    bullets: ['28 templates: job change, baby, home purchase...', 'Branch, merge, compare outcomes'],
   },
   {
     icon: BookOpen,

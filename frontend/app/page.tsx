@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import {
   Hero,
   Modules,
+  LifeEvents,
   Security,
   FAQ,
   Footer,
@@ -37,6 +38,7 @@ export default function Home() {
     <main className="min-h-screen bg-background">
       <Hero />
       <Modules />
+      <LifeEvents />
       <Security />
       <FAQ />
       <Footer />

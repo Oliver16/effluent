@@ -1,6 +1,7 @@
 export { Hero } from './Hero'
 export { Problem } from './Problem'
 export { Modules } from './Modules'
+export { LifeEvents } from './LifeEvents'
 export { HowItWorks } from './HowItWorks'
 export { Security } from './Security'
 export { FAQ } from './FAQ'
