@@ -54,6 +54,9 @@ class MonthlyState:
     applied_changes: set = field(default_factory=set)  # Track one-time changes applied
     employer_match: EmployerMatchInfo = field(default_factory=EmployerMatchInfo)  # Employer 401k match config
     employer_match_ytd: Decimal = field(default_factory=lambda: Decimal('0'))  # Track YTD employer match for annual limits
+    # Deferred flows: flows with future start dates that activate during the projection
+    deferred_incomes: list = field(default_factory=list)
+    deferred_expenses: list = field(default_factory=list)
 
     @property
     def total_assets(self) -> Decimal:
@@ -197,6 +200,12 @@ class ScenarioEngine:
         for month in range(self.scenario.projection_months):
             current_date = self.scenario.start_date + relativedelta(months=month)
 
+            # Activate deferred flows whose start date has been reached
+            state = self._activate_deferred_flows(state, current_date)
+
+            # Check for flows that have ended and remove them
+            state = self._remove_ended_flows(state, current_date)
+
             # Apply any changes that take effect this month
             for change in changes:
                 if change.effective_date <= current_date:
@@ -249,10 +258,12 @@ class ScenarioEngine:
         liabilities = {}
 
         # Determine the reference date for checking active flows
-        # For live baselines (as_of_date=None), use today's date to match metrics service
-        # behavior. This ensures flows created today are included in the projection.
+        # Use the scenario's start_date to determine which flows are active at the
+        # beginning of the projection. This ensures flows with future effective dates
+        # (e.g., life events set for November) are not included in the initial state
+        # but instead take effect at the correct point in the projection.
         # For pinned baselines, use the specified as_of_date.
-        reference_date = as_of_date or date.today()
+        reference_date = as_of_date or self.scenario.start_date
 
         for acct in Account.objects.filter(household=self.household, is_active=True):
             # Get appropriate snapshot based on as_of_date
@@ -296,15 +307,19 @@ class ScenarioEngine:
         incomes = []
         expenses = []
         transfers = []
+        deferred_incomes = []
+        deferred_expenses = []
+
+        # Calculate the end of the projection period for collecting deferred flows
+        projection_end = reference_date + relativedelta(months=self.scenario.projection_months)
 
         # Include income from IncomeSource objects (primary source of income data)
         for source in IncomeSource.objects.filter(household=self.household, is_active=True):
-            # Check if source is active on the reference date
-            if source.start_date and source.start_date > reference_date:
-                continue
+            # Skip sources that have already ended before reference date
             if source.end_date and source.end_date < reference_date:
                 continue
-            incomes.append({
+
+            income_data = {
                 'id': f'income_source_{source.id}',
                 'name': source.name,
                 'category': 'salary' if source.income_type in ('w2', 'w2_hourly') else source.income_type,
@@ -312,7 +327,18 @@ class ScenarioEngine:
                 'frequency': 'annually',
                 'monthly': source.gross_annual / Decimal('12'),
                 'linked_account': None,
-            })
+                'start_date': source.start_date,
+                'end_date': source.end_date,
+            }
+
+            # Check if source starts in the future (deferred)
+            if source.start_date and source.start_date > reference_date:
+                # Only defer if within projection period
+                if source.start_date <= projection_end:
+                    deferred_incomes.append(income_data)
+                continue
+
+            incomes.append(income_data)
 
         # Also include baseline flows for projection (scenario-specific flows are added via changes)
         # Use is_active_on() method to check if flow is active on the reference date
@@ -320,13 +346,12 @@ class ScenarioEngine:
         # IMPORTANT: Skip income flows from RecurringFlow if we already have IncomeSources
         # to avoid double-counting. IncomeSources are the primary/authoritative source of
         # income data; RecurringFlow income entries are legacy or supplementary.
-        has_income_sources = len(incomes) > 0
+        has_income_sources = len(incomes) > 0 or len(deferred_incomes) > 0
 
         # Query active flows - use is_active=True to match metrics service behavior
-        # The is_active_on() check below handles date-based filtering
         for flow in RecurringFlow.objects.filter(household=self.household, is_active=True):
-            # Skip flows that are not active on the reference date
-            if not flow.is_active_on(reference_date):
+            # Skip flows that have already ended
+            if flow.end_date and flow.end_date < reference_date:
                 continue
 
             f = {
@@ -337,7 +362,27 @@ class ScenarioEngine:
                 'frequency': flow.frequency,
                 'monthly': flow.monthly_amount,
                 'linked_account': str(flow.linked_account_id) if flow.linked_account_id else None,
+                'start_date': flow.start_date,
+                'end_date': flow.end_date,
             }
+
+            # Check if flow starts in the future (deferred)
+            if flow.start_date > reference_date:
+                # Only defer if within projection period
+                if flow.start_date <= projection_end:
+                    if flow.flow_type == FlowType.INCOME:
+                        # Skip employment income if we have income sources
+                        if has_income_sources:
+                            employment_categories = {'salary', 'hourly_wages', 'w2', 'w2_hourly', 'bonus', 'commission'}
+                            if flow.category in employment_categories:
+                                continue
+                        deferred_incomes.append(f)
+                    elif flow.flow_type == FlowType.EXPENSE:
+                        deferred_expenses.append(f)
+                    # Note: transfers are not deferred for simplicity
+                continue
+
+            # Flow is active now - add to appropriate list
             if flow.flow_type == FlowType.INCOME:
                 # Only include income flows from RecurringFlow if there are no IncomeSources
                 # This prevents double-counting salary/wages income
@@ -389,7 +434,62 @@ class ScenarioEngine:
             applied_changes=set(),
             employer_match=employer_match,
             employer_match_ytd=Decimal('0'),
+            deferred_incomes=deferred_incomes,
+            deferred_expenses=deferred_expenses,
         )
+
+    def _activate_deferred_flows(self, state: MonthlyState, current_date: date) -> MonthlyState:
+        """
+        Activate deferred flows whose start date has been reached.
+
+        Moves flows from deferred_incomes/deferred_expenses to active incomes/expenses
+        when the projection date reaches or passes their start_date.
+        """
+        # Activate deferred incomes
+        still_deferred_incomes = []
+        for flow in state.deferred_incomes:
+            start_date = flow.get('start_date')
+            if start_date and start_date <= current_date:
+                # Flow is now active - move to active incomes
+                state.incomes.append(flow)
+            else:
+                # Still deferred
+                still_deferred_incomes.append(flow)
+        state.deferred_incomes = still_deferred_incomes
+
+        # Activate deferred expenses
+        still_deferred_expenses = []
+        for flow in state.deferred_expenses:
+            start_date = flow.get('start_date')
+            if start_date and start_date <= current_date:
+                # Flow is now active - move to active expenses
+                state.expenses.append(flow)
+            else:
+                # Still deferred
+                still_deferred_expenses.append(flow)
+        state.deferred_expenses = still_deferred_expenses
+
+        return state
+
+    def _remove_ended_flows(self, state: MonthlyState, current_date: date) -> MonthlyState:
+        """
+        Remove flows that have ended as of the current date.
+
+        Checks end_date on active flows and removes any that have ended.
+        """
+        # Remove ended incomes
+        state.incomes = [
+            flow for flow in state.incomes
+            if not flow.get('end_date') or flow['end_date'] >= current_date
+        ]
+
+        # Remove ended expenses
+        state.expenses = [
+            flow for flow in state.expenses
+            if not flow.get('end_date') or flow['end_date'] >= current_date
+        ]
+
+        return state
 
     def _apply_change(self, state: MonthlyState, change: ScenarioChange, current_date: date) -> MonthlyState:
         """Apply a scenario change to the state."""
