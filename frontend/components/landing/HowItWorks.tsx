@@ -20,9 +20,9 @@ const steps = [
 
 export function HowItWorks() {
   return (
-    <section className="px-4 py-20 bg-muted/30">
+    <section className="px-4 py-12 bg-muted/30">
       <div className="max-w-3xl mx-auto">
-        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-12 text-foreground animate-fade-in">
+        <h2 className="text-2xl sm:text-3xl font-bold text-center mb-8 text-foreground animate-fade-in">
           Initialize → Observe → Operate
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-8">

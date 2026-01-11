@@ -22,7 +22,7 @@ export function Hero() {
       <div className="relative z-10 max-w-4xl mx-auto text-center animate-fade-in">
         {/* Main headline */}
         <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-6 tracking-tight">
-          A financial cockpit for your household.
+          A financial control plane for your household.
         </h1>
 
         {/* Subheadline */}
@@ -56,7 +56,7 @@ export function Hero() {
             className="min-w-[200px] bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/30"
             data-track="cta-launch-cockpit"
           >
-            <Link href="/login">Launch the cockpit</Link>
+            <Link href="/login">Launch the control plane</Link>
           </Button>
           <Button
             asChild

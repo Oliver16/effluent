@@ -9,7 +9,7 @@ const features = [
 
 export function Security() {
   return (
-    <section className="px-4 py-16">
+    <section className="px-4 py-10">
       <div className="max-w-3xl mx-auto">
         <div className="rounded-xl border border-border bg-card/50 p-6 animate-fade-in">
           <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-4">
