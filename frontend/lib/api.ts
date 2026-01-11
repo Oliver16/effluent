@@ -613,7 +613,7 @@ export const lifeEventTemplates = {
       .then(data => toCamelCase<LifeEventTemplate>(data)),
   categories: () =>
     api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/life-event-templates/categories/'),
-  apply: (templateId: string, data: {
+  apply: (templateIdOrName: string, data: {
     scenarioId: string;
     effectiveDate: string;
     changeValues?: Record<string, Record<string, unknown>>;
@@ -623,7 +623,7 @@ export const lifeEventTemplates = {
       templateName: string;
       changesCreated: number;
       changes: ScenarioChange[];
-    }>(`/api/v1/life-event-templates/${templateId}/apply/`, toSnakeCase(data))
+    }>(`/api/v1/life-event-templates/${encodeURIComponent(templateIdOrName)}/apply/`, toSnakeCase(data))
       .then(data => toCamelCase<{
         status: string;
         templateName: string;
