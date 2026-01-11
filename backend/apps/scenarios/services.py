@@ -8,6 +8,7 @@ from apps.core.models import Household
 from apps.accounts.models import Account, ASSET_TYPES, LIABILITY_TYPES, LIQUID_TYPES, RETIREMENT_TYPES
 from apps.flows.models import RecurringFlow, FlowType, Frequency, FREQUENCY_TO_MONTHLY
 from apps.taxes.models import PreTaxDeduction, IncomeSource
+from apps.taxes.services import ScenarioTaxCalculator
 from .models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 
 
@@ -47,8 +48,8 @@ class MonthlyState:
     month: int
     assets: dict  # account_id -> AssetInfo
     liabilities: dict  # account_id -> LiabilityInfo
-    incomes: list  # active flows
-    expenses: list  # active flows
+    incomes: list  # active flows (gross income)
+    expenses: list  # active flows (includes taxes)
     transfers: list = field(default_factory=list)  # transfer flows (move money between accounts)
     contribution_rates: dict = field(default_factory=dict)  # 401k, HSA percentages
     applied_changes: set = field(default_factory=set)  # Track one-time changes applied
@@ -57,6 +58,7 @@ class MonthlyState:
     # Deferred flows: flows with future start dates that activate during the projection
     deferred_incomes: list = field(default_factory=list)
     deferred_expenses: list = field(default_factory=list)
+    income_tax_map: dict = field(default_factory=dict)  # income_id -> tax_expense_id mapping
 
     @property
     def total_assets(self) -> Decimal:
@@ -117,6 +119,27 @@ class ScenarioEngine:
     def __init__(self, scenario: Scenario):
         self.scenario = scenario
         self.household = scenario.household
+        # Initialize tax calculator for income tax calculations
+        self.tax_calculator = ScenarioTaxCalculator(
+            household=self.household,
+            filing_status=self._get_filing_status(),
+            state=getattr(self.household, 'state_of_residence', None),
+        )
+
+    def _get_filing_status(self) -> str:
+        """Get filing status from household W2 withholding or default."""
+        from apps.taxes.models import W2Withholding
+        withholding = W2Withholding.objects.filter(
+            income_source__household=self.household,
+            income_source__is_active=True,
+        ).first()
+        if withholding:
+            return withholding.filing_status
+        # Default based on household member count
+        member_count = self.household.members.count()
+        if member_count > 1:
+            return 'married_jointly'
+        return 'single'
 
     def _get_all_changes(self) -> list[ScenarioChange]:
         """
@@ -309,26 +332,34 @@ class ScenarioEngine:
         transfers = []
         deferred_incomes = []
         deferred_expenses = []
+        income_tax_map = {}  # Maps income_id -> tax_expense_id
 
         # Calculate the end of the projection period for collecting deferred flows
         projection_end = reference_date + relativedelta(months=self.scenario.projection_months)
 
         # Include income from IncomeSource objects (primary source of income data)
+        # Calculate taxes for each income source
+        cumulative_income = Decimal('0')
         for source in IncomeSource.objects.filter(household=self.household, is_active=True):
             # Skip sources that have already ended before reference date
             if source.end_date and source.end_date < reference_date:
                 continue
 
+            income_id = f'income_source_{source.id}'
+            income_type = '1099' if source.income_type in ('self_employed', '1099') else 'w2'
+            monthly_gross = source.gross_annual / Decimal('12')
+
             income_data = {
-                'id': f'income_source_{source.id}',
+                'id': income_id,
                 'name': source.name,
                 'category': 'salary' if source.income_type in ('w2', 'w2_hourly') else source.income_type,
                 'amount': source.gross_annual,
                 'frequency': 'annually',
-                'monthly': source.gross_annual / Decimal('12'),
+                'monthly': monthly_gross,
                 'linked_account': None,
                 'start_date': source.start_date,
                 'end_date': source.end_date,
+                '_income_type': income_type,  # Track for tax purposes
             }
 
             # Check if source starts in the future (deferred)
@@ -339,6 +370,29 @@ class ScenarioEngine:
                 continue
 
             incomes.append(income_data)
+
+            # Calculate tax on this income using marginal calculation
+            tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                income_change=source.gross_annual,
+                income_type=income_type,
+                existing_annual_income=cumulative_income,
+            )
+            cumulative_income += source.gross_annual
+
+            # Add tax expense for this income
+            tax_expense_id = f'tax_{income_id}'
+            monthly_tax = tax_breakdown.total_tax / Decimal('12')
+            expenses.append({
+                'id': tax_expense_id,
+                'name': f'{source.name} - Taxes',
+                'category': 'income_tax',
+                'amount': tax_breakdown.total_tax,
+                'frequency': 'annually',
+                'monthly': monthly_tax.quantize(Decimal('0.01')),
+                '_is_tax_expense': True,
+                '_source_income_id': income_id,
+            })
+            income_tax_map[income_id] = tax_expense_id
 
         # Also include baseline flows for projection (scenario-specific flows are added via changes)
         # Use is_active_on() method to check if flow is active on the reference date
@@ -392,7 +446,36 @@ class ScenarioEngine:
                     employment_categories = {'salary', 'hourly_wages', 'w2', 'w2_hourly', 'bonus', 'commission'}
                     if flow.category in employment_categories:
                         continue
+
+                # Determine income type for tax calculation
+                se_categories = {'self_employed', '1099', 'business_income', 'freelance'}
+                income_type = '1099' if flow.category in se_categories else 'w2'
+                f['_income_type'] = income_type
+
                 incomes.append(f)
+
+                # Calculate and add tax expense for this income flow
+                annual_income = flow.monthly_amount * Decimal('12')
+                tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                    income_change=annual_income,
+                    income_type=income_type,
+                    existing_annual_income=cumulative_income,
+                )
+                cumulative_income += annual_income
+
+                tax_expense_id = f'tax_{flow.id}'
+                monthly_tax = tax_breakdown.total_tax / Decimal('12')
+                expenses.append({
+                    'id': tax_expense_id,
+                    'name': f'{flow.name} - Taxes',
+                    'category': 'income_tax',
+                    'amount': tax_breakdown.total_tax,
+                    'frequency': 'annually',
+                    'monthly': monthly_tax.quantize(Decimal('0.01')),
+                    '_is_tax_expense': True,
+                    '_source_income_id': str(flow.id),
+                })
+                income_tax_map[str(flow.id)] = tax_expense_id
             elif flow.flow_type == FlowType.EXPENSE:
                 expenses.append(f)
             elif flow.flow_type == FlowType.TRANSFER:
@@ -436,6 +519,7 @@ class ScenarioEngine:
             employer_match_ytd=Decimal('0'),
             deferred_incomes=deferred_incomes,
             deferred_expenses=deferred_expenses,
+            income_tax_map=income_tax_map,
         )
 
     def _activate_deferred_flows(self, state: MonthlyState, current_date: date) -> MonthlyState:
@@ -444,6 +528,7 @@ class ScenarioEngine:
 
         Moves flows from deferred_incomes/deferred_expenses to active incomes/expenses
         when the projection date reaches or passes their start_date.
+        Also calculates taxes for newly activated income flows.
         """
         # Activate deferred incomes
         still_deferred_incomes = []
@@ -452,6 +537,32 @@ class ScenarioEngine:
             if start_date and start_date <= current_date:
                 # Flow is now active - move to active incomes
                 state.incomes.append(flow)
+
+                # Calculate and add tax expense for this newly activated income
+                income_id = flow['id']
+                income_type = flow.get('_income_type', 'w2')
+                annual_income = flow['monthly'] * Decimal('12')
+
+                existing_annual_income = self._get_state_annual_income(state, exclude_id=income_id)
+                tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                    income_change=annual_income,
+                    income_type=income_type,
+                    existing_annual_income=existing_annual_income,
+                )
+
+                tax_expense_id = f'tax_{income_id}'
+                monthly_tax = tax_breakdown.total_tax / Decimal('12')
+                state.expenses.append({
+                    'id': tax_expense_id,
+                    'name': f'{flow["name"]} - Taxes',
+                    'category': 'income_tax',
+                    'amount': tax_breakdown.total_tax,
+                    'frequency': 'annually',
+                    'monthly': monthly_tax.quantize(Decimal('0.01')),
+                    '_is_tax_expense': True,
+                    '_source_income_id': income_id,
+                })
+                state.income_tax_map[income_id] = tax_expense_id
             else:
                 # Still deferred
                 still_deferred_incomes.append(flow)
@@ -476,17 +587,28 @@ class ScenarioEngine:
         Remove flows that have ended as of the current date.
 
         Checks end_date on active flows and removes any that have ended.
+        Also removes associated tax expenses when income ends.
         """
+        # Find incomes that are ending and remove their tax expenses
+        ended_income_ids = set()
+        for flow in state.incomes:
+            if flow.get('end_date') and flow['end_date'] < current_date:
+                ended_income_ids.add(flow['id'])
+                # Remove from income_tax_map
+                if flow['id'] in state.income_tax_map:
+                    del state.income_tax_map[flow['id']]
+
         # Remove ended incomes
         state.incomes = [
             flow for flow in state.incomes
             if not flow.get('end_date') or flow['end_date'] >= current_date
         ]
 
-        # Remove ended expenses
+        # Remove ended expenses (including tax expenses for ended incomes)
         state.expenses = [
             flow for flow in state.expenses
-            if not flow.get('end_date') or flow['end_date'] >= current_date
+            if (not flow.get('end_date') or flow['end_date'] >= current_date) and
+               flow.get('_source_income_id') not in ended_income_ids
         ]
 
         return state
@@ -515,20 +637,57 @@ class ScenarioEngine:
             state.applied_changes.add(change_key)
 
         if change.change_type == ChangeType.ADD_INCOME:
+            income_id = f'scenario_{change.id}'
+            category = params.get('category', 'other_income')
+            amount = Decimal(str(params.get('amount', 0)))
+            frequency = params.get('frequency', 'monthly')
+            monthly = self._to_monthly(amount, frequency)
+
+            # Determine income type for tax calculation
+            se_categories = {'self_employed', '1099', 'business_income', 'freelance', 'rental'}
+            income_type = params.get('tax_treatment', '1099' if category in se_categories else 'w2')
+
             state.incomes.append({
-                'id': f'scenario_{change.id}',
+                'id': income_id,
                 'name': change.name,
-                'category': params.get('category', 'other_income'),
-                'amount': Decimal(str(params.get('amount', 0))),
-                'frequency': params.get('frequency', 'monthly'),
-                'monthly': self._to_monthly(params.get('amount', 0), params.get('frequency', 'monthly')),
+                'category': category,
+                'amount': amount,
+                'frequency': frequency,
+                'monthly': monthly,
+                '_income_type': income_type,
             })
 
+            # Calculate tax on this new income
+            existing_annual_income = self._get_state_annual_income(state, exclude_id=income_id)
+            annual_income = monthly * Decimal('12')
+            tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                income_change=annual_income,
+                income_type=income_type,
+                existing_annual_income=existing_annual_income,
+            )
+
+            # Add tax expense
+            tax_expense_id = f'tax_{income_id}'
+            monthly_tax = tax_breakdown.total_tax / Decimal('12')
+            state.expenses.append({
+                'id': tax_expense_id,
+                'name': f'{change.name} - Taxes',
+                'category': 'income_tax',
+                'amount': tax_breakdown.total_tax,
+                'frequency': 'annually',
+                'monthly': monthly_tax.quantize(Decimal('0.01')),
+                '_is_tax_expense': True,
+                '_source_income_id': income_id,
+            })
+            state.income_tax_map[income_id] = tax_expense_id
+
         elif change.change_type == ChangeType.MODIFY_INCOME:
-            # Modify existing income flow
+            # Modify existing income flow and recalculate taxes
             flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
             for income in state.incomes:
                 if income['id'] == flow_id:
+                    old_monthly = income['monthly']
+
                     if 'amount' in params:
                         income['amount'] = Decimal(str(params['amount']))
                         freq = params.get('frequency', income['frequency'])
@@ -536,11 +695,67 @@ class ScenarioEngine:
                         income['monthly'] = self._to_monthly(params['amount'], freq)
                     if 'category' in params:
                         income['category'] = params['category']
+
+                    new_monthly = income['monthly']
+
+                    # Recalculate tax if income amount changed
+                    if new_monthly != old_monthly:
+                        income_type = income.get('_income_type', 'w2')
+                        if params.get('tax_treatment'):
+                            income_type = params['tax_treatment']
+                            income['_income_type'] = income_type
+
+                        # Calculate new tax based on this income
+                        existing_annual_income = self._get_state_annual_income(state, exclude_id=flow_id)
+                        annual_income = new_monthly * Decimal('12')
+                        tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                            income_change=annual_income,
+                            income_type=income_type,
+                            existing_annual_income=existing_annual_income,
+                        )
+
+                        # Update or create tax expense
+                        tax_expense_id = state.income_tax_map.get(flow_id)
+                        monthly_tax = tax_breakdown.total_tax / Decimal('12')
+
+                        if tax_expense_id:
+                            # Update existing tax expense
+                            for expense in state.expenses:
+                                if expense['id'] == tax_expense_id:
+                                    expense['amount'] = tax_breakdown.total_tax
+                                    expense['monthly'] = monthly_tax.quantize(Decimal('0.01'))
+                                    break
+                        else:
+                            # Create new tax expense
+                            tax_expense_id = f'tax_{flow_id}'
+                            state.expenses.append({
+                                'id': tax_expense_id,
+                                'name': f'{income["name"]} - Taxes',
+                                'category': 'income_tax',
+                                'amount': tax_breakdown.total_tax,
+                                'frequency': 'annually',
+                                'monthly': monthly_tax.quantize(Decimal('0.01')),
+                                '_is_tax_expense': True,
+                                '_source_income_id': flow_id,
+                            })
+                            state.income_tax_map[flow_id] = tax_expense_id
                     break
 
         elif change.change_type == ChangeType.REMOVE_INCOME:
             flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
             state.incomes = [i for i in state.incomes if i['id'] != flow_id]
+
+            # Also remove the associated tax expense
+            tax_expense_id = state.income_tax_map.get(flow_id)
+            if tax_expense_id:
+                state.expenses = [e for e in state.expenses if e['id'] != tax_expense_id]
+                del state.income_tax_map[flow_id]
+            else:
+                # Fallback: remove any tax expense linked to this income
+                state.expenses = [
+                    e for e in state.expenses
+                    if e.get('_source_income_id') != flow_id
+                ]
 
         elif change.change_type == ChangeType.ADD_EXPENSE:
             state.expenses.append({
@@ -764,14 +979,29 @@ class ScenarioEngine:
                     )
 
         elif change.change_type == ChangeType.LUMP_SUM_INCOME:
-            # One-time: add to liquid assets
-            amount = Decimal(str(params.get('amount', 0)))
+            # One-time income: add net (after tax) to liquid assets
+            gross_amount = Decimal(str(params.get('amount', 0)))
+
+            # Determine income type for tax calculation
+            income_type = params.get('tax_treatment', 'w2')
+
+            # Calculate tax on this lump sum income
+            existing_annual_income = self._get_state_annual_income(state)
+            tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                income_change=gross_amount,
+                income_type=income_type,
+                existing_annual_income=existing_annual_income,
+            )
+
+            # Net amount after tax withholding
+            net_amount = gross_amount - tax_breakdown.total_tax
+
             liquid_asset = next((k for k, a in state.assets.items() if a.is_liquid), None)
             if liquid_asset:
-                state.assets[liquid_asset].balance += amount
+                state.assets[liquid_asset].balance += net_amount
             elif state.assets:
                 first_key = next(iter(state.assets.keys()))
-                state.assets[first_key].balance += amount
+                state.assets[first_key].balance += net_amount
 
         elif change.change_type == ChangeType.LUMP_SUM_EXPENSE:
             # One-time: subtract from liquid assets
@@ -839,6 +1069,9 @@ class ScenarioEngine:
                             })
                     break
 
+            # Recalculate taxes since pre-tax deductions affect taxable income
+            self._recalculate_all_taxes(state)
+
         elif change.change_type == ChangeType.MODIFY_HSA:
             # Change HSA contribution rate
             new_percentage = Decimal(str(params.get('percentage', 0)))
@@ -869,6 +1102,9 @@ class ScenarioEngine:
                             'monthly': new_contribution,
                         })
                     break
+
+            # Recalculate taxes since HSA contributions are pre-tax
+            self._recalculate_all_taxes(state)
 
         # TASK-14: Overlay adjustments
         # Supports both legacy (monthly_adjustment) and new schema (amount/mode)
@@ -918,31 +1154,45 @@ class ScenarioEngine:
                 # Legacy schema: monthly_adjustment
                 adjustment = Decimal(str(params.get('monthly_adjustment', 0)))
 
-            tax_treatment = params.get('tax_treatment', 'w2')
+            income_type = params.get('tax_treatment', 'w2')
 
             if adjustment != 0:
-                # Try to use TaxService for proper netting, fall back to rough estimate
-                try:
-                    from apps.taxes.services import TaxService
-                    tax_service = TaxService(self.household)
-                    # Estimate annual adjustment and compute tax
-                    annual_adjustment = adjustment * 12
-                    tax_config = {'income_type': '1099' if tax_treatment == '1099' else 'w2'}
-                    estimated_annual_tax = tax_service.estimate_marginal_tax(annual_adjustment, tax_config)
-                    net_adjustment = adjustment - (estimated_annual_tax / 12)
-                except (ImportError, AttributeError, Exception):
-                    # Fall back to rough tax estimate (30% for W2, 40% for 1099 including SE tax)
-                    tax_rate = Decimal('0.40') if tax_treatment == '1099' else Decimal('0.30')
-                    net_adjustment = adjustment * (1 - tax_rate)
+                income_id = f'income_adjustment_{change.id}'
 
+                # Add gross income
                 state.incomes.append({
-                    'id': f'income_adjustment_{change.id}',
+                    'id': income_id,
                     'name': params.get('description', 'Income Adjustment'),
                     'category': 'other_income',
-                    'amount': net_adjustment,
+                    'amount': adjustment,
                     'frequency': 'monthly',
-                    'monthly': net_adjustment,
+                    'monthly': adjustment,
+                    '_income_type': income_type,
                 })
+
+                # Calculate and add tax expense using the tax calculator
+                existing_annual_income = self._get_state_annual_income(state, exclude_id=income_id)
+                annual_adjustment = adjustment * Decimal('12')
+                tax_breakdown = self.tax_calculator.calculate_marginal_tax(
+                    income_change=annual_adjustment,
+                    income_type=income_type,
+                    existing_annual_income=existing_annual_income,
+                )
+
+                # Add tax expense
+                tax_expense_id = f'tax_{income_id}'
+                monthly_tax = tax_breakdown.total_tax / Decimal('12')
+                state.expenses.append({
+                    'id': tax_expense_id,
+                    'name': f'{params.get("description", "Income Adjustment")} - Taxes',
+                    'category': 'income_tax',
+                    'amount': tax_breakdown.total_tax,
+                    'frequency': 'annually',
+                    'monthly': monthly_tax.quantize(Decimal('0.01')),
+                    '_is_tax_expense': True,
+                    '_source_income_id': income_id,
+                })
+                state.income_tax_map[income_id] = tax_expense_id
 
         elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
             # Set up a recurring transfer from liquid to investment account
@@ -1337,3 +1587,86 @@ class ScenarioEngine:
                 pass  # Keep as string if invalid
         mult = FREQUENCY_TO_MONTHLY.get(frequency, Decimal('1'))
         return Decimal(str(amount)) * mult
+
+    def _get_state_annual_income(self, state: MonthlyState, exclude_id: str | None = None) -> Decimal:
+        """
+        Calculate total annual income from current state.
+
+        Args:
+            state: Current monthly state
+            exclude_id: Optional income ID to exclude from calculation
+
+        Returns:
+            Total annual income
+        """
+        total = Decimal('0')
+        for income in state.incomes:
+            if exclude_id and income['id'] == exclude_id:
+                continue
+            # Skip tax-related income entries
+            if income.get('_is_tax_expense'):
+                continue
+            total += income['monthly'] * Decimal('12')
+        return total
+
+    def _recalculate_all_taxes(self, state: MonthlyState) -> None:
+        """
+        Recalculate taxes for all income sources in the state.
+
+        This should be called after any change that affects taxable income
+        (e.g., adding/removing pre-tax deductions like 401k or HSA).
+        """
+        # Calculate total pre-tax deductions from expenses
+        pretax_categories = {'retirement_contribution', 'health_savings', '401k_contribution', 'hsa_contribution'}
+        monthly_pretax_deductions = sum(
+            e['monthly'] for e in state.expenses
+            if e.get('category') in pretax_categories
+        )
+
+        # Recalculate tax for each income source
+        cumulative_income = Decimal('0')
+        for income in state.incomes:
+            income_id = income['id']
+
+            # Skip non-primary incomes and tax adjustments
+            if income.get('_is_tax_expense'):
+                continue
+
+            income_type = income.get('_income_type', 'w2')
+            annual_income = income['monthly'] * Decimal('12')
+
+            # Calculate tax considering pre-tax deductions
+            annual_pretax = monthly_pretax_deductions * Decimal('12')
+            tax_breakdown = self.tax_calculator.calculate_annual_tax(
+                annual_income=annual_income,
+                income_type=income_type,
+                existing_annual_income=cumulative_income,
+                pre_tax_deductions=annual_pretax if income_type == 'w2' else Decimal('0'),
+            )
+            cumulative_income += annual_income
+
+            # Update or create tax expense
+            tax_expense_id = state.income_tax_map.get(income_id)
+            monthly_tax = tax_breakdown.total_tax / Decimal('12')
+
+            if tax_expense_id:
+                # Update existing tax expense
+                for expense in state.expenses:
+                    if expense['id'] == tax_expense_id:
+                        expense['amount'] = tax_breakdown.total_tax
+                        expense['monthly'] = monthly_tax.quantize(Decimal('0.01'))
+                        break
+            else:
+                # Create new tax expense
+                tax_expense_id = f'tax_{income_id}'
+                state.expenses.append({
+                    'id': tax_expense_id,
+                    'name': f'{income.get("name", "Income")} - Taxes',
+                    'category': 'income_tax',
+                    'amount': tax_breakdown.total_tax,
+                    'frequency': 'annually',
+                    'monthly': monthly_tax.quantize(Decimal('0.01')),
+                    '_is_tax_expense': True,
+                    '_source_income_id': income_id,
+                })
+                state.income_tax_map[income_id] = tax_expense_id
