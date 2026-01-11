@@ -1,7 +1,7 @@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FieldConfig } from './change-field-config';
-import { Account, RecurringFlow } from '@/lib/types';
+import { Account, RecurringFlow, HouseholdMember, IncomeSourceDetail } from '@/lib/types';
 
 interface ChangeFieldProps {
   fieldName: string;
@@ -10,24 +10,79 @@ interface ChangeFieldProps {
   onChange: (value: string) => void;
   accounts?: Account[];
   flows?: RecurringFlow[];
+  members?: HouseholdMember[];
+  incomeSources?: IncomeSourceDetail[];
 }
 
 /**
  * Renders a single form field based on its configuration
  */
-export function ChangeField({ fieldName, config, value, onChange, accounts = [], flows = [] }: ChangeFieldProps) {
+export function ChangeField({ fieldName, config, value, onChange, accounts = [], flows = [], members = [], incomeSources = [] }: ChangeFieldProps) {
   const { label, placeholder, type, options, flowType } = config;
+
+  // Income source selector
+  if (type === 'income_source_select') {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={fieldName}>{label}</Label>
+        <select
+          id={fieldName}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Create new income source</option>
+          {incomeSources.map((source) => (
+            <option key={source.id} value={source.id}>
+              {source.name} ({source.incomeType}) - ${parseFloat(source.grossAnnual).toLocaleString()}/yr
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          Select existing source to link, or leave empty to create new during adoption
+        </p>
+      </div>
+    );
+  }
+
+  // Member selector
+  if (type === 'member_select') {
+    return (
+      <div className="space-y-2">
+        <Label htmlFor={fieldName}>{label}</Label>
+        <select
+          id={fieldName}
+          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+        >
+          <option value="">Select {label.toLowerCase()}</option>
+          {members.map((member) => (
+            <option key={member.id} value={member.id}>
+              {member.firstName} {member.lastName}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  }
 
   // Account selector
   if (type === 'account_select') {
-    // Filter to liability accounts for debt-related changes
+    // For linked_account_id, show cash/savings accounts; for source_account_id, show debt accounts
+    const isLinkedAccount = fieldName === 'linked_account_id';
+    const cashAccountTypes = new Set([
+      'checking', 'savings', 'money_market', 'cash', 'high_yield_savings',
+    ]);
     const debtAccountTypes = new Set([
       'credit_card', 'store_card', 'heloc', 'personal_loc', 'business_loc',
       'primary_mortgage', 'rental_mortgage', 'second_mortgage',
       'auto_loan', 'personal_loan', 'student_loan_federal', 'student_loan_private', 'boat_loan',
       'medical_debt', 'tax_debt', 'family_loan', 'other_liability',
     ]);
-    const filteredAccounts = accounts.filter(a => debtAccountTypes.has(a.accountType));
+    const filteredAccounts = isLinkedAccount
+      ? accounts.filter(a => cashAccountTypes.has(a.accountType))
+      : accounts.filter(a => debtAccountTypes.has(a.accountType));
 
     return (
       <div className="space-y-2">

@@ -219,6 +219,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
             # Handle changes that can be converted to persistent data
             if change.change_type == ChangeType.ADD_EXPENSE:
+                # Support both old 'category' field and new 'expense_category' field
+                expense_cat = params.get('expense_category') or params.get('category', 'miscellaneous')
                 flow = RecurringFlow.objects.create(
                     household=request.household,
                     name=change.name,
@@ -226,9 +228,10 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     flow_type=FlowType.EXPENSE,
                     amount=params.get('amount', 0),
                     frequency=params.get('frequency', 'monthly'),
-                    expense_category=params.get('category', 'miscellaneous'),
+                    expense_category=expense_cat,
                     start_date=change.effective_date,
                     end_date=change.end_date,
+                    linked_account_id=params.get('linked_account_id'),
                     is_baseline=True,
                     is_active=True,
                 )
@@ -239,6 +242,66 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 })
 
             elif change.change_type == ChangeType.ADD_INCOME:
+                from apps.taxes.models import IncomeSource
+                from apps.core.models import HouseholdMember
+
+                # Support both old 'category' field and new 'income_category' field
+                income_cat = params.get('income_category') or params.get('category', 'other_income')
+                income_type = params.get('income_type', 'other')
+                income_source_id = params.get('income_source_id')
+                household_member_id = params.get('household_member_id')
+
+                # Get or create income source for proper tax calculation
+                income_source = None
+                if income_source_id:
+                    # User selected existing income source
+                    try:
+                        income_source = IncomeSource.objects.get(
+                            id=income_source_id,
+                            household=request.household
+                        )
+                    except IncomeSource.DoesNotExist:
+                        pass
+
+                if not income_source and household_member_id:
+                    # Create new income source for this income
+                    from decimal import Decimal
+                    try:
+                        member = HouseholdMember.objects.get(
+                            id=household_member_id,
+                            household=request.household
+                        )
+                        # Calculate annual salary based on frequency
+                        amount = Decimal(str(params.get('amount', 0)))
+                        freq = params.get('frequency', 'monthly')
+                        freq_multipliers = {
+                            'weekly': 52, 'biweekly': 26, 'semimonthly': 24,
+                            'monthly': 12, 'quarterly': 4, 'annually': 1
+                        }
+                        annual_salary = amount * freq_multipliers.get(freq, 12)
+
+                        # Map flow frequency to income source pay_frequency
+                        pay_freq_map = {
+                            'weekly': 'weekly', 'biweekly': 'biweekly',
+                            'semimonthly': 'semimonthly', 'monthly': 'monthly',
+                            'quarterly': 'monthly', 'annually': 'monthly'
+                        }
+                        pay_frequency = pay_freq_map.get(freq, 'monthly')
+
+                        income_source = IncomeSource.objects.create(
+                            household=request.household,
+                            household_member=member,
+                            name=change.name,
+                            income_type=income_type,
+                            gross_annual_salary=annual_salary,
+                            pay_frequency=pay_frequency,
+                            start_date=change.effective_date,
+                            end_date=change.end_date,
+                            is_active=True,
+                        )
+                    except HouseholdMember.DoesNotExist:
+                        pass
+
                 flow = RecurringFlow.objects.create(
                     household=request.household,
                     name=change.name,
@@ -246,9 +309,12 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     flow_type=FlowType.INCOME,
                     amount=params.get('amount', 0),
                     frequency=params.get('frequency', 'monthly'),
-                    income_category=params.get('category', 'other_income'),
+                    income_category=income_cat,
                     start_date=change.effective_date,
                     end_date=change.end_date,
+                    linked_account_id=params.get('linked_account_id'),
+                    household_member_id=household_member_id,
+                    income_source=income_source,
                     is_baseline=True,
                     is_active=True,
                 )
@@ -256,6 +322,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     'change_id': str(change.id),
                     'type': 'ADD_INCOME',
                     'flow_id': str(flow.id),
+                    'income_source_id': str(income_source.id) if income_source else None,
                 })
 
             elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:

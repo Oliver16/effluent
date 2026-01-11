@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { scenarios } from '@/lib/api';
+import { scenarios, scenarioActions } from '@/lib/api';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScenarioContextBar } from '@/components/layout/ScenarioContextBar';
 import { CockpitLayout } from '@/components/layout/CockpitLayout';
@@ -20,6 +20,7 @@ import { MilestoneComparison } from '@/components/scenarios/milestone-comparison
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
 import { MergeScenarioDialog } from '@/components/scenarios/merge-scenario-dialog';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
+import { useRouter } from 'next/navigation';
 import { Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -31,6 +32,7 @@ function isBaselineScenario(scenario: Scenario) {
 
 export default function ScenarioDetailPage() {
   const { id } = useParams();
+  const router = useRouter();
   const queryClient = useQueryClient();
   const [showAddChange, setShowAddChange] = useState(false);
   const [showLifeEvents, setShowLifeEvents] = useState(false);
@@ -71,6 +73,32 @@ export default function ScenarioDetailPage() {
     },
   });
 
+  const adoptMutation = useMutation({
+    mutationFn: () => scenarioActions.adopt(scenarioId),
+    onSuccess: (result) => {
+      // Invalidate all relevant queries after adoption
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      queryClient.invalidateQueries({ queryKey: ['flows'] });
+      queryClient.invalidateQueries({ queryKey: ['baseline'] });
+      // Navigate to scenarios list since this scenario is now archived
+      router.push('/scenarios');
+    },
+  });
+
+  const handleAdopt = () => {
+    const changesCount = scenario?.changes?.length || 0;
+    if (confirm(
+      `Are you sure you want to adopt this scenario?\n\n` +
+      `This will:\n` +
+      `• Convert ${changesCount} change(s) into real recurring flows\n` +
+      `• Archive this scenario\n` +
+      `• Update your baseline projection\n\n` +
+      `This action cannot be undone.`
+    )) {
+      adoptMutation.mutate();
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -100,6 +128,7 @@ export default function ScenarioDetailPage() {
   const horizonMismatch = baselineProjections && projections.length !== baselineProjections.length;
 
   // Context bar element
+  const hasChanges = (scenario.changes?.length || 0) > 0;
   const contextBar = (
     <ScenarioContextBar
       scenarioName={scenario.name}
@@ -112,8 +141,11 @@ export default function ScenarioDetailPage() {
       onAddChange={() => setShowAddChange(true)}
       onLifeEvent={() => setShowLifeEvents(true)}
       onMerge={() => setShowMerge(true)}
+      onAdopt={handleAdopt}
       onRunProjection={() => computeMutation.mutate()}
       isRunning={computeMutation.isPending}
+      isAdopting={adoptMutation.isPending}
+      hasChanges={hasChanges}
       isBaseline={isBaseline}
     />
   );
