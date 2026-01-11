@@ -3,9 +3,19 @@ import type { NextRequest } from 'next/server';
 
 // API base URL for token refresh (server-side only)
 // In production, INTERNAL_API_URL must be set. The http:// fallback is only for local development.
+// IMPORTANT: Only use INTERNAL_API_URL - NEXT_PUBLIC_API_URL could leak HTTP URLs to browsers.
 function getApiUrl(): string {
-  const url = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
-  if (url) return url;
+  if (process.env.INTERNAL_API_URL) {
+    return process.env.INTERNAL_API_URL;
+  }
+
+  // Warn if NEXT_PUBLIC_API_URL is set - it's not needed for server-side requests
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.warn(
+      '[Middleware] NEXT_PUBLIC_API_URL is set but should not be used. ' +
+      'Set INTERNAL_API_URL for server-side API calls.'
+    );
+  }
 
   // Only allow localhost fallback in development
   if (process.env.NODE_ENV === 'development') {
@@ -13,8 +23,8 @@ function getApiUrl(): string {
   }
 
   // In production, this would cause mixed content issues - fail fast
-  console.error('[Middleware] CRITICAL: No API URL configured. Set INTERNAL_API_URL environment variable.');
-  throw new Error('INTERNAL_API_URL or NEXT_PUBLIC_API_URL must be set in production');
+  console.error('[Middleware] CRITICAL: No INTERNAL_API_URL configured. This is required in production.');
+  throw new Error('INTERNAL_API_URL must be set in production');
 }
 
 const API_URL = getApiUrl();
