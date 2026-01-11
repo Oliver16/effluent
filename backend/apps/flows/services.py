@@ -17,7 +17,7 @@ from typing import Optional
 from django.db import transaction
 
 from apps.core.models import Household
-from apps.accounts.models import Account, AccountType, LiabilityDetails, SYSTEM_ACCOUNT_TYPES
+from apps.accounts.models import Account, AccountType, LiabilityDetails, SYSTEM_ACCOUNT_TYPES, INSTALLMENT_DEBT_TYPES
 from apps.taxes.models import IncomeSource, PreTaxDeduction, W2Withholding
 from apps.taxes.services import PaycheckCalculator
 from .models import RecurringFlow, FlowType, Frequency, ExpenseCategory, IncomeCategory
@@ -462,7 +462,14 @@ class SystemFlowGenerator:
                 continue
 
             details = account.liability_details
-            if not details.minimum_payment or details.minimum_payment <= 0:
+            payment = details.minimum_payment
+
+            # If no minimum payment specified, calculate from amortization for installment debt
+            if (not payment or payment <= 0) and account.account_type in INSTALLMENT_DEBT_TYPES:
+                payment = self._calculate_amortized_payment(account, details)
+
+            # Skip if still no payment (e.g., revolving debt without min payment, or missing data)
+            if not payment or payment <= 0:
                 continue
 
             # Determine expense category based on account type
@@ -473,7 +480,7 @@ class SystemFlowGenerator:
                 name=f"{account.name} Payment",
                 flow_type=FlowType.EXPENSE,
                 expense_category=expense_category,
-                amount=details.minimum_payment,
+                amount=payment,
                 frequency=Frequency.MONTHLY,
                 start_date=_get_default_start_date(),
                 from_account=checking_account,
@@ -486,6 +493,30 @@ class SystemFlowGenerator:
                 system_flow_kind='debt_payment',
                 calculation_version=CALCULATION_VERSION,
             )
+
+    def _calculate_amortized_payment(self, account: Account, details: LiabilityDetails) -> Decimal:
+        """Calculate monthly payment using amortization formula.
+
+        Uses the standard amortization formula: M = P × [r(1+r)^n] / [(1+r)^n - 1]
+        where M = monthly payment, P = principal, r = monthly rate, n = term in months.
+        """
+        balance = account.current_balance
+        rate = details.interest_rate or Decimal('0')
+        term = details.term_months
+
+        # Need balance and term to calculate
+        if not balance or balance <= 0 or not term or term <= 0:
+            return Decimal('0')
+
+        if rate > 0:
+            monthly_rate = rate / 12
+            # Standard amortization formula
+            payment = balance * (monthly_rate * (1 + monthly_rate) ** term) / ((1 + monthly_rate) ** term - 1)
+        else:
+            # No interest: simple division
+            payment = balance / term
+
+        return payment.quantize(Decimal('0.01'))
 
     def _get_expense_category_for_liability(self, account_type: str) -> str:
         """Map account type to expense category."""
