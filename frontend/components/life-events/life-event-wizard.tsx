@@ -19,6 +19,18 @@ import { Check, ChevronLeft, ChevronRight, Loader2, CheckCircle, ArrowRight, Git
 import { cn } from '@/lib/utils'
 import { SURFACE, STATUS_COLORS } from '@/lib/design-tokens'
 import { ScenarioPicker } from '@/components/scenarios/scenario-picker'
+import { INCOME_CATEGORIES, EXPENSE_CATEGORIES, INCOME_TYPES } from '@/components/scenarios/change-field-config'
+
+// Frequency options matching backend Frequency enum
+const FREQUENCY_OPTIONS = [
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'biweekly', label: 'Bi-weekly' },
+  { value: 'semimonthly', label: 'Semi-monthly' },
+  { value: 'monthly', label: 'Monthly' },
+  { value: 'quarterly', label: 'Quarterly' },
+  { value: 'semiannually', label: 'Semi-annually' },
+  { value: 'annually', label: 'Annually' },
+]
 
 type ScenarioMode = 'create' | 'append'
 
@@ -553,6 +565,80 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                                           .replace(/_/g, ' ')
                                           .replace(/\b\w/g, (c) => c.toUpperCase())
 
+                                        // Handle frequency field with dropdown
+                                        if (key === 'frequency') {
+                                          return (
+                                            <div key={key} className="space-y-1">
+                                              <Label className="text-sm">{label}</Label>
+                                              <Select
+                                                value={String(value)}
+                                                onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                              >
+                                                <SelectTrigger>
+                                                  <SelectValue placeholder="Select frequency" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {FREQUENCY_OPTIONS.map((opt) => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                      {opt.label}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          )
+                                        }
+
+                                        // Handle category field with dropdown (income or expense based on change type)
+                                        if (key === 'category') {
+                                          const isIncome = change.changeType === 'add_income' || change.changeType === 'modify_income'
+                                          const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+                                          return (
+                                            <div key={key} className="space-y-1">
+                                              <Label className="text-sm">{label}</Label>
+                                              <Select
+                                                value={String(value)}
+                                                onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                              >
+                                                <SelectTrigger>
+                                                  <SelectValue placeholder="Select category" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {categories.map((opt) => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                      {opt.label}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          )
+                                        }
+
+                                        // Handle income_type field with dropdown
+                                        if (key === 'income_type') {
+                                          return (
+                                            <div key={key} className="space-y-1">
+                                              <Label className="text-sm">Income Type (for taxes)</Label>
+                                              <Select
+                                                value={String(value)}
+                                                onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                              >
+                                                <SelectTrigger>
+                                                  <SelectValue placeholder="Select income type" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  {INCOME_TYPES.map((opt) => (
+                                                    <SelectItem key={opt.value} value={opt.value}>
+                                                      {opt.label}
+                                                    </SelectItem>
+                                                  ))}
+                                                </SelectContent>
+                                              </Select>
+                                            </div>
+                                          )
+                                        }
+
                                         const isNumeric =
                                           key.includes('amount') ||
                                           key.includes('payment') ||
@@ -667,6 +753,80 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                                 const label = key
                                   .replace(/_/g, ' ')
                                   .replace(/\b\w/g, (c) => c.toUpperCase())
+
+                                // Handle frequency field with dropdown
+                                if (key === 'frequency') {
+                                  return (
+                                    <div key={key} className="space-y-1">
+                                      <Label className="text-sm">{label}</Label>
+                                      <Select
+                                        value={String(value)}
+                                        onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select frequency" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {FREQUENCY_OPTIONS.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                              {opt.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )
+                                }
+
+                                // Handle category field with dropdown (income or expense based on change type)
+                                if (key === 'category') {
+                                  const isIncome = change.changeType === 'add_income' || change.changeType === 'modify_income'
+                                  const categories = isIncome ? INCOME_CATEGORIES : EXPENSE_CATEGORIES
+                                  return (
+                                    <div key={key} className="space-y-1">
+                                      <Label className="text-sm">{label}</Label>
+                                      <Select
+                                        value={String(value)}
+                                        onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select category" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {categories.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                              {opt.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )
+                                }
+
+                                // Handle income_type field with dropdown
+                                if (key === 'income_type') {
+                                  return (
+                                    <div key={key} className="space-y-1">
+                                      <Label className="text-sm">Income Type (for taxes)</Label>
+                                      <Select
+                                        value={String(value)}
+                                        onValueChange={(v) => handleChangeValue(idx, key, v)}
+                                      >
+                                        <SelectTrigger>
+                                          <SelectValue placeholder="Select income type" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {INCOME_TYPES.map((opt) => (
+                                            <SelectItem key={opt.value} value={opt.value}>
+                                              {opt.label}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+                                  )
+                                }
 
                                 // Determine input type
                                 const isNumeric =

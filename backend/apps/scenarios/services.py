@@ -6,7 +6,7 @@ from django.db import transaction
 
 from apps.core.models import Household
 from apps.accounts.models import Account, ASSET_TYPES, LIABILITY_TYPES, LIQUID_TYPES, RETIREMENT_TYPES
-from apps.flows.models import RecurringFlow, FlowType, FREQUENCY_TO_MONTHLY
+from apps.flows.models import RecurringFlow, FlowType, Frequency, FREQUENCY_TO_MONTHLY
 from apps.taxes.models import PreTaxDeduction, IncomeSource
 from .models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 
@@ -1327,5 +1327,11 @@ class ScenarioEngine:
 
     def _to_monthly(self, amount, frequency: str) -> Decimal:
         """Convert amount to monthly."""
+        # Convert string frequency to Frequency enum if needed
+        if isinstance(frequency, str):
+            try:
+                frequency = Frequency(frequency)
+            except ValueError:
+                pass  # Keep as string if invalid
         mult = FREQUENCY_TO_MONTHLY.get(frequency, Decimal('1'))
         return Decimal(str(amount)) * mult
