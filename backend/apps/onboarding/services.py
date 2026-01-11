@@ -600,6 +600,14 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.PERSONAL_PROPERTY:
+            # Delete existing personal property to prevent duplication when going back
+            # Note: We don't delete 'vehicle' type here as motorcycles share that type
+            # with cars from VEHICLES step
+            Account.objects.filter(
+                household=self.household,
+                account_type__in=['jewelry', 'other_asset', 'boat']
+            ).delete()
+
             # Map frontend types to backend account types
             type_mapping = {
                 'jewelry': 'jewelry',
@@ -635,6 +643,12 @@ class OnboardingService:
                 )
 
         elif step == OnboardingStep.BUSINESS_OWNERSHIP:
+            # Delete existing business ownership to prevent duplication when going back
+            Account.objects.filter(
+                household=self.household,
+                account_type='business_equity'
+            ).delete()
+
             for biz in data.get('business_ownership', []):
                 # Create account for business ownership stake
                 account = Account.objects.create(
