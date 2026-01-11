@@ -11,7 +11,7 @@ const modules = [
     icon: Activity,
     title: 'Flows',
     subtitle: 'The engine beneath the instruments.',
-    bullets: ['Paycheck breakdown with tax modeling', 'Recurring income/expense mechanics'],
+    bullets: ['Context-aware cash flow mechanics', 'Tax-integrated paycheck modeling'],
   },
   {
     icon: GitBranch,
