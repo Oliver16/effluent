@@ -1,18 +1,16 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { decisions, accounts as accountsApi } from '@/lib/api'
-import { DecisionTemplate, DecisionStep, DecisionField, DecisionRunResponse, Account } from '@/lib/types'
+import { DecisionTemplate, DecisionStep, DecisionRunResponse } from '@/lib/types'
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { ScenarioPicker } from '@/components/scenarios/scenario-picker'
 import { WizardField } from './wizard-field'
@@ -93,7 +91,6 @@ function buildDefaults(steps: DecisionStep[]): Record<string, unknown> {
 }
 
 export function DecisionWizard({ template }: DecisionWizardProps) {
-  const router = useRouter()
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [result, setResult] = useState<DecisionRunResponse | null>(null)
   // Create/append mode state

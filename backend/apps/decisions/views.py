@@ -407,8 +407,8 @@ class DecisionRunViewSet(ViewSet):
         scenario_name_override = request.data.get('scenario_name_override', run.scenario_name_override)
 
         try:
-            # Compile the decision
-            scenario, changes = compile_decision(
+            # Compile the decision (always creates new scenario for drafts)
+            scenario, changes, scenario_created = compile_decision(
                 template_key=run.template_key,
                 inputs=run.inputs,
                 household=household,
@@ -429,6 +429,7 @@ class DecisionRunViewSet(ViewSet):
                 'decision_run_id': run.id,
                 'changes_created': len(changes),
                 'scenario': scenario,
+                'scenario_created': scenario_created,
             }
 
             response_serializer = DecisionRunResponseSerializer(response_data)
