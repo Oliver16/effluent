@@ -59,7 +59,7 @@ export function ChangeField({ fieldName, config, value, onChange, accounts = [],
           <option value="">Select {label.toLowerCase()}</option>
           {members.map((member) => (
             <option key={member.id} value={member.id}>
-              {member.firstName} {member.lastName}
+              {member.name}
             </option>
           ))}
         </select>
