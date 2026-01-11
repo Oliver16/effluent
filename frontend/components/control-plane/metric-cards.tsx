@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { formatCurrency, formatPercent, formatDecimal } from '@/lib/utils';
-import { Wallet, Shield, PiggyBank, TrendingUp } from 'lucide-react';
+import { Wallet, Shield, PiggyBank, TrendingUp, Calendar } from 'lucide-react';
 import { MetricSnapshot } from '@/lib/types';
 
 interface MetricCardsProps {
@@ -35,10 +35,16 @@ export function MetricCards({ metrics }: MetricCardsProps) {
       subtitle: 'Emergency fund',
       icon: PiggyBank,
     },
+    {
+      title: 'Cash on Hand',
+      value: `${formatDecimal(metrics.daysCashOnHand, 0)} days`,
+      subtitle: getDaysCashLabel(parseFloat(metrics.daysCashOnHand)),
+      icon: Calendar,
+    },
   ];
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
       {cards.map((card) => (
         <Card key={card.title}>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -62,4 +68,10 @@ function getDSCRLabel(dscr: number): string {
   if (dscr >= 1.5) return 'Good';
   if (dscr >= 1) return 'Adequate';
   return 'Critical';
+}
+
+function getDaysCashLabel(days: number): string {
+  if (days >= 180) return 'Strong';
+  if (days >= 90) return 'Adequate';
+  return 'Low';
 }

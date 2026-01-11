@@ -181,6 +181,7 @@ class ScenarioProjection(TimestampedModel):
     dscr = models.DecimalField(max_digits=6, decimal_places=3)
     savings_rate = models.DecimalField(max_digits=5, decimal_places=4)
     liquidity_months = models.DecimalField(max_digits=5, decimal_places=2)
+    days_cash_on_hand = models.DecimalField(max_digits=6, decimal_places=1)
 
     # Breakdown by category (JSON)
     income_breakdown = models.JSONField(default=dict)

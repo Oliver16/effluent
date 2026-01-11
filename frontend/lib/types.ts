@@ -184,6 +184,7 @@ export interface MetricSnapshot {
   monthlySurplus: string
   dscr: string
   liquidityMonths: string
+  daysCashOnHand: string
   savingsRate: string
   dtiRatio: string
   debtToAssetMarket: string
@@ -297,6 +298,7 @@ export interface ScenarioProjection {
   dscr: string
   savingsRate: string
   liquidityMonths: string
+  daysCashOnHand: string
   incomeBreakdown: Record<string, string>
   expenseBreakdown: Record<string, string>
   assetBreakdown: Record<string, string>
