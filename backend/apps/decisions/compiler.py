@@ -7,6 +7,7 @@ import re
 from datetime import date
 from decimal import Decimal
 from django.db import transaction
+from django.db.models import Max
 from django.utils import timezone
 
 from apps.core.models import Household
@@ -26,7 +27,12 @@ class DecisionCompiler:
     Compiles decision template inputs into scenarios and scenario changes.
 
     Usage:
+        # Create new scenario
         compiler = DecisionCompiler(template_key, inputs, household)
+        scenario, changes = compiler.compile()
+
+        # Append to existing scenario
+        compiler = DecisionCompiler(template_key, inputs, household, target_scenario=my_scenario)
         scenario, changes = compiler.compile()
     """
 
@@ -37,12 +43,14 @@ class DecisionCompiler:
         household: Household,
         start_date: date = None,
         scenario_name_override: str = None,
+        target_scenario: Scenario = None,
     ):
         self.template_key = template_key
         self.inputs = inputs
         self.household = household
         self.start_date = start_date
         self.scenario_name_override = scenario_name_override
+        self.target_scenario = target_scenario
 
         # Load the template
         self.template = DecisionTemplate.objects.filter(
@@ -53,12 +61,12 @@ class DecisionCompiler:
         if not self.template:
             raise DecisionCompilerError(f"Template '{template_key}' not found or inactive")
 
-    def compile(self) -> tuple[Scenario, list[ScenarioChange]]:
+    def compile(self) -> tuple[Scenario, list[ScenarioChange], bool]:
         """
         Compile template inputs into a scenario with changes.
 
         Returns:
-            (Scenario, list[ScenarioChange])
+            (Scenario, list[ScenarioChange], scenario_created: bool)
         """
         with transaction.atomic():
             # Get or create baseline using canonical service to avoid duplicate baselines
@@ -67,31 +75,48 @@ class DecisionCompiler:
             # Determine scenario start date
             effective_start = self.start_date or baseline.start_date
 
-            # Generate scenario name
-            scenario_name = self._generate_scenario_name()
+            if self.target_scenario:
+                # Append mode - validate and use existing scenario
+                if self.target_scenario.household_id != self.household.id:
+                    raise DecisionCompilerError("Target scenario does not belong to household")
+                if self.target_scenario.is_baseline:
+                    raise DecisionCompilerError("Cannot append to baseline scenario")
+                if self.target_scenario.is_archived:
+                    raise DecisionCompilerError("Cannot append to archived scenario")
 
-            # Create the scenario
-            scenario = Scenario.objects.create(
-                household=self.household,
-                name=scenario_name,
-                description=f"Created from decision template: {self.template.name}",
-                is_baseline=False,
-                parent_scenario=baseline,
-                start_date=effective_start,
-                projection_months=baseline.projection_months,
-                inflation_rate=baseline.inflation_rate,
-                investment_return_rate=baseline.investment_return_rate,
-                salary_growth_rate=baseline.salary_growth_rate,
-            )
+                scenario = self.target_scenario
+                scenario_created = False
+
+                # Get starting display_order for new changes
+                max_order = scenario.changes.aggregate(Max('display_order'))['display_order__max'] or -1
+                display_order_offset = max_order + 1
+            else:
+                # Create new scenario
+                scenario_name = self._generate_scenario_name()
+
+                scenario = Scenario.objects.create(
+                    household=self.household,
+                    name=scenario_name,
+                    description=f"Created from decision template: {self.template.name}",
+                    is_baseline=False,
+                    parent_scenario=baseline,
+                    start_date=effective_start,
+                    projection_months=baseline.projection_months,
+                    inflation_rate=baseline.inflation_rate,
+                    investment_return_rate=baseline.investment_return_rate,
+                    salary_growth_rate=baseline.salary_growth_rate,
+                )
+                scenario_created = True
+                display_order_offset = 0
 
             # Compile changes from template
-            changes = self._compile_changes(scenario, effective_start)
+            changes = self._compile_changes(scenario, effective_start, display_order_offset)
 
             # Compute projections
             engine = ScenarioEngine(scenario)
             engine.compute_projection()
 
-            return scenario, changes
+            return scenario, changes, scenario_created
 
     def _generate_scenario_name(self) -> str:
         """Generate a descriptive name for the scenario."""
@@ -121,7 +146,7 @@ class DecisionCompiler:
 
         return ""
 
-    def _compile_changes(self, scenario: Scenario, effective_date: date) -> list[ScenarioChange]:
+    def _compile_changes(self, scenario: Scenario, effective_date: date, display_order_offset: int = 0) -> list[ScenarioChange]:
         """Compile template change plan into ScenarioChange records."""
         changes = []
         change_plan = self.template.change_plan
@@ -134,7 +159,7 @@ class DecisionCompiler:
             if not self._should_include_change(change_spec):
                 continue
 
-            change = self._create_change(scenario, change_spec, effective_date, idx)
+            change = self._create_change(scenario, change_spec, effective_date, display_order_offset + idx)
             if change:
                 changes.append(change)
 
@@ -313,7 +338,8 @@ def compile_decision(
     household: Household,
     start_date: date = None,
     scenario_name_override: str = None,
-) -> tuple[Scenario, list[ScenarioChange]]:
+    target_scenario: Scenario = None,
+) -> tuple[Scenario, list[ScenarioChange], bool]:
     """
     Convenience function to compile a decision.
 
@@ -323,9 +349,10 @@ def compile_decision(
         household: The household to create the scenario for
         start_date: Optional override for the scenario start date
         scenario_name_override: Optional custom scenario name
+        target_scenario: Optional existing scenario to append changes to (append mode)
 
     Returns:
-        (Scenario, list[ScenarioChange])
+        (Scenario, list[ScenarioChange], scenario_created: bool)
     """
     compiler = DecisionCompiler(
         template_key=template_key,
@@ -333,6 +360,7 @@ def compile_decision(
         household=household,
         start_date=start_date,
         scenario_name_override=scenario_name_override,
+        target_scenario=target_scenario,
     )
     return compiler.compile()
 
@@ -343,7 +371,8 @@ def create_decision_run(
     household: Household,
     scenario_name_override: str = None,
     as_draft: bool = False,
-) -> DecisionRun:
+    target_scenario: Scenario = None,
+) -> tuple[DecisionRun, bool]:
     """
     Create a decision run record, optionally compiling it immediately.
 
@@ -353,9 +382,10 @@ def create_decision_run(
         household: The household
         scenario_name_override: Optional custom scenario name
         as_draft: If True, save as draft without creating scenario
+        target_scenario: Optional existing scenario to append changes to (append mode)
 
     Returns:
-        DecisionRun
+        (DecisionRun, scenario_created: bool)
     """
     template = DecisionTemplate.objects.filter(key=template_key, is_active=True).first()
 
@@ -368,17 +398,20 @@ def create_decision_run(
         is_draft=as_draft,
     )
 
+    scenario_created = False
+
     if not as_draft:
         # Compile immediately
-        scenario, _ = compile_decision(
+        scenario, _, scenario_created = compile_decision(
             template_key=template_key,
             inputs=inputs,
             household=household,
             scenario_name_override=scenario_name_override,
+            target_scenario=target_scenario,
         )
         run.created_scenario = scenario
         run.is_draft = False
         run.completed_at = timezone.now()
         run.save()
 
-    return run
+    return run, scenario_created

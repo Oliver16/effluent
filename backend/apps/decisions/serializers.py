@@ -44,6 +44,8 @@ class DecisionRunInputSerializer(serializers.Serializer):
     template_key = serializers.CharField(max_length=50)
     inputs = serializers.JSONField()
     scenario_name_override = serializers.CharField(max_length=200, required=False, allow_blank=True)
+    # For append mode: ID of an existing scenario to add changes to
+    target_scenario_id = serializers.UUIDField(required=False, allow_null=True)
 
 
 class DecisionDraftInputSerializer(serializers.Serializer):
@@ -104,6 +106,7 @@ class DecisionRunResponseSerializer(serializers.Serializer):
     scenario_name = serializers.CharField()
     decision_run_id = serializers.UUIDField()
     changes_created = serializers.IntegerField()
+    scenario_created = serializers.BooleanField(default=True)  # False if changes were appended
     projections = serializers.SerializerMethodField()
     summary = serializers.SerializerMethodField()
 

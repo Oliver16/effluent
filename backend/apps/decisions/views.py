@@ -214,7 +214,13 @@ class DecisionRunViewSet(ViewSet):
 
     @action(detail=False, methods=['post'], url_path='run')
     def run_decision(self, request):
-        """Execute a decision template and create a scenario."""
+        """
+        Execute a decision template and create a scenario.
+
+        Supports two modes:
+        - Create new: Creates a new scenario with the decision changes
+        - Append: Adds decision changes to an existing scenario (target_scenario_id)
+        """
         serializer = DecisionRunInputSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -229,6 +235,7 @@ class DecisionRunViewSet(ViewSet):
         template_key = serializer.validated_data['template_key']
         inputs = serializer.validated_data['inputs']
         scenario_name_override = serializer.validated_data.get('scenario_name_override', '')
+        target_scenario_id = serializer.validated_data.get('target_scenario_id')
 
         # Get the template
         template = DecisionTemplate.objects.filter(key=template_key, is_active=True).first()
@@ -238,13 +245,27 @@ class DecisionRunViewSet(ViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
+        # Get target scenario if provided (append mode)
+        target_scenario = None
+        if target_scenario_id:
+            target_scenario = Scenario.objects.filter(
+                id=target_scenario_id,
+                household=household
+            ).first()
+            if not target_scenario:
+                return Response(
+                    {'detail': 'Target scenario not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
         try:
             # Compile the decision
-            scenario, changes = compile_decision(
+            scenario, changes, scenario_created = compile_decision(
                 template_key=template_key,
                 inputs=inputs,
                 household=household,
                 scenario_name_override=scenario_name_override or None,
+                target_scenario=target_scenario,
             )
 
             # Create the decision run record
@@ -270,6 +291,7 @@ class DecisionRunViewSet(ViewSet):
                 'changes_created': len(changes),
                 'scenario': scenario,  # For projections serializer
                 'summary': summary,
+                'scenario_created': scenario_created,
             }
 
             response_serializer = DecisionRunResponseSerializer(response_data)

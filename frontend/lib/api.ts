@@ -811,7 +811,16 @@ export const decisions = {
       .then(data => toCamelCase<DecisionTemplate>(data)),
   categories: () =>
     api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/decisions/templates/categories/'),
-  run: (data: { templateKey: string; inputs: Record<string, unknown>; scenarioNameOverride?: string }) =>
+  /**
+   * Run a decision template.
+   * Either creates a new scenario OR appends to an existing one (if targetScenarioId provided).
+   */
+  run: (data: {
+    templateKey: string;
+    inputs: Record<string, unknown>;
+    scenarioNameOverride?: string;
+    targetScenarioId?: string;  // For append mode
+  }) =>
     api.post<DecisionRunResponse>('/api/v1/decisions/run/', toSnakeCase(data))
       .then(data => toCamelCase<DecisionRunResponse>(data)),
   saveDraft: (data: { templateKey: string; inputs: Record<string, unknown> }) =>
