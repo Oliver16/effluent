@@ -11,10 +11,10 @@ import {
 } from '@/components/landing'
 
 export const metadata: Metadata = {
-  title: 'Effluent — Financial Cockpit',
+  title: 'Effluent — Financial Control Plane',
   description: 'Operational HMI for household finance: baseline model, confidence, scenario control.',
   openGraph: {
-    title: 'Effluent — Financial Cockpit',
+    title: 'Effluent — Financial Control Plane',
     description: 'Operational HMI for household finance: baseline model, confidence, scenario control.',
     type: 'website',
     url: 'https://app.effluent.io',
@@ -23,13 +23,13 @@ export const metadata: Metadata = {
         url: '/og.png',
         width: 1200,
         height: 630,
-        alt: 'Effluent — Financial Cockpit',
+        alt: 'Effluent — Financial Control Plane',
       },
     ],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Effluent — Financial Cockpit',
+    title: 'Effluent — Financial Control Plane',
     description: 'Operational HMI for household finance: baseline model, confidence, scenario control.',
     images: ['/og.png'],
   },

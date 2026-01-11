@@ -14,9 +14,13 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Check, ChevronLeft, ChevronRight, Loader2, Calendar, CheckCircle, ArrowRight } from 'lucide-react'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { Check, ChevronLeft, ChevronRight, Loader2, CheckCircle, ArrowRight, GitBranch, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SURFACE, STATUS_COLORS } from '@/lib/design-tokens'
+import { ScenarioPicker } from '@/components/scenarios/scenario-picker'
+
+type ScenarioMode = 'create' | 'append'
 
 interface LifeEventWizardProps {
   template: LifeEventTemplate
@@ -43,9 +47,11 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const [effectiveDate, setEffectiveDate] = useState(
     new Date().toISOString().split('T')[0]
   )
+  const [scenarioMode, setScenarioMode] = useState<ScenarioMode>('create')
   const [scenarioName, setScenarioName] = useState(
     `${template.name} - ${new Date().toLocaleDateString()}`
   )
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string>('')
   // Get suggested changes with fallback
   const suggestedChanges = template.suggestedChanges || []
   const [changeValues, setChangeValues] = useState<Record<string, ChangeValue>>(() => {
@@ -103,7 +109,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
       }))
   }, [flowsData])
 
-  // Create scenario and apply life event
+  // Create or append scenario with life event
   const createMutation = useMutation({
     mutationFn: async () => {
       // Create a new scenario first - start_date is required
@@ -120,27 +126,33 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
         changeValues: changeValues,
       })
 
-      // Compute projections so the scenario is immediately usable
-      await scenarios.compute(scenario.id)
-
-      // Count how many changes were applied
-      const changesApplied = Object.values(changeValues).filter(v => !v._skip).length
+      // If we appended to an existing scenario, recompute projections
+      if (!response.scenarioCreated && response.scenarioId) {
+        await scenarios.compute(response.scenarioId)
+      }
 
       return {
-        scenarioId: scenario.id,
-        scenarioName: scenario.name,
-        changesApplied,
+        scenarioId: response.scenarioId,
+        scenarioName: response.scenarioName,
+        changesApplied: response.changesCreated,
+        wasCreated: response.scenarioCreated,
       }
     },
     onSuccess: (data) => {
       setResult(data)
       queryClient.invalidateQueries({ queryKey: ['scenarios'] })
-      toast.success('Scenario created!', {
-        description: `"${data.scenarioName}" is ready to analyze.`,
-      })
+      if (data.wasCreated) {
+        toast.success('Scenario created!', {
+          description: `"${data.scenarioName}" is ready to analyze.`,
+        })
+      } else {
+        toast.success('Changes added!', {
+          description: `Added ${data.changesApplied} changes to "${data.scenarioName}".`,
+        })
+      }
     },
     onError: (error: Error) => {
-      toast.error('Failed to create scenario', {
+      toast.error('Failed to apply changes', {
         description: error.message,
       })
     },
@@ -266,16 +278,96 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
 
       {/* Form area */}
       <div className="flex-1">
-        {/* Step 1: Overview */}
+        {/* Step 1: Overview - includes mode selection (create vs append) */}
         {currentStep === 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>When will this happen?</CardTitle>
+              <CardTitle>Model this life event</CardTitle>
               <CardDescription>
-                Set the effective date for {template.name.toLowerCase()}
+                Choose how to add {template.name.toLowerCase()} to your projections
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              {/* Mode Selection - git-inspired but user-friendly */}
+              <div className="space-y-3">
+                <Label>How would you like to save this?</Label>
+                <RadioGroup
+                  value={scenarioMode}
+                  onValueChange={(v) => setScenarioMode(v as ScenarioMode)}
+                  className="grid gap-3"
+                >
+                  <label
+                    htmlFor="mode-create"
+                    className={cn(
+                      'flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors',
+                      scenarioMode === 'create'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-muted-foreground/50'
+                    )}
+                  >
+                    <RadioGroupItem value="create" id="mode-create" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 font-medium">
+                        <Plus className="h-4 w-4" />
+                        Create new scenario
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Start fresh with a new "what-if" scenario for this event
+                      </p>
+                    </div>
+                  </label>
+                  <label
+                    htmlFor="mode-append"
+                    className={cn(
+                      'flex items-start gap-3 rounded-lg border p-4 cursor-pointer transition-colors',
+                      scenarioMode === 'append'
+                        ? 'border-primary bg-primary/5'
+                        : 'border-muted hover:border-muted-foreground/50'
+                    )}
+                  >
+                    <RadioGroupItem value="append" id="mode-append" className="mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 font-medium">
+                        <GitBranch className="h-4 w-4" />
+                        Add to existing scenario
+                      </div>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Combine with changes from another scenario you've already created
+                      </p>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+
+              {/* Conditional: Scenario name (create) or Scenario picker (append) */}
+              {scenarioMode === 'create' ? (
+                <div className="space-y-2">
+                  <Label htmlFor="scenarioName">Scenario Name</Label>
+                  <Input
+                    id="scenarioName"
+                    value={scenarioName}
+                    onChange={(e) => setScenarioName(e.target.value)}
+                    placeholder="Enter a name for this scenario"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    A descriptive name to help you identify this scenario later
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>Select Scenario</Label>
+                  <ScenarioPicker
+                    value={selectedScenarioId}
+                    onValueChange={setSelectedScenarioId}
+                    excludeBaseline={true}
+                    placeholder="Choose a scenario to add changes to..."
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    The changes from this event will be added to the selected scenario
+                  </p>
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label htmlFor="effectiveDate">Effective Date</Label>
                 <Input
@@ -286,20 +378,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                   className="max-w-xs"
                 />
                 <p className="text-sm text-muted-foreground">
-                  The date when these changes will start affecting your finances
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="scenarioName">Scenario Name</Label>
-                <Input
-                  id="scenarioName"
-                  value={scenarioName}
-                  onChange={(e) => setScenarioName(e.target.value)}
-                  placeholder="Enter a name for this scenario"
-                />
-                <p className="text-sm text-muted-foreground">
-                  A descriptive name to help you identify this scenario later
+                  When these changes will start affecting your finances
                 </p>
               </div>
 
@@ -443,9 +522,12 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
         {currentStep === 2 && (
           <Card>
             <CardHeader>
-              <CardTitle>Review Your Scenario</CardTitle>
+              <CardTitle>Review Your Changes</CardTitle>
               <CardDescription>
-                Confirm the details before creating your scenario
+                {scenarioMode === 'create'
+                  ? 'Confirm the details before creating your scenario'
+                  : 'Confirm the changes to add to your scenario'
+                }
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -455,8 +537,22 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
                   <span className="font-medium">{template.name}</span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
-                  <span className="text-muted-foreground">Scenario Name</span>
-                  <span className="font-medium">{scenarioName}</span>
+                  <span className="text-muted-foreground">
+                    {scenarioMode === 'create' ? 'New Scenario' : 'Adding to'}
+                  </span>
+                  <span className="font-medium flex items-center gap-2">
+                    {scenarioMode === 'create' ? (
+                      <>
+                        <Plus className="h-4 w-4 text-muted-foreground" />
+                        {scenarioName}
+                      </>
+                    ) : (
+                      <>
+                        <GitBranch className="h-4 w-4 text-muted-foreground" />
+                        Existing scenario
+                      </>
+                    )}
+                  </span>
                 </div>
                 <div className="flex justify-between py-2 border-b">
                   <span className="text-muted-foreground">Effective Date</span>
@@ -498,22 +594,34 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
           </Button>
 
           {currentStep < steps.length - 1 ? (
-            <Button onClick={handleNext}>
+            <Button
+              onClick={handleNext}
+              disabled={
+                // Disable Next if in append mode without a selected scenario
+                scenarioMode === 'append' && !selectedScenarioId && currentStep === 0
+              }
+            >
               Next
               <ChevronRight className="h-4 w-4 ml-2" />
             </Button>
           ) : (
             <Button
               onClick={handleSubmit}
-              disabled={createMutation.isPending || selectedChangesCount === 0}
+              disabled={
+                createMutation.isPending ||
+                selectedChangesCount === 0 ||
+                (scenarioMode === 'append' && !selectedScenarioId)
+              }
             >
               {createMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating...
+                  {scenarioMode === 'create' ? 'Creating...' : 'Adding...'}
                 </>
-              ) : (
+              ) : scenarioMode === 'create' ? (
                 'Create Scenario'
+              ) : (
+                'Add Changes'
               )}
             </Button>
           )}

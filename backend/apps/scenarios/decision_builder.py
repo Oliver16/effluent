@@ -10,6 +10,8 @@ from datetime import date, timedelta
 from decimal import Decimal
 from django.db import transaction
 
+from django.db.models import Max
+
 from apps.core.models import Household
 from .models import Scenario, ScenarioChange, ChangeType
 from .services import ScenarioEngine
@@ -22,23 +24,26 @@ def run_decision_plan(
     goal=None,
     parent_scenario=None,
     start_date: date = None,
-    fail_on_unknown: bool = False
+    fail_on_unknown: bool = False,
+    target_scenario: Scenario = None,
 ) -> dict:
     """
-    Create a scenario from an action plan.
+    Create a scenario from an action plan, or append to an existing scenario.
 
     Args:
         household: The household to create the scenario for
         plan: List of change specifications (from solver or action templates)
-        scenario_name: Name for the new scenario
+        scenario_name: Name for the new scenario (ignored if target_scenario provided)
         goal: Optional Goal object if this is from goal solver
-        parent_scenario: Optional parent scenario to inherit from
+        parent_scenario: Optional parent scenario to inherit from (ignored if target_scenario)
         start_date: When changes take effect (defaults to first of next month)
         fail_on_unknown: If True, raise error on unknown change types
+        target_scenario: Optional existing scenario to append changes to (append mode)
 
     Returns:
         dict with:
-            - scenario: The created Scenario object
+            - scenario: The created/updated Scenario object
+            - scenario_created: Whether a new scenario was created (False if appended)
             - changes: List of created ScenarioChange objects
             - skipped_steps: List of skipped steps with reasons
             - summary: Summary of the projection results
@@ -51,17 +56,34 @@ def run_decision_plan(
 
     skipped_steps = []
     warnings = []
+    scenario_created = False
 
     with transaction.atomic():
-        # Create the scenario
-        scenario = Scenario.objects.create(
-            household=household,
-            name=scenario_name,
-            description=f"Created from action plan" + (f" for goal: {goal.display_name}" if goal else ""),
-            start_date=start_date,
-            parent_scenario=parent_scenario,
-            projection_months=60,  # Default 5 years
-        )
+        # Either use existing scenario (append mode) or create new one
+        if target_scenario:
+            # Append mode - validate ownership
+            if target_scenario.household_id != household.id:
+                raise ValueError("Target scenario does not belong to household")
+            if target_scenario.is_baseline:
+                raise ValueError("Cannot append to baseline scenario")
+            if target_scenario.is_archived:
+                raise ValueError("Cannot append to archived scenario")
+            scenario = target_scenario
+            # Get starting display_order for new changes
+            max_order = scenario.changes.aggregate(Max('display_order'))['display_order__max'] or 0
+            display_order_offset = max_order + 1
+        else:
+            # Create new scenario
+            scenario = Scenario.objects.create(
+                household=household,
+                name=scenario_name,
+                description=f"Created from action plan" + (f" for goal: {goal.display_name}" if goal else ""),
+                start_date=start_date,
+                parent_scenario=parent_scenario,
+                projection_months=60,  # Default 5 years
+            )
+            scenario_created = True
+            display_order_offset = 0
 
         # Create changes from plan
         created_changes = []
@@ -131,7 +153,7 @@ def run_decision_plan(
                 effective_date=step_effective_date,
                 end_date=step_end_date,
                 parameters=params,
-                display_order=idx,
+                display_order=display_order_offset + idx,
                 is_enabled=True,
             )
             created_changes.append(change)
@@ -145,6 +167,7 @@ def run_decision_plan(
 
         result = {
             'scenario': scenario,
+            'scenario_created': scenario_created,
             'changes': created_changes,
             'summary': summary,
         }

@@ -27,9 +27,9 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
-    <section className="px-4 py-20 bg-muted/30">
+    <section className="px-4 py-12 bg-muted/30">
       <div className="max-w-2xl mx-auto">
-        <h2 className="text-2xl font-bold text-center mb-10 text-foreground animate-fade-in">
+        <h2 className="text-2xl font-bold text-center mb-6 text-foreground animate-fade-in">
           FAQ
         </h2>
         <div className="space-y-3">

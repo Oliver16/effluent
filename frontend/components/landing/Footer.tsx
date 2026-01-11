@@ -13,7 +13,7 @@ export function Footer() {
           <div className="col-span-2 sm:col-span-1">
             <div className="font-bold text-lg text-foreground mb-2">Effluent</div>
             <p className="text-sm text-muted-foreground">
-              Financial cockpit for households.
+              Financial control plane for households.
             </p>
           </div>
 

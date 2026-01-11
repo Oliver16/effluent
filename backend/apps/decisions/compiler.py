@@ -208,6 +208,34 @@ class DecisionCompiler:
                 except (ValueError, TypeError):
                     pass
 
+        # Resolve source_account_id if specified (for debt payoff, refinance, etc.)
+        source_account_id = None
+        if 'source_account_id_field' in change_spec:
+            account_field = change_spec['source_account_id_field']
+            if account_field in self.inputs and self.inputs[account_field]:
+                source_account_id = self.inputs[account_field]
+                # Try to get account name to make the change name more descriptive
+                try:
+                    from apps.accounts.models import Account
+                    account = Account.objects.filter(id=source_account_id, household=self.household).first()
+                    if account:
+                        # Update name to include account name
+                        name = self._resolve_template(
+                            change_spec.get('name_template', '').replace('debt', account.name).replace('loan', account.name),
+                            name
+                        )
+                        if not name or name == 'Change':
+                            name = f"{change_spec.get('name', 'Change')} - {account.name}"
+                except Exception:
+                    pass  # If account lookup fails, continue with generic name
+
+        # Resolve source_flow_id if specified (for income/expense modifications)
+        source_flow_id = None
+        if 'source_flow_id_field' in change_spec:
+            flow_field = change_spec['source_flow_id_field']
+            if flow_field in self.inputs and self.inputs[flow_field]:
+                source_flow_id = self.inputs[flow_field]
+
         change = ScenarioChange.objects.create(
             scenario=scenario,
             change_type=change_type,
@@ -215,6 +243,8 @@ class DecisionCompiler:
             description=description,
             effective_date=change_date,
             end_date=end_date,
+            source_account_id=source_account_id,
+            source_flow_id=source_flow_id,
             parameters=parameters,
             display_order=order,
             is_enabled=True,

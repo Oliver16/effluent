@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { TYPOGRAPHY, StatusTone } from '@/lib/design-tokens';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Play, Plus, Sparkles, Loader2 } from 'lucide-react';
+import { Play, Plus, Sparkles, Loader2, GitMerge } from 'lucide-react';
 
 interface ScenarioContextBarProps {
   /** Current scenario name */
@@ -22,8 +22,12 @@ interface ScenarioContextBarProps {
   onAddChange?: () => void;
   /** Life event handler */
   onLifeEvent?: () => void;
+  /** Merge scenarios handler */
+  onMerge?: () => void;
   /** Is projection running */
   isRunning?: boolean;
+  /** Is this the baseline scenario (hides certain actions) */
+  isBaseline?: boolean;
   /** Additional classes */
   className?: string;
 }
@@ -35,7 +39,9 @@ export function ScenarioContextBar({
   onRunProjection,
   onAddChange,
   onLifeEvent,
+  onMerge,
   isRunning = false,
+  isBaseline = false,
   className,
 }: ScenarioContextBarProps) {
   return (
@@ -61,6 +67,13 @@ export function ScenarioContextBar({
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2">
+        {/* Merge button - only for non-baseline scenarios */}
+        {onMerge && !isBaseline && (
+          <Button variant="outline" size="sm" onClick={onMerge} className="h-8">
+            <GitMerge className="h-4 w-4 mr-1.5" />
+            Combine
+          </Button>
+        )}
         {onLifeEvent && (
           <Button variant="outline" size="sm" onClick={onLifeEvent} className="h-8">
             <Sparkles className="h-4 w-4 mr-1.5" />
