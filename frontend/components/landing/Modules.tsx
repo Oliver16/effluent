@@ -5,25 +5,25 @@ const modules = [
     icon: Gauge,
     title: 'Cockpit',
     subtitle: 'High-signal state view + confidence.',
-    bullets: ['Core gauges that matter', 'Drift & staleness warnings'],
+    bullets: ['Stress tests with resilience scoring', 'Goal tracking + solver'],
   },
   {
     icon: Activity,
     title: 'Flows',
     subtitle: 'The engine beneath the instruments.',
-    bullets: ['Recurring income/expense mechanics', 'Traceable assumptions'],
+    bullets: ['Paycheck breakdown with tax modeling', 'Recurring income/expense mechanics'],
   },
   {
     icon: GitBranch,
     title: 'Scenarios',
     subtitle: 'Life-event driven what-if modeling.',
-    bullets: ['28 templates: job change, baby, home purchase...', 'Branch, merge, compare outcomes'],
+    bullets: ['28 templates: job, baby, home...', 'Branch, merge, compare outcomes'],
   },
   {
     icon: BookOpen,
     title: 'Explanations',
     subtitle: 'Interrogate every signal.',
-    bullets: ['Definitions + drivers', 'What changed and why'],
+    bullets: ['Driver decomposition across scenarios', 'What changed and why'],
   },
 ]
 
@@ -39,6 +39,9 @@ export function Modules() {
             <ModuleCard key={module.title} {...module} delay={i * 100} />
           ))}
         </div>
+        <p className="text-center text-xs text-muted-foreground mt-8">
+          Plus: asset groups with LTV tracking, dual-basis net worth, household sharing, full data export.
+        </p>
       </div>
     </section>
   )
