@@ -32,6 +32,7 @@ class MetricsCalculator:
         # Calculate key ratios
         dscr = self._calculate_dscr(total_monthly_income, total_monthly_expenses, total_debt_service)
         liquidity_months = self._calculate_liquidity_months(total_liquid_assets, total_monthly_expenses)
+        days_cash_on_hand = self._calculate_days_cash_on_hand(total_liquid_assets, total_monthly_expenses)
         savings_rate = self._calculate_savings_rate(monthly_surplus, total_monthly_income)
         dti_ratio = self._calculate_dti_ratio(total_debt_service, total_monthly_income)
         debt_to_asset_market = self._calculate_debt_to_asset(total_liabilities, total_assets_market)
@@ -56,6 +57,7 @@ class MetricsCalculator:
                 'monthly_surplus': monthly_surplus,
                 'dscr': dscr,
                 'liquidity_months': liquidity_months,
+                'days_cash_on_hand': days_cash_on_hand,
                 'savings_rate': savings_rate,
                 'dti_ratio': dti_ratio,
                 'debt_to_asset_market': debt_to_asset_market,
@@ -175,6 +177,16 @@ class MetricsCalculator:
             return Decimal('99.99')
 
         return liquid_assets / monthly_expenses
+
+    def _calculate_days_cash_on_hand(self, liquid_assets: Decimal, monthly_expenses: Decimal) -> Decimal:
+        """
+        Number of days liquid assets can cover expenses.
+        Target: >180 days = good, 90-180 days = warning, <90 days = critical.
+        """
+        if monthly_expenses == 0:
+            return Decimal('999.9')
+
+        return (liquid_assets * Decimal('30')) / monthly_expenses
 
     def _calculate_savings_rate(self, surplus: Decimal, income: Decimal) -> Decimal:
         """Savings rate = Surplus / Income. >20% = excellent."""
@@ -551,6 +563,13 @@ class InsightGenerator:
                 "Build your emergency fund by setting aside a portion of each paycheck into a high-yield savings account. Start with a goal of 1 month, then gradually increase to 6 months.",
                 "Emergency Fund"
             )
+        elif metric_name == 'days_cash_on_hand':
+            return (
+                f"{severity_word}: Low Cash Reserves",
+                f"Your cash on hand can only cover {value:.0f} days of expenses. {'This is critically low.' if is_critical else 'Recommended minimum is 180 days (6 months).'}",
+                "Increase your liquid cash reserves by building an emergency fund. Aim for at least 90 days (3 months) of expenses as a minimum, with 180+ days being ideal for financial security.",
+                "Cash Management"
+            )
         elif metric_name == 'dti_ratio':
             value_pct = value * 100
             return (
@@ -619,6 +638,19 @@ class InsightGenerator:
                 recommendation='With a strong emergency fund in place, consider directing additional savings toward retirement or other long-term goals.',
                 metric_name='liquidity_months',
                 metric_value=snapshot.liquidity_months,
+            ))
+
+        # Strong cash reserves
+        if snapshot.days_cash_on_hand >= Decimal('180'):
+            insights.append(Insight.objects.create(
+                household=self.household,
+                severity='positive',
+                category='Cash Management',
+                title='Strong Cash Position',
+                description=f'Your cash reserves can cover {snapshot.days_cash_on_hand:.0f} days of expenses - well above the 180-day target.',
+                recommendation='Your strong cash position provides excellent financial security. Consider whether excess cash could be better deployed in higher-yield investments.',
+                metric_name='days_cash_on_hand',
+                metric_value=snapshot.days_cash_on_hand,
             ))
 
         # Excellent savings rate

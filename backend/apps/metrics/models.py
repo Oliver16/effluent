@@ -14,6 +14,7 @@ class MetricSnapshot(HouseholdOwnedModel):
     monthly_surplus = models.DecimalField(max_digits=12, decimal_places=2)
     dscr = models.DecimalField(max_digits=6, decimal_places=3)
     liquidity_months = models.DecimalField(max_digits=5, decimal_places=2)
+    days_cash_on_hand = models.DecimalField(max_digits=6, decimal_places=1)
     savings_rate = models.DecimalField(max_digits=5, decimal_places=4)
 
     # Tier 2
@@ -60,6 +61,7 @@ class MetricThreshold(HouseholdOwnedModel):
 DEFAULT_THRESHOLDS = [
     {'metric_name': 'dscr', 'warning': Decimal('1.5'), 'critical': Decimal('1.0'), 'comparison': 'lt'},
     {'metric_name': 'liquidity_months', 'warning': Decimal('3'), 'critical': Decimal('1'), 'comparison': 'lt'},
+    {'metric_name': 'days_cash_on_hand', 'warning': Decimal('180'), 'critical': Decimal('90'), 'comparison': 'lt'},
     {'metric_name': 'dti_ratio', 'warning': Decimal('0.36'), 'critical': Decimal('0.43'), 'comparison': 'gt'},
     {'metric_name': 'savings_rate', 'warning': Decimal('0.10'), 'critical': Decimal('0'), 'comparison': 'lt'},
     {'metric_name': 'high_interest_debt_ratio', 'warning': Decimal('0.10'), 'critical': Decimal('0.25'), 'comparison': 'gt'},

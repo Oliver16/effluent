@@ -19,6 +19,7 @@ import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
 import { MilestoneComparison } from '@/components/scenarios/milestone-comparison';
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
 import { MergeScenarioDialog } from '@/components/scenarios/merge-scenario-dialog';
+import { ScenarioMetricsComparison } from '@/components/scenarios/scenario-metrics-comparison';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { useRouter } from 'next/navigation';
 import { Loader2, Rocket } from 'lucide-react';
@@ -228,6 +229,15 @@ export default function ScenarioDetailPage() {
                     title="Projection horizon mismatch"
                     description={`Scenario projects ${projections.length} months but baseline only has ${baselineProjections?.length || 0} months. Comparison shows Month ${compareHorizon}. Re-run the baseline projection to get a full comparison.`}
                     dismissible
+                  />
+                )}
+
+                {/* Metrics Comparison at Final Month */}
+                {finalProjection && finalBaseline && (
+                  <ScenarioMetricsComparison
+                    scenarioProjection={finalProjection}
+                    baselineProjection={finalBaseline}
+                    monthNumber={compareHorizon}
                   />
                 )}
 

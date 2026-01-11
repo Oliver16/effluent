@@ -1183,6 +1183,7 @@ class ScenarioEngine:
 
         savings_rate = state.net_cash_flow / state.total_income if state.total_income > 0 else Decimal('0')
         liquidity = state.liquid_assets / total_exp if total_exp > 0 else Decimal('999')
+        days_cash = (state.liquid_assets * Decimal('30')) / total_exp if total_exp > 0 else Decimal('999.9')
 
         # Build income breakdown aggregating by category
         income_breakdown = {}
@@ -1219,6 +1220,7 @@ class ScenarioEngine:
             dscr=min(dscr, Decimal('999')).quantize(Decimal('0.001')),
             savings_rate=savings_rate.quantize(Decimal('0.0001')),
             liquidity_months=min(liquidity, Decimal('999')).quantize(Decimal('0.01')),
+            days_cash_on_hand=min(days_cash, Decimal('999.9')).quantize(Decimal('0.1')),
             income_breakdown=income_breakdown,
             expense_breakdown=expense_breakdown,
             asset_breakdown=state.get_asset_breakdown(),
