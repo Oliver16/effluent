@@ -47,16 +47,28 @@ import type {
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
-// Server-side requests use the configured URL directly
+// Server-side requests use INTERNAL_API_URL directly
 function getApiBase(): string {
   // Client-side: always use same-origin routing via Next.js rewrites
+  // This ensures HTTPS is used when the page is served over HTTPS
   if (typeof window !== 'undefined') {
     return '';
   }
 
-  // Server-side: use configured URL
-  const url = process.env.INTERNAL_API_URL || process.env.NEXT_PUBLIC_API_URL;
-  if (url) return url;
+  // Server-side: use INTERNAL_API_URL (internal Docker networking uses HTTP, which is fine)
+  // IMPORTANT: NEXT_PUBLIC_API_URL should NOT be used - it could leak HTTP URLs to the browser
+  if (process.env.INTERNAL_API_URL) {
+    return process.env.INTERNAL_API_URL;
+  }
+
+  // Warn if NEXT_PUBLIC_API_URL is set - it's not needed and could cause confusion
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    console.warn(
+      '[API] NEXT_PUBLIC_API_URL is set but not used. ' +
+      'Use INTERNAL_API_URL for server-side API calls. ' +
+      'Client-side always uses same-origin routing.'
+    );
+  }
 
   // In development, allow empty string (will use relative URLs)
   if (process.env.NODE_ENV === 'development') {
