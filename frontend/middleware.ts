@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 // API base URL for token refresh (server-side only)
 // In production, INTERNAL_API_URL must be set. The http:// fallback is only for local development.
 // IMPORTANT: Only use INTERNAL_API_URL - NEXT_PUBLIC_API_URL could leak HTTP URLs to browsers.
+// NOTE: This function is called at runtime, not build time, to avoid Docker build failures.
 function getApiUrl(): string {
   if (process.env.INTERNAL_API_URL) {
     return process.env.INTERNAL_API_URL;
@@ -26,8 +27,6 @@ function getApiUrl(): string {
   console.error('[Middleware] CRITICAL: No INTERNAL_API_URL configured. This is required in production.');
   throw new Error('INTERNAL_API_URL must be set in production');
 }
-
-const API_URL = getApiUrl();
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = [
@@ -65,8 +64,9 @@ function shouldSkip(pathname: string): boolean {
  * Attempt to refresh the access token using the refresh token.
  */
 async function refreshToken(refreshToken: string): Promise<{ access: string; refresh?: string } | null> {
+  const apiUrl = getApiUrl();
   try {
-    const response = await fetch(`${API_URL}/api/auth/token/refresh/`, {
+    const response = await fetch(`${apiUrl}/api/auth/token/refresh/`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ refresh: refreshToken }),
