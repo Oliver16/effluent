@@ -273,6 +273,7 @@ interface Member {
   relationship: string
   is_primary: boolean
   employment_status: string
+  date_of_birth?: string
 }
 
 interface IncomeSource {
@@ -772,6 +773,15 @@ export default function OnboardingPage() {
                         <option key={r.value} value={r.value}>{r.label}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <Label>Date of Birth (optional)</Label>
+                    <Input
+                      type="date"
+                      value={member.date_of_birth || ''}
+                      onChange={(e) => updateArrayItem<Member>('members', index, { date_of_birth: e.target.value })}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">Required for retirement projections</p>
                   </div>
                   <div>
                     <Label>Employment Status</Label>
