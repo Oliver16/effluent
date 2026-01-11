@@ -15,6 +15,7 @@ from .serializers import (
 from .services import ScenarioEngine
 from .baseline import BaselineScenarioService
 from .comparison import ScenarioComparisonService
+from .merge import merge_scenarios
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -300,6 +301,73 @@ class ScenarioViewSet(viewsets.ModelViewSet):
             'scenario_archived': True,
         })
 
+    @action(detail=True, methods=['post'])
+    def merge(self, request, pk=None):
+        """
+        Merge changes from another scenario into this one.
+
+        POST /api/v1/scenarios/{id}/merge/
+        {
+            "source_scenario_id": "uuid",
+            "dedupe": true,        // optional, skip duplicates (default true)
+            "recompute": true      // optional, recompute projections (default true)
+        }
+
+        This combines two scenarios, copying all enabled changes from the source
+        into the target (this scenario). Think of it like merging branches.
+        Use this to build complex scenarios by combining multiple life events.
+
+        Returns:
+            {
+                "status": "merged",
+                "target_scenario_id": "...",
+                "source_scenario_id": "...",
+                "changes_copied": 5,
+                "changes_skipped": 1,
+                "copied": [...],
+                "skipped": [...],
+                "warnings": [...],
+                "projection_recomputed": true
+            }
+        """
+        target = self.get_object()
+        source_id = request.data.get('source_scenario_id')
+        dedupe = request.data.get('dedupe', True)
+        recompute = request.data.get('recompute', True)
+
+        if not source_id:
+            return Response(
+                {'error': 'source_scenario_id is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Fetch source scenario with ownership validation
+        try:
+            source = Scenario.objects.get(
+                id=source_id,
+                household=request.household
+            )
+        except Scenario.DoesNotExist:
+            return Response(
+                {'error': 'Source scenario not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        try:
+            result = merge_scenarios(
+                household=request.household,
+                source=source,
+                target=target,
+                dedupe=dedupe,
+                recompute=recompute,
+            )
+            return Response(result)
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
 
 class ScenarioChangeViewSet(viewsets.ModelViewSet):
     serializer_class = ScenarioChangeSerializer
@@ -504,6 +572,8 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             )
 
         scenario_id = request.data.get('scenario_id')
+        scenario_name = request.data.get('scenario_name')
+        parent_scenario_id = request.data.get('parent_scenario_id')
         effective_date_str = request.data.get('effective_date')
         change_values = request.data.get('change_values', {})  # User-provided values
 
@@ -519,19 +589,60 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         else:
             effective_date = date.today()
 
-        try:
-            scenario = Scenario.objects.get(
-                id=scenario_id,
-                household=request.household
+        scenario_created = False
+
+        if scenario_id:
+            # Append mode - use existing scenario
+            try:
+                scenario = Scenario.objects.get(
+                    id=scenario_id,
+                    household=request.household
+                )
+            except Scenario.DoesNotExist:
+                return Response(
+                    {'error': 'Scenario not found'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+        elif scenario_name:
+            # Create mode - create new scenario
+            parent = None
+            if parent_scenario_id:
+                try:
+                    parent = Scenario.objects.get(
+                        id=parent_scenario_id,
+                        household=request.household
+                    )
+                except Scenario.DoesNotExist:
+                    return Response(
+                        {'error': 'Parent scenario not found'},
+                        status=status.HTTP_404_NOT_FOUND
+                    )
+
+            # Use effective_date as start_date for the scenario
+            start_date = effective_date.replace(day=1)
+
+            scenario = Scenario.objects.create(
+                household=request.household,
+                name=scenario_name,
+                description=f"Created from life event: {template_data['name']}",
+                start_date=start_date,
+                parent_scenario=parent,
+                projection_months=120,  # Default 10 years
             )
-        except Scenario.DoesNotExist:
+            scenario_created = True
+        else:
             return Response(
-                {'error': 'Scenario not found'},
-                status=status.HTTP_404_NOT_FOUND
+                {'error': 'Either scenario_id or scenario_name is required'},
+                status=status.HTTP_400_BAD_REQUEST
             )
 
         created_changes = []
         suggested_changes = template_data.get('suggested_changes', [])
+
+        # Get starting display_order for append mode
+        from django.db.models import Max
+        max_order = scenario.changes.aggregate(Max('display_order'))['display_order__max'] or -1
+        display_order_offset = max_order + 1
 
         for idx, change_template in enumerate(suggested_changes):
             # Get user values for this change (by index or name)
@@ -576,14 +687,24 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 source_flow_id=source_flow_id,
                 source_account_id=source_account_id,
                 parameters=parameters,
-                display_order=idx,
+                display_order=display_order_offset + idx,
                 is_enabled=True,
             )
             created_changes.append(change)
 
-        return Response({
+        # Compute projections for newly created scenarios
+        if scenario_created and created_changes:
+            engine = ScenarioEngine(scenario)
+            engine.compute_projection()
+
+        response_data = {
             'status': 'applied',
             'template_name': template_data['name'],
             'changes_created': len(created_changes),
-            'changes': ScenarioChangeSerializer(created_changes, many=True).data
-        })
+            'changes': ScenarioChangeSerializer(created_changes, many=True).data,
+            'scenario_id': str(scenario.id),
+            'scenario_name': scenario.name,
+            'scenario_created': scenario_created,
+        }
+
+        return Response(response_data)
