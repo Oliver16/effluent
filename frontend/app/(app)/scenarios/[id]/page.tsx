@@ -90,8 +90,12 @@ export default function ScenarioDetailPage() {
   const isBaseline = isBaselineScenario(scenario);
 
   // Get final milestone data for compare view
-  const finalProjection = projections[projections.length - 1];
-  const finalBaseline = baselineProjections?.[baselineProjections.length - 1];
+  // IMPORTANT: Compare at the same month - use the shorter of the two horizons
+  // to ensure we're comparing apples to apples (e.g., don't compare 84-month scenario vs 60-month baseline)
+  const compareHorizon = Math.min(projections.length, baselineProjections?.length || projections.length);
+  const finalProjection = projections[compareHorizon - 1];
+  const finalBaseline = baselineProjections?.[compareHorizon - 1];
+  const horizonMismatch = baselineProjections && projections.length !== baselineProjections.length;
 
   // Context bar element
   const contextBar = (
@@ -181,9 +185,19 @@ export default function ScenarioDetailPage() {
           <TabsContent value="compare" className="space-y-6 mt-6">
             {hasProjections && baselineProjections && baselineProjections.length > 0 ? (
               <>
+                {/* Warning if horizon lengths don't match */}
+                {horizonMismatch && (
+                  <SystemAlert
+                    tone="warning"
+                    title="Projection horizon mismatch"
+                    description={`Scenario projects ${projections.length} months but baseline only has ${baselineProjections?.length || 0} months. Comparison shows Month ${compareHorizon}. Re-run the baseline projection to get a full comparison.`}
+                    dismissible
+                  />
+                )}
+
                 {/* Delta-first comparison metrics */}
                 {finalProjection && finalBaseline && (
-                  <InstrumentPanel title="Impact at End of Horizon" subtitle={`Month ${projections.length}`}>
+                  <InstrumentPanel title="Impact at End of Horizon" subtitle={`Month ${compareHorizon}`}>
                     <MetricRowHeader />
                     <MetricRow
                       label="Net Worth"
