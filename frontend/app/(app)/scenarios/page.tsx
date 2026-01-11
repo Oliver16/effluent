@@ -74,7 +74,7 @@ export default function ScenariosPage() {
       name: 'Current Trajectory',
       description: 'Baseline projection from current state',
       isBaseline: true,
-      projectionMonths: 60,
+      projectionMonths: 120,  // 10 years for proper long-term comparisons
       startDate: todayString(),
     });
   };

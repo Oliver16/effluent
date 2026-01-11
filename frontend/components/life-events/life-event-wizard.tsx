@@ -112,12 +112,16 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   // Create or append scenario with life event
   const createMutation = useMutation({
     mutationFn: async () => {
-      // Apply the life event template - API handles both create and append
-      const response = await lifeEventTemplates.apply(template.name, {
-        ...(scenarioMode === 'create'
-          ? { scenarioName: scenarioName }
-          : { scenarioId: selectedScenarioId }
-        ),
+      // Create a new scenario first - start_date is required
+      const scenario = await scenarios.create({
+        name: scenarioName,
+        description: `Created from life event: ${template.name}`,
+        startDate: effectiveDate || new Date().toISOString().split('T')[0],
+      })
+
+      // Then apply the life event template to the scenario
+      await lifeEventTemplates.apply(template.name, {
+        scenarioId: scenario.id,
         effectiveDate: effectiveDate,
         changeValues: changeValues,
       })

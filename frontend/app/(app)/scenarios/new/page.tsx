@@ -45,7 +45,7 @@ export default function NewScenarioPage() {
   const router = useRouter();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [projectionMonths, setProjectionMonths] = useState('60');
+  const [projectionMonths, setProjectionMonths] = useState('120');
   const [startDate, setStartDate] = useState(todayString());
   const [inflationRate, setInflationRate] = useState('3');
   const [investmentReturnRate, setInvestmentReturnRate] = useState('7');
