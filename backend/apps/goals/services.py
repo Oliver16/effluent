@@ -413,8 +413,9 @@ class GoalEvaluator:
 
     def _get_primary_member_age(self) -> Optional[int]:
         """Get the age of the primary household member."""
-        from apps.core.models import HouseholdMember
+        from apps.core.models import HouseholdMember, HouseholdMembership
 
+        # First try to get date_of_birth from HouseholdMember
         member = HouseholdMember.objects.filter(
             household=self.household,
             is_primary=True
@@ -427,12 +428,28 @@ class GoalEvaluator:
                 relationship='self'
             ).first()
 
-        if not member or not member.date_of_birth:
+        date_of_birth = None
+
+        # Check if member has date_of_birth set
+        if member and member.date_of_birth:
+            date_of_birth = member.date_of_birth
+        else:
+            # Fall back to checking the User's date_of_birth
+            # Get the primary user (owner) of the household
+            membership = HouseholdMembership.objects.filter(
+                household=self.household,
+                role='owner'
+            ).select_related('user').first()
+
+            if membership and membership.user.date_of_birth:
+                date_of_birth = membership.user.date_of_birth
+
+        if not date_of_birth:
             return None
 
         today = timezone.now().date()
-        age = today.year - member.date_of_birth.year
-        if (today.month, today.day) < (member.date_of_birth.month, member.date_of_birth.day):
+        age = today.year - date_of_birth.year
+        if (today.month, today.day) < (date_of_birth.month, date_of_birth.day):
             age -= 1
         return age
 
