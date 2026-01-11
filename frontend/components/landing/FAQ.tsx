@@ -7,19 +7,19 @@ import { cn } from '@/lib/utils'
 const faqs = [
   {
     question: 'Is this a budgeting app?',
-    answer: 'Not really. Budgeting apps track what you spent. Effluent helps you model what\'s ahead—your baseline, your scenarios, your runway.',
+    answer: 'No — it\'s an operational interface for a financial model.',
   },
   {
-    question: 'Do I need to connect my bank accounts?',
-    answer: 'No. You enter your flows manually (income, recurring expenses, etc). This keeps the model in your control and avoids the complexity of syncing.',
+    question: 'Do I need to connect accounts?',
+    answer: 'No. The model is primary; update balances when it matters.',
   },
   {
-    question: 'What does "confidence" mean?',
-    answer: 'It\'s a measure of how fresh and complete your data is. If you haven\'t updated your balances in a while, confidence drops to remind you.',
+    question: 'What does confidence mean?',
+    answer: 'A reliability indicator based on freshness and completeness.',
   },
   {
-    question: 'Can I share with my partner?',
-    answer: 'Yes. You can invite other users to your household. Everyone sees the same data and can run their own scenarios.',
+    question: 'Can multiple users share a household?',
+    answer: 'Yes.',
   },
 ]
 

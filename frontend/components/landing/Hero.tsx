@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Activity } from 'lucide-react'
+import { Activity, GitBranch, Gauge, FileText } from 'lucide-react'
 
 export function Hero() {
   return (
@@ -25,18 +25,27 @@ export function Hero() {
           A financial control plane for your household.
         </h1>
 
-        {/* Subheadline - tighter, less jargon */}
-        <p className="text-lg text-slate-400 mb-8 max-w-xl mx-auto">
-          Most finance apps show you the past. This one helps you see what's coming—and decide what to do about it.
+        {/* Subheadline */}
+        <p className="text-lg text-slate-300 mb-8 max-w-xl mx-auto">
+          Operational interface for your finances — a living model with instrumentation, confidence, and scenario control.
         </p>
 
-        {/* Hero bullets - simplified */}
-        <div className="flex items-center justify-center gap-6 mb-8 text-sm text-slate-500">
-          <span>Model your baseline</span>
-          <span className="hidden sm:inline text-slate-700">·</span>
-          <span>Run scenarios</span>
-          <span className="hidden sm:inline text-slate-700">·</span>
-          <span>Track confidence</span>
+        {/* Hero bullets */}
+        <div className="flex flex-wrap items-center justify-center gap-4 mb-8 text-sm text-slate-400">
+          <div className="flex items-center gap-2">
+            <GitBranch className="w-4 h-4 text-primary" />
+            <span>Baseline model + scenarios</span>
+          </div>
+          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
+          <div className="flex items-center gap-2">
+            <Gauge className="w-4 h-4 text-primary" />
+            <span>Confidence strip</span>
+          </div>
+          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
+          <div className="flex items-center gap-2">
+            <FileText className="w-4 h-4 text-primary" />
+            <span>Explainable metrics</span>
+          </div>
         </div>
 
         {/* CTAs */}

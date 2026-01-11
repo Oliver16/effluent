@@ -4,26 +4,26 @@ const modules = [
   {
     icon: Gauge,
     title: 'Cockpit',
-    subtitle: 'See where you stand at a glance.',
-    bullets: ['Net worth, runway, burn rate', 'Alerts when data gets stale'],
+    subtitle: 'High-signal state view + confidence.',
+    bullets: ['Core gauges that matter', 'Drift & staleness warnings'],
   },
   {
     icon: Activity,
     title: 'Flows',
-    subtitle: 'Model recurring income and expenses.',
-    bullets: ['Paycheck, rent, subscriptions', 'See how they compound over time'],
+    subtitle: 'The engine beneath the instruments.',
+    bullets: ['Recurring income/expense mechanics', 'Traceable assumptions'],
   },
   {
     icon: GitBranch,
     title: 'Scenarios',
-    subtitle: 'Ask "what if" without breaking anything.',
-    bullets: ['Fork your baseline', 'Compare different futures side-by-side'],
+    subtitle: 'Control surfaces for decisions.',
+    bullets: ['Branch baseline safely', 'Compare deltas across outcomes'],
   },
   {
     icon: BookOpen,
     title: 'Explanations',
-    subtitle: 'Understand why numbers changed.',
-    bullets: ['Click any metric for details', 'Trace changes back to their source'],
+    subtitle: 'Interrogate every signal.',
+    bullets: ['Definitions + drivers', 'What changed and why'],
   },
 ]
 
