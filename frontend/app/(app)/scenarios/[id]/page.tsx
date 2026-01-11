@@ -80,8 +80,12 @@ export default function ScenarioDetailPage() {
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
       queryClient.invalidateQueries({ queryKey: ['flows'] });
       queryClient.invalidateQueries({ queryKey: ['baseline'] });
+      queryClient.invalidateQueries({ queryKey: ['income-sources'] });
       // Navigate to scenarios list since this scenario is now archived
       router.push('/scenarios');
+    },
+    onError: (error: Error) => {
+      alert(`Failed to adopt scenario: ${error.message}`);
     },
   });
 

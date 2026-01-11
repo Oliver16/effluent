@@ -415,10 +415,12 @@ class ScenarioEngine:
             state.applied_changes.add(change_key)
 
         if change.change_type == ChangeType.ADD_INCOME:
+            # Support both old 'category' field and new 'income_category' field
+            income_cat = params.get('income_category') or params.get('category', 'other_income')
             state.incomes.append({
                 'id': f'scenario_{change.id}',
                 'name': change.name,
-                'category': params.get('category', 'other_income'),
+                'category': income_cat,
                 'amount': Decimal(str(params.get('amount', 0))),
                 'frequency': params.get('frequency', 'monthly'),
                 'monthly': self._to_monthly(params.get('amount', 0), params.get('frequency', 'monthly')),
@@ -434,8 +436,8 @@ class ScenarioEngine:
                         freq = params.get('frequency', income['frequency'])
                         income['frequency'] = freq
                         income['monthly'] = self._to_monthly(params['amount'], freq)
-                    if 'category' in params:
-                        income['category'] = params['category']
+                    if 'income_category' in params or 'category' in params:
+                        income['category'] = params.get('income_category') or params['category']
                     break
 
         elif change.change_type == ChangeType.REMOVE_INCOME:
@@ -443,10 +445,12 @@ class ScenarioEngine:
             state.incomes = [i for i in state.incomes if i['id'] != flow_id]
 
         elif change.change_type == ChangeType.ADD_EXPENSE:
+            # Support both old 'category' field and new 'expense_category' field
+            expense_cat = params.get('expense_category') or params.get('category', 'miscellaneous')
             state.expenses.append({
                 'id': f'scenario_{change.id}',
                 'name': change.name,
-                'category': params.get('category', 'miscellaneous'),
+                'category': expense_cat,
                 'amount': Decimal(str(params.get('amount', 0))),
                 'frequency': params.get('frequency', 'monthly'),
                 'monthly': self._to_monthly(params.get('amount', 0), params.get('frequency', 'monthly')),
@@ -462,8 +466,8 @@ class ScenarioEngine:
                         freq = params.get('frequency', expense['frequency'])
                         expense['frequency'] = freq
                         expense['monthly'] = self._to_monthly(params['amount'], freq)
-                    if 'category' in params:
-                        expense['category'] = params['category']
+                    if 'expense_category' in params or 'category' in params:
+                        expense['category'] = params.get('expense_category') or params['category']
                     break
 
         elif change.change_type == ChangeType.REMOVE_EXPENSE:
