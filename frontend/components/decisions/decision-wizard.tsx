@@ -1,21 +1,24 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import { decisions, accounts as accountsApi } from '@/lib/api'
-import { DecisionTemplate, DecisionStep, DecisionField, DecisionRunResponse, Account } from '@/lib/types'
+import { DecisionTemplate, DecisionStep, DecisionRunResponse } from '@/lib/types'
 import { Form } from '@/components/ui/form'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
+import { ScenarioPicker } from '@/components/scenarios/scenario-picker'
 import { WizardField } from './wizard-field'
 import { DecisionResults } from './decision-results'
-import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Loader2, GitBranch, Plus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+
+type ScenarioMode = 'create' | 'append'
 
 interface DecisionWizardProps {
   template: DecisionTemplate
@@ -88,9 +91,12 @@ function buildDefaults(steps: DecisionStep[]): Record<string, unknown> {
 }
 
 export function DecisionWizard({ template }: DecisionWizardProps) {
-  const router = useRouter()
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [result, setResult] = useState<DecisionRunResponse | null>(null)
+  // Create/append mode state
+  const [scenarioMode, setScenarioMode] = useState<ScenarioMode>('create')
+  const [targetScenarioId, setTargetScenarioId] = useState<string>('')
+
   const steps = template.uiSchema?.steps || []
   const currentStep = steps[currentStepIndex]
   const isFirstStep = currentStepIndex === 0
@@ -125,12 +131,22 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
 
   const runMutation = useMutation({
     mutationFn: (inputs: Record<string, unknown>) =>
-      decisions.run({ templateKey: template.key, inputs }),
+      decisions.run({
+        templateKey: template.key,
+        inputs,
+        targetScenarioId: scenarioMode === 'append' ? targetScenarioId : undefined,
+      }),
     onSuccess: (data) => {
       setResult(data)
-      toast.success('Scenario created!', {
-        description: `"${data.scenarioName}" has been created.`,
-      })
+      if (data.scenarioCreated) {
+        toast.success('Scenario created!', {
+          description: `"${data.scenarioName}" has been created.`,
+        })
+      } else {
+        toast.success('Changes added!', {
+          description: `${data.changesCreated} changes added to "${data.scenarioName}".`,
+        })
+      }
     },
     onError: (error: Error) => {
       toast.error('Failed to create scenario', {
@@ -173,6 +189,8 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
   const handleStartAnother = () => {
     setResult(null)
     setCurrentStepIndex(0)
+    setScenarioMode('create')
+    setTargetScenarioId('')
     form.reset(defaults)
   }
 
@@ -225,7 +243,72 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
       </div>
 
       {/* Form area */}
-      <div className="flex-1">
+      <div className="flex-1 space-y-4">
+        {/* Scenario mode selection - shows on last step */}
+        {isLastStep && (
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Where should we save this?</CardTitle>
+              <CardDescription>
+                Create a new scenario or add to an existing one
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <RadioGroup
+                value={scenarioMode}
+                onValueChange={(value) => {
+                  setScenarioMode(value as ScenarioMode)
+                  if (value === 'create') {
+                    setTargetScenarioId('')
+                  }
+                }}
+                className="grid gap-3"
+              >
+                <div className="flex items-start space-x-3">
+                  <RadioGroupItem value="create" id="create" className="mt-1" />
+                  <div className="grid gap-1.5 leading-none">
+                    <label
+                      htmlFor="create"
+                      className="flex items-center gap-2 text-sm font-medium leading-none cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4 text-muted-foreground" />
+                      Create new scenario
+                    </label>
+                    <p className="text-sm text-muted-foreground">
+                      Start fresh with a dedicated scenario for this decision
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <RadioGroupItem value="append" id="append" className="mt-1" />
+                  <div className="grid gap-1.5 leading-none flex-1">
+                    <label
+                      htmlFor="append"
+                      className="flex items-center gap-2 text-sm font-medium leading-none cursor-pointer"
+                    >
+                      <GitBranch className="h-4 w-4 text-muted-foreground" />
+                      Add to existing scenario
+                    </label>
+                    <p className="text-sm text-muted-foreground">
+                      Combine this decision with other changes you&apos;re exploring
+                    </p>
+                    {scenarioMode === 'append' && (
+                      <div className="pt-2">
+                        <ScenarioPicker
+                          value={targetScenarioId}
+                          onValueChange={setTargetScenarioId}
+                          excludeBaseline={true}
+                          placeholder="Select a scenario..."
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </RadioGroup>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader>
             <CardTitle>{currentStep?.title}</CardTitle>
@@ -264,13 +347,15 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
           {isLastStep ? (
             <Button
               onClick={handleSubmit}
-              disabled={runMutation.isPending}
+              disabled={runMutation.isPending || (scenarioMode === 'append' && !targetScenarioId)}
             >
               {runMutation.isPending ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating scenario...
+                  {scenarioMode === 'append' ? 'Adding changes...' : 'Creating scenario...'}
                 </>
+              ) : scenarioMode === 'append' ? (
+                'Add Changes'
               ) : (
                 'Create Scenario'
               )}

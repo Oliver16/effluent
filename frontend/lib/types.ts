@@ -554,6 +554,7 @@ export interface DecisionRunResponse {
   scenarioName: string
   decisionRunId: string
   changesCreated: number
+  scenarioCreated: boolean  // False if changes were appended to existing scenario
   projections: {
     now?: ScenarioProjection
     year1?: ScenarioProjection
