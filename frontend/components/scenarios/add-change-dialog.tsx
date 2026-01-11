@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { CHANGE_TYPES, FIELD_CONFIGS } from './change-field-config';
 import { ChangeField } from './change-field';
 import { convertFormParameters } from './change-form-utils';
@@ -115,80 +116,93 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>Add Change</DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="changeType">Change Type</Label>
-            <select
-              id="changeType"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={changeType}
-              onChange={(event) => setChangeType(event.target.value)}
-            >
-              <option value="">Select type...</option>
-              {CHANGE_TYPES.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
-            </select>
+        <ScrollArea className="flex-1 pr-4">
+          <div className="space-y-4 pb-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="changeType">Change Type</Label>
+                <select
+                  id="changeType"
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={changeType}
+                  onChange={(event) => setChangeType(event.target.value)}
+                >
+                  <option value="">Select type...</option>
+                  {CHANGE_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="effectiveDate">Effective Date</Label>
+                <Input
+                  id="effectiveDate"
+                  type="date"
+                  value={effectiveDate}
+                  onChange={(event) => setEffectiveDate(event.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="name">Name</Label>
+                <Input
+                  id="name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g., New job at ACME"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="description">Description (optional)</Label>
+                <Input
+                  id="description"
+                  value={description}
+                  onChange={(event) => setDescription(event.target.value)}
+                  placeholder="Additional details"
+                />
+              </div>
+            </div>
+
+            {selectedType && selectedType.fields.length > 0 && (
+              <div className="border-t pt-4 mt-4">
+                <h4 className="text-sm font-medium mb-3 text-muted-foreground">Change Parameters</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {selectedType.fields.map((field) => {
+                    const config = FIELD_CONFIGS[field];
+                    if (!config) return null;
+
+                    return (
+                      <ChangeField
+                        key={field}
+                        fieldName={field}
+                        config={config}
+                        value={params[field] || ''}
+                        onChange={(value) => updateParam(field, value)}
+                        accounts={accounts}
+                        flows={flows}
+                        members={members}
+                        incomeSources={incomeSources}
+                      />
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
+        </ScrollArea>
 
-          <div className="space-y-2">
-            <Label htmlFor="name">Name</Label>
-            <Input
-              id="name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="e.g., New job at ACME"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Input
-              id="description"
-              value={description}
-              onChange={(event) => setDescription(event.target.value)}
-              placeholder="Optional details"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="effectiveDate">Effective Date</Label>
-            <Input
-              id="effectiveDate"
-              type="date"
-              value={effectiveDate}
-              onChange={(event) => setEffectiveDate(event.target.value)}
-            />
-          </div>
-
-          {selectedType?.fields.map((field) => {
-            const config = FIELD_CONFIGS[field];
-            if (!config) return null;
-
-            return (
-              <ChangeField
-                key={field}
-                fieldName={field}
-                config={config}
-                value={params[field] || ''}
-                onChange={(value) => updateParam(field, value)}
-                accounts={accounts}
-                flows={flows}
-                members={members}
-                incomeSources={incomeSources}
-              />
-            );
-          })}
-        </div>
-
-        <DialogFooter>
+        <DialogFooter className="border-t pt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
