@@ -86,6 +86,23 @@ function getApiBase(): string {
 
 const API_BASE = getApiBase();
 
+// Public endpoints that should NOT include the Authorization header
+// These endpoints are unauthenticated and sending an expired token causes 401 errors
+const PUBLIC_ENDPOINTS = [
+  '/api/auth/register/',
+  '/api/auth/token/',
+  '/api/auth/token/refresh/',
+  '/api/auth/password-reset/',
+  '/api/auth/password-reset/confirm/',
+];
+
+/**
+ * Check if an endpoint is public (should not include auth header)
+ */
+function isPublicEndpoint(endpoint: string): boolean {
+  return PUBLIC_ENDPOINTS.some(publicPath => endpoint.startsWith(publicPath));
+}
+
 interface RequestOptions extends RequestInit {
   data?: unknown
 }
@@ -247,9 +264,9 @@ async function request<T>(endpoint: string, options: RequestOptions = {}, isRetr
     })
   }
 
-  // Add auth token if available
+  // Add auth token if available (skip for public endpoints to avoid 401 errors from expired tokens)
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
-  if (token) {
+  if (token && !isPublicEndpoint(endpoint)) {
     headers['Authorization'] = `Bearer ${token}`
   }
 
@@ -267,7 +284,8 @@ async function request<T>(endpoint: string, options: RequestOptions = {}, isRetr
 
   if (!response.ok) {
     // If we get a 401 and haven't retried yet, try to refresh the token
-    if (response.status === 401 && !isRetry && typeof window !== 'undefined') {
+    // Skip token refresh for public endpoints (they don't need auth)
+    if (response.status === 401 && !isRetry && !isPublicEndpoint(endpoint) && typeof window !== 'undefined') {
       const newToken = await getRefreshedToken()
       if (newToken) {
         // Retry the request with the new token
