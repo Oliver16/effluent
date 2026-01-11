@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { TYPOGRAPHY, StatusTone } from '@/lib/design-tokens';
 import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Button } from '@/components/ui/button';
-import { Play, Plus, Sparkles, Loader2, GitMerge } from 'lucide-react';
+import { Play, Plus, Sparkles, Loader2, GitMerge, CheckCircle2 } from 'lucide-react';
 
 interface ScenarioContextBarProps {
   /** Current scenario name */
@@ -24,8 +24,14 @@ interface ScenarioContextBarProps {
   onLifeEvent?: () => void;
   /** Merge scenarios handler */
   onMerge?: () => void;
+  /** Adopt scenario handler (make changes permanent) */
+  onAdopt?: () => void;
   /** Is projection running */
   isRunning?: boolean;
+  /** Is adopt in progress */
+  isAdopting?: boolean;
+  /** Does scenario have changes to adopt */
+  hasChanges?: boolean;
   /** Is this the baseline scenario (hides certain actions) */
   isBaseline?: boolean;
   /** Additional classes */
@@ -40,7 +46,10 @@ export function ScenarioContextBar({
   onAddChange,
   onLifeEvent,
   onMerge,
+  onAdopt,
   isRunning = false,
+  isAdopting = false,
+  hasChanges = false,
   isBaseline = false,
   className,
 }: ScenarioContextBarProps) {
@@ -72,6 +81,28 @@ export function ScenarioContextBar({
           <Button variant="outline" size="sm" onClick={onMerge} className="h-8">
             <GitMerge className="h-4 w-4 mr-1.5" />
             Combine
+          </Button>
+        )}
+        {/* Adopt button - make scenario changes permanent */}
+        {onAdopt && !isBaseline && hasChanges && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAdopt}
+            disabled={isAdopting}
+            className="h-8 text-green-600 border-green-200 hover:bg-green-50 hover:text-green-700"
+          >
+            {isAdopting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                Adopting...
+              </>
+            ) : (
+              <>
+                <CheckCircle2 className="h-4 w-4 mr-1.5" />
+                Adopt
+              </>
+            )}
           </Button>
         )}
         {onLifeEvent && (
