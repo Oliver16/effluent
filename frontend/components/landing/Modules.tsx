@@ -39,7 +39,7 @@ export function Modules() {
             <ModuleCard key={module.title} {...module} delay={i * 100} />
           ))}
         </div>
-        <p className="text-center text-xs text-muted-foreground mt-8">
+        <p className="text-center text-sm text-muted-foreground mt-8">
           Plus: asset groups with LTV tracking, dual-basis net worth, household sharing, full data export.
         </p>
       </div>
@@ -68,12 +68,12 @@ function ModuleCard({
       <div className="mb-3 inline-flex items-center justify-center w-9 h-9 rounded-md bg-primary/10 text-primary">
         <Icon className="w-4 h-4" />
       </div>
-      <h3 className="font-semibold mb-1 text-foreground">{title}</h3>
+      <h3 className="text-lg font-semibold mb-1 text-foreground">{title}</h3>
       <p className="text-sm text-muted-foreground mb-3">{subtitle}</p>
       <ul className="space-y-1.5">
         {bullets.map((bullet) => (
-          <li key={bullet} className="text-xs text-muted-foreground flex items-start gap-2">
-            <span className="w-1 h-1 rounded-full bg-primary/60 mt-1.5 shrink-0" />
+          <li key={bullet} className="text-sm text-muted-foreground flex items-start gap-2">
+            <span className="w-1 h-1 rounded-full bg-primary/60 mt-2 shrink-0" />
             {bullet}
           </li>
         ))}
