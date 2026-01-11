@@ -7,7 +7,7 @@ class MetricSnapshotSerializer(serializers.ModelSerializer):
         model = MetricSnapshot
         fields = [
             'id', 'as_of_date', 'net_worth_market', 'net_worth_cost',
-            'monthly_surplus', 'dscr', 'liquidity_months', 'savings_rate',
+            'monthly_surplus', 'dscr', 'liquidity_months', 'days_cash_on_hand', 'savings_rate',
             'dti_ratio', 'debt_to_asset_market', 'debt_to_asset_cost',
             'weighted_avg_interest_rate', 'high_interest_debt_ratio',
             'housing_ratio', 'fixed_expense_ratio', 'essential_expense_ratio',

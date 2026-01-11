@@ -19,7 +19,7 @@ class ScenarioProjectionSerializer(serializers.ModelSerializer):
             'id', 'projection_date', 'month_number', 'total_assets',
             'total_liabilities', 'net_worth', 'liquid_assets', 'retirement_assets',
             'total_income', 'total_expenses', 'net_cash_flow', 'dscr',
-            'savings_rate', 'liquidity_months', 'income_breakdown',
+            'savings_rate', 'liquidity_months', 'days_cash_on_hand', 'income_breakdown',
             'expense_breakdown', 'asset_breakdown', 'liability_breakdown',
             'computed_at'
         ]
