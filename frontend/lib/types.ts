@@ -393,6 +393,9 @@ export interface SuggestedChange {
   sourceFlowType?: 'income' | 'expense'
   requiresSourceAccount?: boolean
   sourceAccountType?: 'asset' | 'debt'
+  // Optional choice group - changes with the same choiceGroup are mutually exclusive
+  // User must select exactly one from each group
+  choiceGroup?: string
 }
 
 export interface LifeEventTemplate {
