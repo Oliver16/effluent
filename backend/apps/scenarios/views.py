@@ -411,6 +411,8 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
     """ViewSet for life event templates (read-only)."""
     serializer_class = LifeEventTemplateSerializer
     permission_classes = [IsAuthenticated]
+    # Allow template names (with spaces/special chars) as lookup values, not just UUIDs
+    lookup_value_regex = '[^/]+'
 
     def get_queryset(self):
         qs = LifeEventTemplate.objects.filter(is_active=True)
@@ -487,9 +489,10 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 'suggested_changes': template.suggested_changes,
             }
         except Exception:
-            # Fall back to defaults
+            # Fall back to defaults - pk might be template name (URL-decoded)
             templates = LifeEventTemplate.get_default_templates()
             for t in templates:
+                # Match by id or name (name comparison is case-sensitive)
                 if str(t.get('id', '')) == pk or t['name'] == pk:
                     template_data = t
                     break

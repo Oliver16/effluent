@@ -119,6 +119,9 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
         changeValues: changeValues,
       })
 
+      // Compute projections so the scenario is immediately usable
+      await scenarios.compute(scenario.id)
+
       // Count how many changes were applied
       const changesApplied = Object.values(changeValues).filter(v => !v._skip).length
 

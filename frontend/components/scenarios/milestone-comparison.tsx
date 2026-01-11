@@ -41,17 +41,17 @@ const MILESTONES = [
 ];
 
 function getProjectionAtMonth(projections: ScenarioProjection[], targetMonth: number): ScenarioProjection | null {
-  // Find exact match or closest month that doesn't exceed target
-  let best: ScenarioProjection | null = null;
+  // Find exact match for the target month (monthNumber is 0-indexed, so targetMonth 12 = monthNumber 11)
+  // Only return a projection if it actually exists for this month - do NOT fall back to earlier months
+  const targetIndex = targetMonth - 1; // Convert to 0-indexed
   for (const p of projections) {
-    if (p.monthNumber === targetMonth - 1) { // monthNumber is 0-indexed
+    if (p.monthNumber === targetIndex) {
       return p;
     }
-    if (p.monthNumber < targetMonth && (!best || p.monthNumber > best.monthNumber)) {
-      best = p;
-    }
   }
-  return best;
+  // No projection exists for this month - return null instead of using an earlier month
+  // This prevents comparing 60-month baseline data as if it were 120-month data
+  return null;
 }
 
 function DifferenceIndicator({ value, isPositiveGood }: { value: number; isPositiveGood: boolean }) {

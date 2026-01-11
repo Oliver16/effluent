@@ -20,7 +20,7 @@ from .services import ScenarioEngine
 class BaselineScenarioService:
     """Service for managing baseline scenarios."""
 
-    DEFAULT_PROJECTION_MONTHS = 60  # 5 years
+    DEFAULT_PROJECTION_MONTHS = 120  # 10 years
     DEFAULT_NAME = "Current Trajectory"
     DEFAULT_DESCRIPTION = "Baseline projection from current state"
 
