@@ -27,22 +27,31 @@ export function FAQ() {
   const [openIndex, setOpenIndex] = useState<number | null>(null)
 
   return (
-    <section className="px-4 py-12 bg-muted/30">
-      <div className="max-w-xl mx-auto">
-        <h2 className="text-lg font-semibold text-center mb-6 text-foreground">
-          Questions
-        </h2>
-        <div className="space-y-2">
-          {faqs.map((faq, i) => (
-            <FAQItem
-              key={faq.question}
-              question={faq.question}
-              answer={faq.answer}
-              isOpen={openIndex === i}
-              onClick={() => setOpenIndex(openIndex === i ? null : i)}
-              delay={i * 50}
-            />
-          ))}
+    <section className="border-t border-border">
+      <div className="px-6 sm:px-8 md:px-12 lg:px-20 py-20 md:py-28">
+        <div className="max-w-6xl mx-auto">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20">
+            <div>
+              <p className="text-sm font-medium text-primary mb-4 tracking-wide uppercase">
+                FAQ
+              </p>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-foreground tracking-[-0.02em]">
+                Questions
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {faqs.map((faq, i) => (
+                <FAQItem
+                  key={faq.question}
+                  question={faq.question}
+                  answer={faq.answer}
+                  isOpen={openIndex === i}
+                  onClick={() => setOpenIndex(openIndex === i ? null : i)}
+                />
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -54,27 +63,22 @@ function FAQItem({
   answer,
   isOpen,
   onClick,
-  delay
 }: {
   question: string
   answer: string
   isOpen: boolean
   onClick: () => void
-  delay: number
 }) {
   return (
-    <div
-      className="rounded-md border border-border bg-card overflow-hidden"
-      style={{ animationDelay: `${delay}ms` }}
-    >
+    <div className="border-b border-border pb-4">
       <button
         onClick={onClick}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/50 transition-colors"
+        className="w-full flex items-center justify-between py-2 text-left"
       >
-        <span className="text-sm font-medium text-foreground">{question}</span>
+        <span className="text-lg font-medium text-foreground">{question}</span>
         <ChevronDown
           className={cn(
-            'w-4 h-4 text-muted-foreground transition-transform duration-200 shrink-0 ml-2',
+            'w-5 h-5 text-muted-foreground transition-transform duration-200 shrink-0 ml-4',
             isOpen && 'rotate-180'
           )}
         />
@@ -85,7 +89,7 @@ function FAQItem({
           isOpen ? 'max-h-40 opacity-100' : 'max-h-0 opacity-0'
         )}
       >
-        <p className="px-4 pb-3 text-sm text-muted-foreground leading-relaxed">
+        <p className="text-muted-foreground leading-relaxed pt-2">
           {answer}
         </p>
       </div>

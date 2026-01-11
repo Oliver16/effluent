@@ -2,58 +2,40 @@
 
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
-import { Activity, GitBranch, Gauge, FileText } from 'lucide-react'
+import { Activity } from 'lucide-react'
 
 export function Hero() {
   return (
-    <section className="relative min-h-[90vh] flex items-center justify-center px-4 py-16 overflow-hidden">
-      {/* Dark gradient background for cockpit feel */}
+    <section className="relative min-h-screen flex items-center justify-center px-6 sm:px-8 md:px-12 lg:px-20 py-24 overflow-hidden">
+      {/* Dark gradient background */}
       <div className="absolute inset-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800" />
 
       {/* Subtle grid pattern overlay */}
       <div
-        className="absolute inset-0 opacity-[0.03]"
+        className="absolute inset-0 opacity-[0.02]"
         style={{
           backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-          backgroundSize: '40px 40px'
+          backgroundSize: '60px 60px'
         }}
       />
 
-      <div className="relative z-10 max-w-4xl mx-auto text-center animate-fade-in">
-        {/* Main headline */}
-        <h1 className="text-4xl sm:text-5xl md:text-6xl font-bold text-white mb-5 tracking-tight">
+      <div className="relative z-10 max-w-5xl mx-auto text-center">
+        {/* Main headline - much larger, tighter tracking */}
+        <h1 className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-white mb-8 tracking-[-0.04em] leading-[1.05]">
           A financial control plane for your household.
         </h1>
 
         {/* Subheadline */}
-        <p className="text-lg text-slate-300 mb-8 max-w-xl mx-auto">
+        <p className="text-lg sm:text-xl text-slate-400 mb-12 max-w-2xl mx-auto leading-relaxed">
           Operational interface for your finances — a living model with instrumentation, confidence, and scenario control.
         </p>
 
-        {/* Hero bullets */}
-        <div className="flex flex-wrap items-center justify-center gap-4 mb-8 text-sm text-slate-400">
-          <div className="flex items-center gap-2">
-            <GitBranch className="w-4 h-4 text-primary" />
-            <span>Baseline model + scenarios</span>
-          </div>
-          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
-          <div className="flex items-center gap-2">
-            <Gauge className="w-4 h-4 text-primary" />
-            <span>Confidence strip</span>
-          </div>
-          <div className="hidden sm:block w-1 h-1 rounded-full bg-slate-600" />
-          <div className="flex items-center gap-2">
-            <FileText className="w-4 h-4 text-primary" />
-            <span>Explainable metrics</span>
-          </div>
-        </div>
-
         {/* CTAs */}
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 mb-10">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
           <Button
             asChild
             size="xl"
-            className="min-w-[200px] bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/30"
+            className="min-w-[220px] bg-primary hover:bg-primary/90 text-white shadow-lg shadow-primary/30 text-base"
             data-track="cta-launch-cockpit"
           >
             <Link href="/login">Launch the control plane</Link>
@@ -62,7 +44,7 @@ export function Hero() {
             asChild
             variant="outline"
             size="xl"
-            className="min-w-[200px] border-slate-600 text-slate-200 hover:bg-slate-800 hover:text-white"
+            className="min-w-[220px] border-slate-600 text-slate-200 hover:bg-slate-800 hover:text-white text-base"
             data-track="cta-watch-walkthrough"
           >
             <Link href="/demo">Watch walkthrough</Link>
@@ -73,10 +55,10 @@ export function Hero() {
         <InstrumentStrip />
 
         {/* Screenshot placeholder panel */}
-        <div className="mt-12 relative animate-fade-in-delay">
-          <div className="relative mx-auto max-w-2xl rounded-lg border border-slate-700/50 bg-slate-900/80 p-1.5 shadow-xl backdrop-blur-sm">
-            <div className="rounded bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
-              <Activity className="w-8 h-8 text-slate-600" />
+        <div className="mt-16 relative">
+          <div className="relative mx-auto max-w-4xl rounded-xl border border-slate-700/50 bg-slate-900/80 p-2 shadow-2xl backdrop-blur-sm">
+            <div className="rounded-lg bg-slate-800/50 border border-slate-700/30 aspect-[16/9] flex items-center justify-center">
+              <Activity className="w-10 h-10 text-slate-600" />
             </div>
           </div>
         </div>
@@ -87,7 +69,7 @@ export function Hero() {
 
 function InstrumentStrip() {
   return (
-    <div className="inline-flex flex-wrap items-center justify-center gap-3 px-4 py-3 rounded-full bg-slate-800/60 border border-slate-700/50 backdrop-blur-sm">
+    <div className="inline-flex flex-wrap items-center justify-center gap-3 px-5 py-3 rounded-full bg-slate-800/60 border border-slate-700/50 backdrop-blur-sm">
       <Chip label="Confidence" value="82%" variant="success" />
       <Chip label="Drift" value="2 signals" variant="warning" />
       <Chip label="Scenario Δ" value="+$4.2k runway" variant="info" />
@@ -103,7 +85,7 @@ function Chip({ label, value, variant }: { label: string; value: string; variant
   }
 
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium border ${variantStyles[variant]}`}>
+    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium border ${variantStyles[variant]}`}>
       <span className="text-slate-400">{label}:</span>
       <span>{value}</span>
     </div>
