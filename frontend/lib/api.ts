@@ -44,6 +44,9 @@ import type {
   StressTestResult,
   StressTestBatchResponse,
   ScenarioCompareResponse,
+  // Scenario merge types
+  ScenarioMergeResponse,
+  LifeEventApplyResponse,
 } from './types'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
@@ -610,6 +613,27 @@ export const scenarios = {
       skippedChanges: Array<{ changeId: string; type: string; reason: string }>;
       scenarioArchived: boolean;
     }>(data)),
+  /**
+   * Merge changes from another scenario into this one.
+   * Combines two scenarios by copying all enabled changes from the source
+   * into the target. Think of it like merging branches.
+   * @param targetId The scenario to merge INTO (receives the changes)
+   * @param sourceId The scenario to merge FROM (provides the changes)
+   * @param options Optional settings: dedupe (skip duplicates), recompute (rerun projections)
+   */
+  merge: (
+    targetId: string,
+    sourceId: string,
+    options?: { dedupe?: boolean; recompute?: boolean }
+  ) =>
+    api.post<ScenarioMergeResponse>(
+      `/api/v1/scenarios/${targetId}/merge/`,
+      {
+        source_scenario_id: sourceId,
+        dedupe: options?.dedupe ?? true,
+        recompute: options?.recompute ?? true,
+      }
+    ).then(data => toCamelCase<ScenarioMergeResponse>(data)),
 }
 
 // Life Event Template endpoints
@@ -625,23 +649,24 @@ export const lifeEventTemplates = {
       .then(data => toCamelCase<LifeEventTemplate>(data)),
   categories: () =>
     api.get<{ categories: Array<{ value: string; label: string }> }>('/api/v1/life-event-templates/categories/'),
+  /**
+   * Apply a life event template.
+   * Either append to existing scenario OR create a new one.
+   *
+   * For append mode: provide scenarioId
+   * For create mode: provide scenarioName (and optionally parentScenarioId)
+   */
   apply: (templateIdOrName: string, data: {
-    scenarioId: string;
+    scenarioId?: string;
+    scenarioName?: string;
+    parentScenarioId?: string;
     effectiveDate: string;
     changeValues?: Record<string, Record<string, unknown>>;
   }) =>
-    api.post<{
-      status: string;
-      templateName: string;
-      changesCreated: number;
-      changes: ScenarioChange[];
-    }>(`/api/v1/life-event-templates/${encodeURIComponent(templateIdOrName)}/apply/`, toSnakeCase(data))
-      .then(data => toCamelCase<{
-        status: string;
-        templateName: string;
-        changesCreated: number;
-        changes: ScenarioChange[];
-      }>(data)),
+    api.post<LifeEventApplyResponse>(
+      `/api/v1/life-event-templates/${encodeURIComponent(templateIdOrName)}/apply/`,
+      toSnakeCase(data)
+    ).then(data => toCamelCase<LifeEventApplyResponse>(data)),
 }
 
 // Goals endpoints (TASK-14)

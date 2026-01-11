@@ -916,3 +916,40 @@ export interface ScenarioCompareResponse {
   results: ScenarioComparisonResult[]
   driverAnalysis?: DriverAnalysisResult | { error: string }
 }
+
+// Scenario Merge types
+export interface MergedChange {
+  sourceChangeId: string
+  newChangeId: string
+  name: string
+  changeType: string
+}
+
+export interface SkippedChange {
+  sourceChangeId: string
+  name: string
+  reason: string
+}
+
+export interface ScenarioMergeResponse {
+  status: string
+  targetScenarioId: string
+  sourceScenarioId: string
+  changesCopied: number
+  changesSkipped: number
+  copied: MergedChange[]
+  skipped: SkippedChange[]
+  warnings: string[]
+  projectionRecomputed: boolean
+}
+
+// Life Event Apply response (extended)
+export interface LifeEventApplyResponse {
+  status: string
+  templateName: string
+  changesCreated: number
+  changes: ScenarioChange[]
+  scenarioId: string
+  scenarioName: string
+  scenarioCreated: boolean
+}

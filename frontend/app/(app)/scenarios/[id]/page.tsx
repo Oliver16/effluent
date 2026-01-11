@@ -18,6 +18,7 @@ import { AddChangeDialog } from '@/components/scenarios/add-change-dialog';
 import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
 import { MilestoneComparison } from '@/components/scenarios/milestone-comparison';
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
+import { MergeScenarioDialog } from '@/components/scenarios/merge-scenario-dialog';
 import { SPACING, TYPOGRAPHY } from '@/lib/design-tokens';
 import { Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -33,6 +34,7 @@ export default function ScenarioDetailPage() {
   const queryClient = useQueryClient();
   const [showAddChange, setShowAddChange] = useState(false);
   const [showLifeEvents, setShowLifeEvents] = useState(false);
+  const [showMerge, setShowMerge] = useState(false);
 
   const scenarioId = id as string;
 
@@ -109,8 +111,10 @@ export default function ScenarioDetailPage() {
       }
       onAddChange={() => setShowAddChange(true)}
       onLifeEvent={() => setShowLifeEvents(true)}
+      onMerge={() => setShowMerge(true)}
       onRunProjection={() => computeMutation.mutate()}
       isRunning={computeMutation.isPending}
+      isBaseline={isBaseline}
     />
   );
 
@@ -292,6 +296,13 @@ export default function ScenarioDetailPage() {
         open={showLifeEvents}
         onOpenChange={setShowLifeEvents}
         scenarioId={scenarioId}
+      />
+
+      <MergeScenarioDialog
+        open={showMerge}
+        onOpenChange={setShowMerge}
+        targetScenarioId={scenarioId}
+        targetScenarioName={scenario.name}
       />
     </CockpitLayout>
   );
