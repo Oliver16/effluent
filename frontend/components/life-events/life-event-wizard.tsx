@@ -112,30 +112,42 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   // Create or append scenario with life event
   const createMutation = useMutation({
     mutationFn: async () => {
-      // Create a new scenario first - start_date is required
-      const scenario = await scenarios.create({
-        name: scenarioName,
-        description: `Created from life event: ${template.name}`,
-        startDate: effectiveDate || new Date().toISOString().split('T')[0],
-      })
+      let scenarioId: string
+      let scenarioNameResult: string
+      let wasCreated: boolean
 
-      // Then apply the life event template to the scenario
-      await lifeEventTemplates.apply(template.name, {
-        scenarioId: scenario.id,
+      if (scenarioMode === 'create') {
+        // Create a new scenario first - start_date is required
+        const scenario = await scenarios.create({
+          name: scenarioName,
+          description: `Created from life event: ${template.name}`,
+          startDate: effectiveDate || new Date().toISOString().split('T')[0],
+        })
+        scenarioId = scenario.id
+        scenarioNameResult = scenario.name
+        wasCreated = true
+      } else {
+        // Append to existing scenario
+        scenarioId = selectedScenarioId
+        scenarioNameResult = 'existing scenario' // Will be updated from response if needed
+        wasCreated = false
+      }
+
+      // Apply the life event template to the scenario
+      const response = await lifeEventTemplates.apply(template.name, {
+        scenarioId: scenarioId,
         effectiveDate: effectiveDate,
         changeValues: changeValues,
       })
 
-      // If we appended to an existing scenario, recompute projections
-      if (!response.scenarioCreated && response.scenarioId) {
-        await scenarios.compute(response.scenarioId)
-      }
+      // Compute projections so the scenario is immediately usable
+      await scenarios.compute(scenarioId)
 
       return {
-        scenarioId: response.scenarioId,
-        scenarioName: response.scenarioName,
-        changesApplied: response.changesCreated,
-        wasCreated: response.scenarioCreated,
+        scenarioId: scenarioId,
+        scenarioName: response.templateName ? `${response.templateName} scenario` : scenarioNameResult,
+        changesApplied: response.changesCreated || Object.values(changeValues).filter(v => !v._skip).length,
+        wasCreated: wasCreated,
       }
     },
     onSuccess: (data) => {
