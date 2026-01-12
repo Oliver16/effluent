@@ -893,10 +893,10 @@ class LifeEventTemplate(models.Model):
                 ],
             },
             {
-                'name': 'Pay Off Debt Faster',
-                'description': 'Accelerate debt payoff with extra monthly payments.',
+                'name': 'Accelerate Debt Payoff',
+                'description': 'Make extra monthly payments to pay off debt faster.',
                 'category': LifeEventCategory.FINANCIAL,
-                'icon': 'check-circle',
+                'icon': 'trending-up',
                 'display_order': 13,
                 'suggested_changes': [
                     {
@@ -911,11 +911,27 @@ class LifeEventTemplate(models.Model):
                 ],
             },
             {
+                'name': 'Pay Off Debt (Lump Sum)',
+                'description': 'Make a one-time lump sum payment to pay off a debt completely.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'check-circle',
+                'display_order': 14,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.LUMP_SUM_EXPENSE,
+                        'name': 'Lump Sum Debt Payment',
+                        'description': 'One-time payment to pay off debt (enter the remaining balance)',
+                        'parameters_template': {'amount': 0},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
                 'name': 'Refinance Loan',
                 'description': 'Refinance an existing loan to get a better rate or term.',
                 'category': LifeEventCategory.FINANCIAL,
                 'icon': 'refresh-cw',
-                'display_order': 14,
+                'display_order': 15,
                 'suggested_changes': [
                     {
                         'change_type': ChangeType.REFINANCE,
@@ -933,7 +949,7 @@ class LifeEventTemplate(models.Model):
                 'description': 'Model a new loan or line of credit.',
                 'category': LifeEventCategory.FINANCIAL,
                 'icon': 'file-text',
-                'display_order': 15,
+                'display_order': 16,
                 'suggested_changes': [
                     {
                         'change_type': ChangeType.ADD_DEBT,
@@ -949,7 +965,7 @@ class LifeEventTemplate(models.Model):
                 'description': 'Set up recurring transfers to a savings or investment goal.',
                 'category': LifeEventCategory.FINANCIAL,
                 'icon': 'piggy-bank',
-                'display_order': 16,
+                'display_order': 17,
                 'suggested_changes': [
                     {
                         'change_type': ChangeType.SET_SAVINGS_TRANSFER,
@@ -989,6 +1005,107 @@ class LifeEventTemplate(models.Model):
                         'description': 'Enter quarterly estimated tax payment amount',
                         'parameters_template': {'quarterly_amount': 0},
                         'is_required': True,
+                    },
+                ],
+            },
+            # Generic single-change templates
+            {
+                'name': 'Add Income Source',
+                'description': 'Add a new source of income.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'plus-circle',
+                'display_order': 18,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.ADD_INCOME,
+                        'name': 'New Income',
+                        'description': 'Enter income details',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly', 'income_type': 'other', 'income_category': 'other_income'},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Add Expense',
+                'description': 'Add a new recurring expense.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'plus-circle',
+                'display_order': 19,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.ADD_EXPENSE,
+                        'name': 'New Expense',
+                        'description': 'Enter expense details',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly', 'expense_category': 'miscellaneous'},
+                        'is_required': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Modify Existing Income',
+                'description': 'Change the amount or frequency of an existing income source.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'edit',
+                'display_order': 20,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.MODIFY_INCOME,
+                        'name': 'Income Change',
+                        'description': 'Enter new income amount',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly'},
+                        'is_required': True,
+                        'requires_source_flow': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Modify Existing Expense',
+                'description': 'Change the amount or frequency of an existing expense.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'edit',
+                'display_order': 21,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.MODIFY_EXPENSE,
+                        'name': 'Expense Change',
+                        'description': 'Enter new expense amount',
+                        'parameters_template': {'amount': 0, 'frequency': 'monthly'},
+                        'is_required': True,
+                        'requires_source_flow': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Remove Income',
+                'description': 'Stop receiving an income source.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'minus-circle',
+                'display_order': 22,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.REMOVE_INCOME,
+                        'name': 'Remove Income',
+                        'description': 'Select the income source to remove',
+                        'parameters_template': {},
+                        'is_required': True,
+                        'requires_source_flow': True,
+                    },
+                ],
+            },
+            {
+                'name': 'Remove Expense',
+                'description': 'Stop paying a recurring expense.',
+                'category': LifeEventCategory.FINANCIAL,
+                'icon': 'minus-circle',
+                'display_order': 23,
+                'suggested_changes': [
+                    {
+                        'change_type': ChangeType.REMOVE_EXPENSE,
+                        'name': 'Remove Expense',
+                        'description': 'Select the expense to remove',
+                        'parameters_template': {},
+                        'is_required': True,
+                        'requires_source_flow': True,
                     },
                 ],
             },

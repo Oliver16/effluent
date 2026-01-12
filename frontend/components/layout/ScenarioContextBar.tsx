@@ -18,8 +18,6 @@ interface ScenarioContextBarProps {
   };
   /** Run projection handler */
   onRunProjection?: () => void;
-  /** Add change handler */
-  onAddChange?: () => void;
   /** Life event handler */
   onLifeEvent?: () => void;
   /** Merge scenarios handler */
@@ -43,7 +41,6 @@ export function ScenarioContextBar({
   baselineName,
   status,
   onRunProjection,
-  onAddChange,
   onLifeEvent,
   onMerge,
   onAdopt,
@@ -108,13 +105,7 @@ export function ScenarioContextBar({
         {onLifeEvent && (
           <Button variant="outline" size="sm" onClick={onLifeEvent} className="h-8">
             <Sparkles className="h-4 w-4 mr-1.5" />
-            Life Event
-          </Button>
-        )}
-        {onAddChange && (
-          <Button variant="outline" size="sm" onClick={onAddChange} className="h-8">
-            <Plus className="h-4 w-4 mr-1.5" />
-            Add Change
+            Apply Life Event
           </Button>
         )}
         {onRunProjection && (

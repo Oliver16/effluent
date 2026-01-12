@@ -130,7 +130,7 @@ export default function ScenariosPage() {
               </Button>
             )}
             <Button variant="outline" asChild>
-              <Link href="/scenarios/new">
+              <Link href="/life-events">
                 <Plus className="h-4 w-4 mr-2" />
                 New Scenario
               </Link>

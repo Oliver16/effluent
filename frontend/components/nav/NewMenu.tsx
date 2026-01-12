@@ -31,13 +31,6 @@ export function NewMenu({ showStressTests = false }: NewMenuProps) {
         <DropdownMenuItem asChild>
           <Link href="/life-events" className="flex items-center gap-2">
             <CalendarHeart className="h-4 w-4" />
-            Model a Life Event
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-          <Link href={"/scenarios/new" as any} className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
             Create Scenario
           </Link>
         </DropdownMenuItem>
