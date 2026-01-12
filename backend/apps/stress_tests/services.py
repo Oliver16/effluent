@@ -13,6 +13,7 @@ from django.utils import timezone
 
 from apps.scenarios.models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 from apps.scenarios.services import ScenarioEngine
+from apps.scenarios.baseline import BaselineScenarioService
 from .templates import get_stress_test_by_key, get_stress_test_templates
 
 
@@ -101,14 +102,11 @@ class StressTestService:
         if not template:
             raise ValueError(f"Unknown stress test: {test_key}")
 
-        # Get baseline scenario
-        baseline = Scenario.objects.filter(
-            household=self.household,
-            is_baseline=True
-        ).first()
+        # Get or create baseline scenario
+        baseline = BaselineScenarioService.get_or_create_baseline(self.household)
 
-        if not baseline:
-            raise ValueError("No baseline scenario found")
+        # Refresh baseline to ensure it has up-to-date projections
+        baseline = BaselineScenarioService.refresh_baseline(self.household)
 
         # Resolve inputs
         inputs = template['default_inputs'].copy()
