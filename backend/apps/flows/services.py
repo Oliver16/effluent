@@ -462,6 +462,11 @@ class SystemFlowGenerator:
                 continue
 
             details = account.liability_details
+
+            # Skip accounts in forbearance (payments temporarily suspended)
+            if details.in_forbearance:
+                continue
+
             payment = details.minimum_payment
 
             # If no minimum payment specified, calculate from amortization for installment debt
