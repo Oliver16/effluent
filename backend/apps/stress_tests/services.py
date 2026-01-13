@@ -85,7 +85,8 @@ class StressTestService:
         self,
         test_key: str,
         custom_inputs: dict = None,
-        horizon_months: int = 60
+        horizon_months: int = 60,
+        skip_baseline_refresh: bool = False
     ) -> StressTestResult:
         """
         Run a stress test and return results.
@@ -94,6 +95,7 @@ class StressTestService:
             test_key: Key of the stress test template
             custom_inputs: Override default inputs
             horizon_months: Projection horizon
+            skip_baseline_refresh: Skip baseline refresh if already done (for batch operations)
 
         Returns:
             StressTestResult with summary and breach details
@@ -106,7 +108,9 @@ class StressTestService:
         baseline = BaselineScenarioService.get_or_create_baseline(self.household)
 
         # Refresh baseline to ensure it has up-to-date projections
-        baseline = BaselineScenarioService.refresh_baseline(self.household)
+        # Skip if already refreshed (e.g., in batch operations)
+        if not skip_baseline_refresh:
+            baseline = BaselineScenarioService.refresh_baseline(self.household)
 
         # Resolve inputs
         inputs = template['default_inputs'].copy()

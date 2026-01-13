@@ -120,11 +120,24 @@ class StressTestBatchRunView(APIView):
         results = []
         errors = []
 
+        # Refresh baseline once before running all tests
+        # This avoids redundant refreshes for each test
+        try:
+            from apps.scenarios.baseline import BaselineScenarioService
+            BaselineScenarioService.get_or_create_baseline(household)
+            BaselineScenarioService.refresh_baseline(household)
+        except Exception as e:
+            return Response(
+                {'error': f'Failed to initialize baseline scenario: {str(e)}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
         for test_key in test_keys:
             try:
                 result = service.run_stress_test(
                     test_key=test_key,
-                    horizon_months=horizon_months
+                    horizon_months=horizon_months,
+                    skip_baseline_refresh=True  # Already refreshed above
                 )
                 results.append({
                     'test_key': result.test_key,
@@ -141,7 +154,8 @@ class StressTestBatchRunView(APIView):
                     },
                     'computed_at': result.computed_at,
                 })
-            except ValueError as e:
+            except Exception as e:
+                # Catch all exceptions to prevent batch failure
                 errors.append({
                     'test_key': test_key,
                     'error': str(e)
