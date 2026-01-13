@@ -317,6 +317,12 @@ class LiabilityDetails(TimestampedModel):
     servicer = models.CharField(max_length=200, blank=True)
     is_income_driven = models.BooleanField(default=False)
 
+    # Payment status
+    in_forbearance = models.BooleanField(
+        default=False,
+        help_text="Indicates if payments are temporarily suspended (e.g., student loan forbearance or deferment)"
+    )
+
     class Meta:
         db_table = 'liability_details'
 

@@ -222,30 +222,47 @@ class DataQualityService:
         from apps.accounts.models import Account, LIABILITY_TYPES
         from apps.flows.models import RecurringFlow
 
-        # Check if household has liability accounts
+        # Get all active liability accounts, excluding those in forbearance
         liability_accounts = Account.objects.filter(
             household=self.household,
             is_active=True,
             account_type__in=LIABILITY_TYPES
-        )
+        ).select_related('liability_details')
 
         if not liability_accounts.exists():
             return {}
 
-        # Check if there are debt service flows
-        has_debt_flows = RecurringFlow.objects.filter(
-            household=self.household,
-            is_active=True,
-            linked_account__in=liability_accounts
-        ).exists()
+        # Check each liability account individually for associated payment flows
+        accounts_without_flows = []
+        for account in liability_accounts:
+            # Skip accounts in forbearance
+            if hasattr(account, 'liability_details') and account.liability_details.in_forbearance:
+                continue
 
-        if not has_debt_flows:
+            # Check if this specific account has any recurring flows
+            has_flow = RecurringFlow.objects.filter(
+                household=self.household,
+                is_active=True,
+                linked_account=account
+            ).exists()
+
+            if not has_flow:
+                accounts_without_flows.append(account.name)
+
+        # Return warning if any accounts are missing flows
+        if accounts_without_flows:
+            if len(accounts_without_flows) == 1:
+                description = f'The liability account "{accounts_without_flows[0]}" is missing a recurring payment flow.'
+            else:
+                account_list = ', '.join(f'"{name}"' for name in accounts_without_flows[:-1])
+                description = f'The following liability accounts are missing recurring payment flows: {account_list} and "{accounts_without_flows[-1]}".'
+
             return {
                 'warning': DataQualityItem(
                     key='missing_debt_payments',
                     severity='warning',
                     title='Debt accounts without payment flows',
-                    description='Some liability accounts may be missing recurring payment entries.',
+                    description=description,
                     cta={'label': 'Configure payments', 'route': '/flows'}
                 )
             }

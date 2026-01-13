@@ -32,7 +32,7 @@ class LiabilityDetailsSerializer(serializers.ModelSerializer):
             'maturity_date', 'term_months', 'minimum_payment', 'payment_day_of_month',
             'is_interest_only', 'includes_escrow', 'escrow_amount', 'credit_limit',
             'rate_index', 'rate_margin', 'rate_floor', 'rate_ceiling',
-            'servicer', 'is_income_driven'
+            'servicer', 'is_income_driven', 'in_forbearance'
         ]
 
 
