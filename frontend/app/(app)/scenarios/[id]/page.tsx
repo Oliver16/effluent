@@ -14,7 +14,6 @@ import { DriversBlock } from '@/components/ui/DriversBlock';
 import { ScenarioChanges } from '@/components/scenarios/scenario-changes';
 import { ProjectionChart } from '@/components/scenarios/projection-chart';
 import { ProjectionTable } from '@/components/scenarios/projection-table';
-import { AddChangeDialog } from '@/components/scenarios/add-change-dialog';
 import { AssumptionsForm } from '@/components/scenarios/assumptions-form';
 import { MilestoneComparison } from '@/components/scenarios/milestone-comparison';
 import { LifeEventTemplatesDialog } from '@/components/scenarios/life-event-templates';
@@ -35,7 +34,6 @@ export default function ScenarioDetailPage() {
   const { id } = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [showAddChange, setShowAddChange] = useState(false);
   const [showLifeEvents, setShowLifeEvents] = useState(false);
   const [showMerge, setShowMerge] = useState(false);
 
@@ -139,7 +137,6 @@ export default function ScenarioDetailPage() {
           ? { tone: 'good', label: 'Computed' }
           : { tone: 'warning', label: 'Not Run' }
       }
-      onAddChange={() => setShowAddChange(true)}
       onLifeEvent={() => setShowLifeEvents(true)}
       onMerge={() => setShowMerge(true)}
       onAdopt={handleAdopt}
@@ -327,12 +324,6 @@ export default function ScenarioDetailPage() {
           </TabsContent>
         </Tabs>
       </div>
-
-      <AddChangeDialog
-        open={showAddChange}
-        onOpenChange={setShowAddChange}
-        scenarioId={scenarioId}
-      />
 
       <LifeEventTemplatesDialog
         open={showLifeEvents}
