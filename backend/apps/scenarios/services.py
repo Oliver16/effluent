@@ -1568,7 +1568,7 @@ class ScenarioEngine:
             total_expenses=total_exp.quantize(Decimal('0.01')),
             net_cash_flow=state.net_cash_flow.quantize(Decimal('0.01')),
             dscr=min(dscr, Decimal('999')).quantize(Decimal('0.001')),
-            savings_rate=savings_rate.quantize(Decimal('0.0001')),
+            savings_rate=max(Decimal('-9.9999'), min(savings_rate, Decimal('9.9999'))).quantize(Decimal('0.0001')),
             liquidity_months=min(liquidity, Decimal('999')).quantize(Decimal('0.01')),
             days_cash_on_hand=min(days_cash, Decimal('999.9')).quantize(Decimal('0.1')),
             income_breakdown=income_breakdown,
