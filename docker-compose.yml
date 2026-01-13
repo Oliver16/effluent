@@ -35,5 +35,23 @@ services:
       db:
         condition: service_healthy
 
+  worker:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile
+    command: python manage.py process_reality_changes --continuous --interval=10
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=1
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=devpassword
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
