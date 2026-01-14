@@ -15,6 +15,16 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: ./backend
@@ -26,13 +36,61 @@ services:
       - "8000:8000"
     environment:
       - DEBUG=1
+      - SECRET_KEY=dev-secret-key-change-in-production
       - DB_HOST=db
       - DB_NAME=effluent
       - DB_USER=effluent
       - DB_PASSWORD=devpassword
       - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile
+    command: celery -A config worker --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=devpassword
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  celery_beat:
+    build:
+      context: ./backend
+      dockerfile: docker/Dockerfile
+    command: celery -A config beat --loglevel=info
+    volumes:
+      - ./backend:/app
+    environment:
+      - DEBUG=1
+      - SECRET_KEY=dev-secret-key-change-in-production
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=devpassword
+      - DJANGO_SETTINGS_MODULE=config.settings.dev
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
 
 volumes:

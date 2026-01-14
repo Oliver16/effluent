@@ -9,8 +9,11 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from celery.result import AsyncResult
+
 from .services import StressTestService
 from .templates import get_stress_test_templates, get_stress_test_by_key
+from .tasks import run_stress_test_task, run_batch_stress_tests_task
 
 
 class StressTestListView(APIView):
@@ -39,7 +42,7 @@ class StressTestRunView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Run a stress test against the household's baseline scenario."""
+        """Run a stress test against the household's baseline scenario (async)."""
         household = request.household or request.user.get_default_household()
         if not household:
             return Response(
@@ -49,6 +52,7 @@ class StressTestRunView(APIView):
         test_key = request.data.get('test_key')
         custom_inputs = request.data.get('inputs', {})
         horizon_months = request.data.get('horizon_months', 60)
+        run_async = request.data.get('async', True)  # Default to async
 
         if not test_key:
             return Response(
@@ -63,6 +67,24 @@ class StressTestRunView(APIView):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
+        # If async, dispatch to Celery
+        if run_async:
+            task = run_stress_test_task.apply_async(
+                kwargs={
+                    'household_id': str(household.id),
+                    'test_type': test_key,
+                    'parameters': custom_inputs or {},
+                }
+            )
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'test_key': test_key,
+                'message': 'Stress test started. Poll /api/stress-tests/status/{task_id}/ for results.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Otherwise run synchronously (for backwards compatibility)
         service = StressTestService(household)
 
         try:
@@ -102,7 +124,7 @@ class StressTestBatchRunView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
-        """Run multiple stress tests and return combined results."""
+        """Run multiple stress tests in batch (async by default)."""
         household = request.household or request.user.get_default_household()
         if not household:
             return Response(
@@ -111,11 +133,34 @@ class StressTestBatchRunView(APIView):
             )
         test_keys = request.data.get('test_keys', [])
         horizon_months = request.data.get('horizon_months', 60)
+        run_async = request.data.get('async', True)  # Default to async
 
         if not test_keys:
             # Run all tests if none specified
             test_keys = list(get_stress_test_templates().keys())
 
+        # If async, dispatch batch task
+        if run_async:
+            test_configs = [
+                {'test_type': test_key, 'parameters': {}}
+                for test_key in test_keys
+            ]
+
+            task = run_batch_stress_tests_task.apply_async(
+                kwargs={
+                    'household_id': str(household.id),
+                    'test_configs': test_configs,
+                }
+            )
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'test_count': len(test_keys),
+                'message': 'Batch stress tests started. Poll /api/stress-tests/status/{task_id}/ for results.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Otherwise run synchronously
         service = StressTestService(household)
         results = []
         errors = []
@@ -186,3 +231,33 @@ class StressTestBatchRunView(APIView):
                 'resilience_score': resilience_score,
             }
         })
+
+
+class StressTestTaskStatusView(APIView):
+    """Check status of an async stress test task."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_id):
+        """Get the status and result of a stress test task."""
+        task_result = AsyncResult(task_id)
+
+        if task_result.ready():
+            if task_result.successful():
+                result = task_result.result
+                return Response({
+                    'task_id': task_id,
+                    'status': 'completed',
+                    'result': result
+                })
+            else:
+                return Response({
+                    'task_id': task_id,
+                    'status': 'failed',
+                    'error': str(task_result.result)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({
+                'task_id': task_id,
+                'status': 'pending',
+                'state': task_result.state
+            })

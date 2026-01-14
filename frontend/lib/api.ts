@@ -48,6 +48,7 @@ import type {
   ScenarioMergeResponse,
   LifeEventApplyResponse,
 } from './types'
+import { handleAsyncResponse } from './task-polling'
 
 // API base URL - empty string for browser requests (uses Next.js rewrites for internal routing)
 // Server-side requests use INTERNAL_API_URL directly
@@ -581,8 +582,18 @@ export const scenarios = {
   create: (data: Partial<Scenario>) => api.post<Scenario>('/api/v1/scenarios/', toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   update: (id: string, data: Partial<Scenario>) => api.patch<Scenario>(`/api/v1/scenarios/${id}/`, toSnakeCase(data)).then(data => toCamelCase<Scenario>(data)),
   delete: (id: string) => api.delete<void>(`/api/v1/scenarios/${id}/`),
-  compute: (id: string) => api.post<{ status: string; projectionCount: number }>(`/api/v1/scenarios/${id}/compute/`)
-    .then(data => toCamelCase<{ status: string; projectionCount: number }>(data)),
+  compute: async (id: string) => {
+    const response = await api.post<any>(`/api/v1/scenarios/${id}/compute/`, { async: true });
+    const camelResponse = toCamelCase<any>(response);
+
+    // Handle async response with polling
+    const result = await handleAsyncResponse<{ status: string; projectionCount: number }>(
+      camelResponse,
+      '/api/v1/scenarios/tasks/{taskId}/'
+    );
+
+    return toCamelCase<{ status: string; projectionCount: number }>(result);
+  },
   getProjections: (id: string) => api.get<ScenarioProjection[]>(`/api/v1/scenarios/${id}/projections/`)
     .then(data => toCamelCase<ScenarioProjection[]>(data)),
   listChanges: (scenarioId: string) =>
@@ -806,10 +817,20 @@ export const baseline = {
   /**
    * Refresh the baseline projection.
    * @param force If true, refresh even if baseline is pinned.
+   * Note: This operation is async and will poll for completion.
    */
-  refresh: (force = false) =>
-    api.post<BaselineActionResponse>('/api/v1/scenarios/baseline/', { action: 'refresh', force })
-      .then(data => toCamelCase<BaselineActionResponse>(data)),
+  refresh: async (force = false) => {
+    const response = await api.post<any>('/api/v1/scenarios/baseline/', { action: 'refresh', force, async: true });
+    const camelResponse = toCamelCase<any>(response);
+
+    // Handle async response with polling
+    const result = await handleAsyncResponse<BaselineActionResponse>(
+      camelResponse,
+      '/api/v1/scenarios/tasks/{taskId}/'
+    );
+
+    return toCamelCase<BaselineActionResponse>(result);
+  },
 
   /**
    * Pin the baseline to a specific as-of date.
@@ -885,22 +906,46 @@ export const stressTests = {
    * @param testKey The key of the stress test template
    * @param inputs Custom input overrides for the test
    * @param horizonMonths Projection horizon (default 60)
+   * Note: This operation is async and will poll for completion.
    */
-  run: (testKey: string, inputs?: Record<string, unknown>, horizonMonths?: number) =>
-    api.post<StressTestResult>('/api/v1/stress-tests/run/', toSnakeCase({
+  run: async (testKey: string, inputs?: Record<string, unknown>, horizonMonths?: number) => {
+    const response = await api.post<any>('/api/v1/stress-tests/run/', toSnakeCase({
       testKey,
       inputs: inputs || {},
       horizonMonths: horizonMonths || 60,
-    })).then(data => toCamelCase<StressTestResult>(data)),
+      async: true,
+    }));
+    const camelResponse = toCamelCase<any>(response);
+
+    // Handle async response with polling
+    const result = await handleAsyncResponse<StressTestResult>(
+      camelResponse,
+      '/api/v1/stress-tests/status/{taskId}/'
+    );
+
+    return toCamelCase<StressTestResult>(result);
+  },
 
   /**
    * Run multiple stress tests in batch.
    * @param testKeys Array of test keys to run (runs all if empty)
    * @param horizonMonths Projection horizon (default 60)
+   * Note: This operation is async and will poll for completion.
    */
-  batch: (testKeys?: string[], horizonMonths?: number) =>
-    api.post<StressTestBatchResponse>('/api/v1/stress-tests/batch/', toSnakeCase({
+  batch: async (testKeys?: string[], horizonMonths?: number) => {
+    const response = await api.post<any>('/api/v1/stress-tests/batch/', toSnakeCase({
       testKeys: testKeys || [],
       horizonMonths: horizonMonths || 60,
-    })).then(data => toCamelCase<StressTestBatchResponse>(data)),
+      async: true,
+    }));
+    const camelResponse = toCamelCase<any>(response);
+
+    // Handle async response with polling
+    const result = await handleAsyncResponse<StressTestBatchResponse>(
+      camelResponse,
+      '/api/v1/stress-tests/status/{taskId}/'
+    );
+
+    return toCamelCase<StressTestBatchResponse>(result);
+  },
 }

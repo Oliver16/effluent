@@ -1,4 +1,5 @@
 from datetime import date
+from celery.result import AsyncResult
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -16,6 +17,12 @@ from .services import ScenarioEngine
 from .baseline import BaselineScenarioService
 from .comparison import ScenarioComparisonService
 from .merge import merge_scenarios
+from .tasks import (
+    refresh_baseline_task,
+    compute_projection_task,
+    compare_scenarios_task,
+    apply_life_event_task
+)
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -48,10 +55,30 @@ class ScenarioViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def compute(self, request, pk=None):
-        """Compute projections for this scenario."""
+        """Compute projections for this scenario (async by default)."""
         scenario = self.get_object()
+        run_async = request.data.get('async', True)  # Default to async
+        horizon_months = request.data.get('horizon_months')
+
+        if run_async:
+            task = compute_projection_task.apply_async(
+                kwargs={
+                    'scenario_id': str(scenario.id),
+                    'horizon_months': horizon_months,
+                    'in_memory': False
+                }
+            )
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'scenario_id': str(scenario.id),
+                'message': 'Projection computation started. Poll /api/v1/scenarios/tasks/{task_id}/ for results.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Synchronous for backwards compatibility
         engine = ScenarioEngine(scenario)
-        projections = engine.compute_projection()
+        projections = engine.compute_projection(horizon_months=horizon_months)
         return Response({
             'status': 'computed',
             'projection_count': len(projections)
@@ -492,8 +519,21 @@ class BaselineView(APIView):
     def post(self, request):
         """Handle baseline actions via action parameter."""
         action_type = request.data.get('action')
+        run_async = request.data.get('async', True)  # Default to async
 
         if action_type == 'refresh':
+            if run_async:
+                task = refresh_baseline_task.apply_async(
+                    kwargs={'household_id': str(request.household.id)}
+                )
+
+                return Response({
+                    'task_id': task.id,
+                    'status': 'pending',
+                    'message': 'Baseline refresh started. Poll /api/v1/scenarios/tasks/{task_id}/ for results.'
+                }, status=status.HTTP_202_ACCEPTED)
+
+            # Synchronous for backwards compatibility
             baseline = BaselineScenarioService.refresh_baseline(
                 request.household,
                 force=request.data.get('force', False)
@@ -775,3 +815,33 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         }
 
         return Response(response_data)
+
+
+class ScenarioTaskStatusView(APIView):
+    """Check status of an async scenario task."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_id):
+        """Get the status and result of a scenario task."""
+        task_result = AsyncResult(task_id)
+
+        if task_result.ready():
+            if task_result.successful():
+                result = task_result.result
+                return Response({
+                    'task_id': task_id,
+                    'status': 'completed',
+                    'result': result
+                })
+            else:
+                return Response({
+                    'task_id': task_id,
+                    'status': 'failed',
+                    'error': str(task_result.result)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({
+                'task_id': task_id,
+                'status': 'pending',
+                'state': task_result.state
+            })

@@ -10,6 +10,7 @@ from apps.core.views import (
     HouseholdViewSet, HouseholdMemberViewSet,
     NotificationSettingsView, TwoFactorSettingsView, SessionsView, DataExportView
 )
+from apps.core.views_health import HealthCheckView, CeleryHealthCheckView
 from apps.accounts.views import AccountViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
@@ -29,12 +30,12 @@ from apps.onboarding.views import (
     go_back as onboarding_back
 )
 from apps.scenarios.views import (
-    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet, BaselineView
+    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet, BaselineView, ScenarioTaskStatusView
 )
 from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
 from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
-from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView
+from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView, StressTestTaskStatusView
 
 # Create routers
 router = DefaultRouter()
@@ -62,6 +63,10 @@ decision_router.register('templates', DecisionTemplateViewSet, basename='decisio
 decision_router.register('runs', DecisionRunViewSet, basename='decision-run')
 
 urlpatterns = [
+    # Health checks (public endpoints for monitoring)
+    path('health/', HealthCheckView.as_view(), name='health-check'),
+    path('health/celery/', CeleryHealthCheckView.as_view(), name='celery-health-check'),
+
     # Admin
     path('admin/', admin.site.urls),
 
@@ -107,6 +112,9 @@ urlpatterns = [
     # Baseline Scenario
     path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline'),
 
+    # Scenario Task Status
+    path('api/v1/scenarios/tasks/<str:task_id>/', ScenarioTaskStatusView.as_view(), name='scenario-task-status'),
+
     # Goals
     path('api/v1/goals/status/', GoalStatusView.as_view(), name='goal-status'),
 
@@ -122,4 +130,5 @@ urlpatterns = [
     path('api/v1/stress-tests/', StressTestListView.as_view(), name='stress-test-list'),
     path('api/v1/stress-tests/run/', StressTestRunView.as_view(), name='stress-test-run'),
     path('api/v1/stress-tests/batch/', StressTestBatchRunView.as_view(), name='stress-test-batch'),
+    path('api/v1/stress-tests/status/<str:task_id>/', StressTestTaskStatusView.as_view(), name='stress-test-task-status'),
 ]
