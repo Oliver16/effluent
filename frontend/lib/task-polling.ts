@@ -14,7 +14,7 @@ export interface TaskResponse {
 export interface PollOptions {
   interval?: number; // Polling interval in ms (default: 1000)
   timeout?: number; // Max time to poll in ms (default: 300000 = 5 minutes)
-  onProgress?: (status: TaskResponse) => void;
+  onProgress?: (status: TaskResponse, elapsedSeconds: number) => void;
 }
 
 /**
@@ -60,9 +60,10 @@ export async function pollTaskStatus<T = any>(
 
         const taskStatus: TaskResponse = await response.json();
 
-        // Call progress callback if provided
+        // Calculate elapsed time and call progress callback if provided
         if (onProgress) {
-          onProgress(taskStatus);
+          const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+          onProgress(taskStatus, elapsedSeconds);
         }
 
         // Handle completed task
@@ -105,7 +106,18 @@ export async function handleAsyncResponse<T = any>(
   // If response has task_id, it's async - poll for completion
   if (response.taskId || response.task_id) {
     const taskId = response.taskId || response.task_id;
-    return pollTaskStatus<T>(taskId, statusUrl, options);
+
+    // Add default progress handler if none provided (for console logging)
+    const optionsWithProgress = {
+      ...options,
+      onProgress: options.onProgress || ((status: TaskResponse, elapsedSeconds: number) => {
+        if (elapsedSeconds > 0 && elapsedSeconds % 5 === 0) {
+          console.log(`Task ${taskId} still processing... (${elapsedSeconds}s elapsed)`);
+        }
+      })
+    };
+
+    return pollTaskStatus<T>(taskId, statusUrl, optionsWithProgress);
   }
 
   // Otherwise it's a synchronous response - return it directly

@@ -39,14 +39,19 @@ export function BaselineStatus({ health, onRefresh }: BaselineStatusProps) {
   const queryClient = useQueryClient();
 
   const refreshMutation = useMutation({
-    mutationFn: () => baseline.refresh(true),
+    mutationFn: () => {
+      // Show immediate feedback that processing has started
+      toast.loading('Starting baseline refresh...', { id: 'baseline-refresh' });
+      return baseline.refresh(true);
+    },
     onSuccess: () => {
+      toast.success('Baseline refreshed successfully', { id: 'baseline-refresh' });
       queryClient.invalidateQueries({ queryKey: ['baseline'] });
-      toast.success('Baseline refreshed successfully');
       onRefresh?.();
     },
-    onError: () => {
-      toast.error('Failed to refresh baseline');
+    onError: (error: any) => {
+      const errorMessage = error?.message || 'Failed to refresh baseline';
+      toast.error(errorMessage, { id: 'baseline-refresh' });
     },
   });
 

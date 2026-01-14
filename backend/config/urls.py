@@ -10,6 +10,7 @@ from apps.core.views import (
     HouseholdViewSet, HouseholdMemberViewSet,
     NotificationSettingsView, TwoFactorSettingsView, SessionsView, DataExportView
 )
+from apps.core.views_health import HealthCheckView, CeleryHealthCheckView
 from apps.accounts.views import AccountViewSet
 from apps.flows.views import RecurringFlowViewSet
 from apps.taxes.views import (
@@ -62,6 +63,10 @@ decision_router.register('templates', DecisionTemplateViewSet, basename='decisio
 decision_router.register('runs', DecisionRunViewSet, basename='decision-run')
 
 urlpatterns = [
+    # Health checks (public endpoints for monitoring)
+    path('health/', HealthCheckView.as_view(), name='health-check'),
+    path('health/celery/', CeleryHealthCheckView.as_view(), name='celery-health-check'),
+
     # Admin
     path('admin/', admin.site.urls),
 
