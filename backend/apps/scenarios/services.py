@@ -654,37 +654,51 @@ class ScenarioEngine:
 
         elif change.change_type == ChangeType.MODIFY_INCOME:
             # Modify existing income flow and recalculate taxes
-            flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
-            for income in state.incomes:
-                if income['id'] == flow_id:
-                    old_monthly = income['monthly']
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"MODIFY_INCOME requires source_flow_id or source_flow_id in parameters")
 
-                    if 'amount' in params:
-                        income['amount'] = Decimal(str(params['amount']))
-                        freq = params.get('frequency', income['frequency'])
-                        income['frequency'] = freq
-                        income['monthly'] = self._to_monthly(params['amount'], freq)
-                    if 'category' in params:
-                        income['category'] = params['category']
+            income = self._find_income_by_id(state, flow_id)
+            if not income:
+                raise ValueError(f"Income source {flow_id} not found in scenario state")
 
-                    new_monthly = income['monthly']
+            old_monthly = income['monthly']
 
-                    # Update tax treatment if specified
-                    if params.get('tax_treatment'):
-                        income['_income_type'] = params['tax_treatment']
+            if 'amount' in params:
+                income['amount'] = Decimal(str(params['amount']))
+                freq = params.get('frequency', income['frequency'])
+                income['frequency'] = freq
+                income['monthly'] = self._to_monthly(params['amount'], freq)
+            if 'category' in params:
+                income['category'] = params['category']
 
-                    # Recalculate ALL taxes if income changed since marginal rates may have shifted
-                    if new_monthly != old_monthly or params.get('tax_treatment'):
-                        self._recalculate_all_taxes(state)
-                    break
+            new_monthly = income['monthly']
+
+            # Update tax treatment if specified
+            if params.get('tax_treatment'):
+                income['_income_type'] = params['tax_treatment']
+
+            # Recalculate ALL taxes if income changed since marginal rates may have shifted
+            if new_monthly != old_monthly or params.get('tax_treatment'):
+                self._recalculate_all_taxes(state)
 
         elif change.change_type == ChangeType.REMOVE_INCOME:
-            flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
-            state.incomes = [i for i in state.incomes if i['id'] != flow_id]
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"REMOVE_INCOME requires source_flow_id or source_flow_id in parameters")
+
+            # Verify income exists before removal
+            income = self._find_income_by_id(state, flow_id)
+            if not income:
+                raise ValueError(f"Income source {flow_id} not found in scenario state")
+
+            # Remove income (filter by exact ID match)
+            income_id_to_remove = income['id']
+            state.incomes = [i for i in state.incomes if i['id'] != income_id_to_remove]
 
             # Remove from income_tax_map
-            if flow_id in state.income_tax_map:
-                del state.income_tax_map[flow_id]
+            if income_id_to_remove in state.income_tax_map:
+                del state.income_tax_map[income_id_to_remove]
 
             # Recalculate ALL taxes since removing income changes marginal rates for remaining income
             self._recalculate_all_taxes(state)
@@ -701,20 +715,32 @@ class ScenarioEngine:
 
         elif change.change_type == ChangeType.MODIFY_EXPENSE:
             # Modify existing expense flow
-            flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
-            for expense in state.expenses:
-                if expense['id'] == flow_id:
-                    if 'amount' in params:
-                        expense['amount'] = Decimal(str(params['amount']))
-                        freq = params.get('frequency', expense['frequency'])
-                        expense['frequency'] = freq
-                        expense['monthly'] = self._to_monthly(params['amount'], freq)
-                    if 'category' in params:
-                        expense['category'] = params['category']
-                    break
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"MODIFY_EXPENSE requires source_flow_id or source_flow_id in parameters")
+
+            expense = self._find_expense_by_id(state, flow_id)
+            if not expense:
+                raise ValueError(f"Expense flow {flow_id} not found in scenario state")
+
+            if 'amount' in params:
+                expense['amount'] = Decimal(str(params['amount']))
+                freq = params.get('frequency', expense['frequency'])
+                expense['frequency'] = freq
+                expense['monthly'] = self._to_monthly(params['amount'], freq)
+            if 'category' in params:
+                expense['category'] = params['category']
 
         elif change.change_type == ChangeType.REMOVE_EXPENSE:
-            flow_id = str(change.source_flow_id) if change.source_flow_id else params.get('source_flow_id')
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"REMOVE_EXPENSE requires source_flow_id or source_flow_id in parameters")
+
+            # Verify expense exists before removal
+            expense = self._find_expense_by_id(state, flow_id)
+            if not expense:
+                raise ValueError(f"Expense flow {flow_id} not found in scenario state")
+
             state.expenses = [e for e in state.expenses if e['id'] != flow_id]
 
         elif change.change_type == ChangeType.ADD_DEBT:
@@ -755,6 +781,12 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.MODIFY_DEBT:
             # Modify existing debt parameters
             debt_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
+            if not debt_id:
+                raise ValueError(f"MODIFY_DEBT requires source_account_id")
+
+            if debt_id not in state.liabilities:
+                raise ValueError(f"Debt account {debt_id} not found in scenario state")
+
             if debt_id in state.liabilities:
                 liab = state.liabilities[debt_id]
                 if 'principal' in params:
@@ -777,9 +809,15 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.PAYOFF_DEBT:
             # Add extra payment to existing debt
             debt_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
+            if not debt_id:
+                raise ValueError(f"PAYOFF_DEBT requires source_account_id")
+
             extra = Decimal(str(params.get('extra_monthly', 0)))
 
             # Validate that the debt exists in state
+            if debt_id not in state.liabilities:
+                raise ValueError(f"Debt account {debt_id} not found in scenario state")
+
             if debt_id and debt_id in state.liabilities:
                 liab = state.liabilities[debt_id]
                 # Use a unique expense ID that can be matched back to the debt
@@ -817,6 +855,12 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.REFINANCE:
             # Refinance existing debt with new terms
             debt_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
+            if not debt_id:
+                raise ValueError(f"REFINANCE requires source_account_id")
+
+            if debt_id not in state.liabilities:
+                raise ValueError(f"Debt account {debt_id} not found in scenario state")
+
             if debt_id in state.liabilities:
                 liab = state.liabilities[debt_id]
                 old_balance = liab.balance
@@ -880,6 +924,12 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.MODIFY_ASSET:
             # Modify existing asset value
             asset_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
+            if not asset_id:
+                raise ValueError(f"MODIFY_ASSET requires source_account_id")
+
+            if asset_id not in state.assets:
+                raise ValueError(f"Asset account {asset_id} not found in scenario state")
+
             if asset_id in state.assets:
                 if 'value' in params:
                     state.assets[asset_id].balance = Decimal(str(params['value']))
@@ -889,6 +939,12 @@ class ScenarioEngine:
         elif change.change_type == ChangeType.SELL_ASSET:
             # Sell asset and add proceeds to liquid assets
             asset_id = str(change.source_account_id) if change.source_account_id else params.get('source_account_id')
+            if not asset_id:
+                raise ValueError(f"SELL_ASSET requires source_account_id")
+
+            if asset_id not in state.assets:
+                raise ValueError(f"Asset account {asset_id} not found in scenario state")
+
             if asset_id in state.assets:
                 sale_price = Decimal(str(params.get('sale_price', state.assets[asset_id].balance)))
                 selling_costs = Decimal(str(params.get('selling_costs', 0)))
@@ -951,55 +1007,55 @@ class ScenarioEngine:
             new_rate = new_percentage / 100  # Convert to decimal
             state.contribution_rates['401k'] = new_rate
 
-            # Calculate contribution amount from gross salary income
+            # Calculate contribution amount from ALL gross salary income sources (handles multiple jobs)
+            total_gross_monthly = Decimal('0')
             for inc in state.incomes:
-                if inc['category'] in ('salary', 'hourly_wages'):
-                    gross_monthly = inc['monthly']
-                    new_contribution = gross_monthly * new_rate
+                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly'):
+                    total_gross_monthly += inc['monthly']
 
-                    # Add 401(k) contribution as expense (reduces take-home pay)
-                    # But also add to retirement assets
-                    existing_expense = next(
-                        (e for e in state.expenses if '401k_contribution' in e.get('id', '')),
-                        None
-                    )
-                    if existing_expense:
-                        existing_expense['monthly'] = new_contribution
-                        existing_expense['amount'] = new_contribution
-                    elif new_contribution > 0:
-                        state.expenses.append({
-                            'id': f'401k_contribution_{change.id}',
-                            'name': f'{change.name} - 401(k) Contribution',
-                            'category': 'retirement_contribution',
-                            'amount': new_contribution,
-                            'frequency': 'monthly',
-                            'monthly': new_contribution,
-                        })
+            new_contribution = total_gross_monthly * new_rate
 
-                    # Add transfer to retirement account
-                    retirement_acct = next(
-                        (k for k, a in state.assets.items() if a.is_retirement),
-                        None
-                    )
-                    if retirement_acct and new_contribution > 0:
-                        existing_transfer = next(
-                            (t for t in state.transfers if '401k_transfer' in t.get('id', '')),
-                            None
-                        )
-                        if existing_transfer:
-                            existing_transfer['monthly'] = new_contribution
-                            existing_transfer['amount'] = new_contribution
-                        else:
-                            state.transfers.append({
-                                'id': f'401k_transfer_{change.id}',
-                                'name': '401(k) Contribution',
-                                'category': 'retirement_transfer',
-                                'amount': new_contribution,
-                                'frequency': 'monthly',
-                                'monthly': new_contribution,
-                                'linked_account': retirement_acct,
-                            })
-                    break
+            # Add 401(k) contribution as expense (reduces take-home pay)
+            existing_expense = next(
+                (e for e in state.expenses if '401k_contribution' in e.get('id', '')),
+                None
+            )
+            if existing_expense:
+                existing_expense['monthly'] = new_contribution
+                existing_expense['amount'] = new_contribution
+            elif new_contribution > 0:
+                state.expenses.append({
+                    'id': f'401k_contribution_{change.id}',
+                    'name': f'{change.name} - 401(k) Contribution',
+                    'category': 'retirement_contribution',
+                    'amount': new_contribution,
+                    'frequency': 'monthly',
+                    'monthly': new_contribution,
+                })
+
+            # Add transfer to retirement account
+            retirement_acct = next(
+                (k for k, a in state.assets.items() if a.is_retirement),
+                None
+            )
+            if retirement_acct and new_contribution > 0:
+                existing_transfer = next(
+                    (t for t in state.transfers if '401k_transfer' in t.get('id', '')),
+                    None
+                )
+                if existing_transfer:
+                    existing_transfer['monthly'] = new_contribution
+                    existing_transfer['amount'] = new_contribution
+                else:
+                    state.transfers.append({
+                        'id': f'401k_transfer_{change.id}',
+                        'name': '401(k) Contribution',
+                        'category': 'retirement_transfer',
+                        'amount': new_contribution,
+                        'frequency': 'monthly',
+                        'monthly': new_contribution,
+                        'linked_account': retirement_acct,
+                    })
 
             # Recalculate taxes since pre-tax deductions affect taxable income
             self._recalculate_all_taxes(state)
@@ -1010,30 +1066,31 @@ class ScenarioEngine:
             new_rate = new_percentage / 100  # Convert to decimal
             state.contribution_rates['hsa'] = new_rate
 
-            # Calculate HSA contribution amount from gross salary income
+            # Calculate HSA contribution amount from ALL gross salary income sources (handles multiple jobs)
+            total_gross_monthly = Decimal('0')
             for inc in state.incomes:
-                if inc['category'] in ('salary', 'hourly_wages'):
-                    gross_monthly = inc['monthly']
-                    new_contribution = gross_monthly * new_rate
+                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly'):
+                    total_gross_monthly += inc['monthly']
 
-                    # Add HSA contribution as expense (reduces take-home pay)
-                    existing_expense = next(
-                        (e for e in state.expenses if 'hsa_contribution' in e.get('id', '')),
-                        None
-                    )
-                    if existing_expense:
-                        existing_expense['monthly'] = new_contribution
-                        existing_expense['amount'] = new_contribution
-                    elif new_contribution > 0:
-                        state.expenses.append({
-                            'id': f'hsa_contribution_{change.id}',
-                            'name': f'{change.name} - HSA Contribution',
-                            'category': 'health_savings',
-                            'amount': new_contribution,
-                            'frequency': 'monthly',
-                            'monthly': new_contribution,
-                        })
-                    break
+            new_contribution = total_gross_monthly * new_rate
+
+            # Add HSA contribution as expense (reduces take-home pay)
+            existing_expense = next(
+                (e for e in state.expenses if 'hsa_contribution' in e.get('id', '')),
+                None
+            )
+            if existing_expense:
+                existing_expense['monthly'] = new_contribution
+                existing_expense['amount'] = new_contribution
+            elif new_contribution > 0:
+                state.expenses.append({
+                    'id': f'hsa_contribution_{change.id}',
+                    'name': f'{change.name} - HSA Contribution',
+                    'category': 'health_savings',
+                    'amount': new_contribution,
+                    'frequency': 'monthly',
+                    'monthly': new_contribution,
+                })
 
             # Recalculate taxes since HSA contributions are pre-tax
             self._recalculate_all_taxes(state)
@@ -1486,6 +1543,58 @@ class ScenarioEngine:
             asset_breakdown=state.get_asset_breakdown(),
             liability_breakdown=state.get_liability_breakdown(),
         )
+
+    def _get_flow_id(self, source_flow_id: str, params: dict) -> str:
+        """
+        Get normalized flow ID from source_flow_id or parameters.
+
+        Handles both plain UUID strings and formatted strings like "income_source_{uuid}".
+
+        Args:
+            source_flow_id: The source_flow_id from ScenarioChange
+            params: The change parameters dict
+
+        Returns:
+            Normalized flow ID string
+        """
+        return str(source_flow_id) if source_flow_id else params.get('source_flow_id', '')
+
+    def _find_income_by_id(self, state: MonthlyState, flow_id: str) -> dict | None:
+        """
+        Find income in state by ID, handling both exact matches and partial matches.
+
+        Args:
+            state: Current monthly state
+            flow_id: Flow ID to search for
+
+        Returns:
+            Income dict if found, None otherwise
+        """
+        # First try exact match
+        for income in state.incomes:
+            if income['id'] == flow_id:
+                return income
+
+        # If flow_id is a UUID, try matching against formatted income_source_{uuid}
+        for income in state.incomes:
+            if income['id'] == f'income_source_{flow_id}':
+                return income
+
+        # If flow_id is formatted, try matching the UUID part
+        if flow_id.startswith('income_source_'):
+            uuid_part = flow_id.replace('income_source_', '')
+            for income in state.incomes:
+                if income['id'] == uuid_part:
+                    return income
+
+        return None
+
+    def _find_expense_by_id(self, state: MonthlyState, flow_id: str) -> dict | None:
+        """Find expense in state by ID."""
+        for expense in state.expenses:
+            if expense['id'] == flow_id:
+                return expense
+        return None
 
     def _to_monthly(self, amount, frequency: str) -> Decimal:
         """Convert amount to monthly.
