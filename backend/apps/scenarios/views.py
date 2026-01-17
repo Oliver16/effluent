@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from celery.result import AsyncResult
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -385,12 +386,217 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     'flow_id': str(flow.id),
                 })
 
-            else:
-                # Overlay adjustments and other synthetic changes can't be adopted
+            elif change.change_type == ChangeType.MODIFY_INCOME:
+                # Update existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household)
+                        if 'amount' in params:
+                            flow.amount = params['amount']
+                        if 'frequency' in params:
+                            flow.frequency = params['frequency']
+                        if 'category' in params or 'income_category' in params:
+                            flow.income_category = params.get('income_category') or params.get('category')
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_INCOME',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_EXPENSE:
+                # Update existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household)
+                        if 'amount' in params:
+                            flow.amount = params['amount']
+                        if 'frequency' in params:
+                            flow.frequency = params['frequency']
+                        if 'category' in params or 'expense_category' in params:
+                            flow.expense_category = params.get('expense_category') or params.get('category')
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_EXPENSE',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.REMOVE_INCOME:
+                # Delete existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household, flow_type=FlowType.INCOME)
+                        flow.is_active = False
+                        flow.end_date = change.effective_date
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'REMOVE_INCOME',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.REMOVE_EXPENSE:
+                # Delete existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household, flow_type=FlowType.EXPENSE)
+                        flow.is_active = False
+                        flow.end_date = change.effective_date
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'REMOVE_EXPENSE',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_401K:
+                # Update pre-tax deduction
+                from apps.taxes.models import PreTaxDeduction
+                try:
+                    # Find existing 401k deduction for this household
+                    deduction = PreTaxDeduction.objects.filter(
+                        income_source__household=request.household,
+                        deduction_type__in=['traditional_401k', 'roth_401k'],
+                        is_active=True
+                    ).first()
+
+                    if deduction:
+                        # Update percentage
+                        new_percentage = Decimal(str(params.get('percentage', 0)))
+                        deduction.amount = new_percentage / 100  # Convert to decimal
+                        deduction.amount_type = 'percentage'
+                        deduction.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_401K',
+                            'deduction_id': str(deduction.id),
+                        })
+                    else:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'No active 401k deduction found',
+                        })
+                except Exception as e:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': f'Error: {str(e)}',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_HSA:
+                # Update pre-tax deduction
+                from apps.taxes.models import PreTaxDeduction
+                try:
+                    # Find existing HSA deduction for this household
+                    deduction = PreTaxDeduction.objects.filter(
+                        income_source__household=request.household,
+                        deduction_type='hsa',
+                        is_active=True
+                    ).first()
+
+                    if deduction:
+                        # Update percentage
+                        new_percentage = Decimal(str(params.get('percentage', 0)))
+                        deduction.amount = new_percentage / 100  # Convert to decimal
+                        deduction.amount_type = 'percentage'
+                        deduction.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_HSA',
+                            'deduction_id': str(deduction.id),
+                        })
+                    else:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'No active HSA deduction found',
+                        })
+                except Exception as e:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': f'Error: {str(e)}',
+                    })
+
+            # One-time and synthetic changes cannot be adopted as persistent flows
+            elif change.change_type in [
+                ChangeType.LUMP_SUM_INCOME,
+                ChangeType.LUMP_SUM_EXPENSE,
+                ChangeType.ADJUST_TOTAL_INCOME,
+                ChangeType.ADJUST_TOTAL_EXPENSES,
+                ChangeType.OVERRIDE_ASSUMPTIONS,
+                ChangeType.OVERRIDE_INFLATION,
+                ChangeType.OVERRIDE_INVESTMENT_RETURN,
+                ChangeType.OVERRIDE_SALARY_GROWTH,
+                ChangeType.ADJUST_INTEREST_RATES,
+                ChangeType.ADJUST_INVESTMENT_VALUE,
+            ]:
                 skipped_changes.append({
                     'change_id': str(change.id),
                     'type': change.change_type,
-                    'reason': 'Overlay/synthetic changes cannot be adopted',
+                    'reason': 'One-time or synthetic changes cannot be adopted as persistent flows',
+                })
+
+            else:
+                # Other change types not yet supported for adoption
+                skipped_changes.append({
+                    'change_id': str(change.id),
+                    'type': change.change_type,
+                    'reason': 'Adopt not yet implemented for this change type',
                 })
 
         # Archive the scenario after adoption
