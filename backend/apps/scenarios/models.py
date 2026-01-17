@@ -153,6 +153,21 @@ class ScenarioChange(TimestampedModel):
         db_table = 'scenario_changes'
         ordering = ['effective_date', 'display_order']
 
+    def clean(self):
+        """Validate parameters match the schema for this change type."""
+        from .validators import validate_scenario_change_parameters
+        validate_scenario_change_parameters(
+            self.change_type,
+            self.parameters,
+            self.source_flow_id,
+            self.source_account_id
+        )
+
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.scenario.name} - {self.name}"
 

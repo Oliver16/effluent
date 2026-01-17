@@ -56,6 +56,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def compute(self, request, pk=None):
         """Compute projections for this scenario (async by default)."""
+        from django.core.cache import cache
+
         scenario = self.get_object()
         run_async = request.data.get('async', True)  # Default to async
         horizon_months = request.data.get('horizon_months')
@@ -68,6 +70,9 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     'in_memory': False
                 }
             )
+
+            # Store task -> household mapping for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(scenario.household_id), 3600)
 
             return Response({
                 'task_id': task.id,
@@ -156,22 +161,27 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Extend projections if horizon exceeds current projection_months
-        if horizon_months:
-            for scenario in scenarios:
-                if scenario.projection_months < horizon_months:
-                    # Update scenario's projection_months and recompute
-                    scenario.projection_months = horizon_months
-                    scenario.save(update_fields=['projection_months'])
-                    engine = ScenarioEngine(scenario)
-                    engine.compute_projection()
-
         # Build basic comparison results
+        # If horizon exceeds scenario's projection_months, compute extended projections in-memory
         comparisons = []
         for scenario in scenarios:
-            projections = scenario.projections.all()
-            if horizon_months:
+            if horizon_months and scenario.projection_months < horizon_months:
+                # Compute extended projections in-memory (don't save to DB)
+                # Temporarily increase projection_months for computation only
+                original_months = scenario.projection_months
+                scenario.projection_months = horizon_months
+                engine = ScenarioEngine(scenario)
+                projections = engine.compute_projection(in_memory=True)
+                # Restore original projection_months (no DB write occurred)
+                scenario.projection_months = original_months
+                # Limit to requested horizon
                 projections = projections[:horizon_months]
+            else:
+                # Use existing projections from DB
+                projections = scenario.projections.all()
+                if horizon_months:
+                    projections = projections[:horizon_months]
+
             comparisons.append({
                 'scenario': ScenarioSerializer(scenario).data,
                 'projections': ScenarioProjectionSerializer(projections, many=True).data,
@@ -518,6 +528,8 @@ class BaselineView(APIView):
 
     def post(self, request):
         """Handle baseline actions via action parameter."""
+        from django.core.cache import cache
+
         action_type = request.data.get('action')
         run_async = request.data.get('async', True)  # Default to async
 
@@ -526,6 +538,9 @@ class BaselineView(APIView):
                 task = refresh_baseline_task.apply_async(
                     kwargs={'household_id': str(request.household.id)}
                 )
+
+                # Store task -> household mapping for security validation (1 hour TTL)
+                cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
 
                 return Response({
                     'task_id': task.id,
@@ -822,18 +837,44 @@ class ScenarioTaskStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, task_id):
-        """Get the status and result of a scenario task."""
+        """
+        Get the status and result of a scenario task.
+
+        Security: Validates that the task belongs to the requesting user's household
+        by checking a task_id -> household_id mapping stored in cache.
+        """
+        from django.core.cache import cache
+
+        # Validate task ownership
+        cached_household_id = cache.get(f'task_household:{task_id}')
+
+        if not cached_household_id:
+            # Task ID not found or expired - could be old task or invalid ID
+            return Response({
+                'error': 'Task not found or expired'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Verify task belongs to requesting user's household
+        if not request.household or str(request.household.id) != str(cached_household_id):
+            return Response({
+                'error': 'Access denied to this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         task_result = AsyncResult(task_id)
 
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
+                # Clean up cache entry after successful retrieval
+                cache.delete(f'task_household:{task_id}')
                 return Response({
                     'task_id': task_id,
                     'status': 'completed',
                     'result': result
                 })
             else:
+                # Clean up cache entry after failed retrieval
+                cache.delete(f'task_household:{task_id}')
                 return Response({
                     'task_id': task_id,
                     'status': 'failed',
