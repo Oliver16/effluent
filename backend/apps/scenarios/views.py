@@ -1010,6 +1010,26 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 source_account_id = user_values.get('source_account_id')
                 parameters.pop('source_account_id', None)
 
+            # Validate parameters before creating change
+            from .validators import validate_scenario_change_parameters
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_scenario_change_parameters(
+                    change_template['change_type'],
+                    parameters,
+                    source_flow_id,
+                    source_account_id
+                )
+            except DjangoValidationError as e:
+                return Response(
+                    {
+                        'error': f"Validation error for change '{change_template['name']}': {str(e)}",
+                        'change_index': idx,
+                        'change_name': change_template['name'],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             change = ScenarioChange.objects.create(
                 scenario=scenario,
                 change_type=change_template['change_type'],

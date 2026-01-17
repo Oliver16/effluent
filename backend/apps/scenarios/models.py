@@ -252,7 +252,7 @@ class LifeEventCategory(models.TextChoices):
 class LifeEventTemplate(models.Model):
     """Template for common life events with suggested changes."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, unique=True, help_text='Unique name for this life event template')
     description = models.TextField()
     category = models.CharField(max_length=30, choices=LifeEventCategory.choices)
     icon = models.CharField(max_length=50, default='calendar')  # Icon name for UI
