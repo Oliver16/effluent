@@ -40,7 +40,10 @@ class Scenario(HouseholdOwnedModel):
     last_projected_at = models.DateTimeField(null=True, blank=True)
 
     # Projection settings
-    projection_months = models.PositiveIntegerField(default=120)  # 10 years
+    projection_months = models.PositiveIntegerField(
+        default=120,  # 10 years
+        validators=[models.validators.MaxValueValidator(360)]  # Max 30 years
+    )
     start_date = models.DateField()
 
     # Assumptions

@@ -12,6 +12,14 @@ from apps.taxes.services import ScenarioTaxCalculator
 from .models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 
 
+# Financial calculation constants
+MAX_DSCR = Decimal('999')  # Maximum debt service coverage ratio (capped for display)
+MAX_SAVINGS_RATE = Decimal('9.9999')  # Maximum savings rate (capped for display)
+MIN_SAVINGS_RATE = Decimal('-9.9999')  # Minimum savings rate (negative = overspending)
+MAX_LIQUIDITY_MONTHS = Decimal('999')  # Maximum liquidity months (capped for display)
+MAX_DAYS_CASH = Decimal('999.9')  # Maximum days cash on hand (capped for display)
+
+
 @dataclass
 class AssetInfo:
     """Information about an asset account."""
@@ -1387,15 +1395,12 @@ class ScenarioEngine:
                 monthly_interest = liab.balance * (liab.rate / 12) if liab.rate > 0 else Decimal('0')
                 principal_payment = liab.payment - monthly_interest
 
-                # Find any extra payments for this debt using explicit mapping first, then fallback to ID matching
+                # Find any extra payments for this debt using explicit mapping ONLY
                 extra_payment = Decimal('0')
                 for e in state.expenses:
-                    # Prefer explicit mapping via _target_debt_id
+                    # Only use explicit mapping via _target_debt_id for safety
                     target_debt = e.get('_target_debt_id')
                     if target_debt and target_debt == lid:
-                        extra_payment += e['monthly']
-                    # Fallback to ID-based matching for legacy/scenario_debt entries
-                    elif not target_debt and 'extra' in e.get('id', '') and lid in e.get('id', ''):
                         extra_payment += e['monthly']
 
                 principal_payment += extra_payment
@@ -1431,11 +1436,11 @@ class ScenarioEngine:
 
         non_debt_exp = total_exp - debt_service
         operating_income = state.total_income - non_debt_exp
-        dscr = operating_income / debt_service if debt_service > 0 else Decimal('999')
+        dscr = operating_income / debt_service if debt_service > 0 else MAX_DSCR
 
         savings_rate = state.net_cash_flow / state.total_income if state.total_income > 0 else Decimal('0')
-        liquidity = state.liquid_assets / total_exp if total_exp > 0 else Decimal('999')
-        days_cash = (state.liquid_assets * Decimal('30')) / total_exp if total_exp > 0 else Decimal('999.9')
+        liquidity = state.liquid_assets / total_exp if total_exp > 0 else MAX_LIQUIDITY_MONTHS
+        days_cash = (state.liquid_assets * Decimal('30')) / total_exp if total_exp > 0 else MAX_DAYS_CASH
 
         # Build income breakdown aggregating by category
         income_breakdown = {}
@@ -1469,10 +1474,10 @@ class ScenarioEngine:
             total_income=state.total_income.quantize(Decimal('0.01')),
             total_expenses=total_exp.quantize(Decimal('0.01')),
             net_cash_flow=state.net_cash_flow.quantize(Decimal('0.01')),
-            dscr=min(dscr, Decimal('999')).quantize(Decimal('0.001')),
-            savings_rate=max(Decimal('-9.9999'), min(savings_rate, Decimal('9.9999'))).quantize(Decimal('0.0001')),
-            liquidity_months=min(liquidity, Decimal('999')).quantize(Decimal('0.01')),
-            days_cash_on_hand=min(days_cash, Decimal('999.9')).quantize(Decimal('0.1')),
+            dscr=min(dscr, MAX_DSCR).quantize(Decimal('0.001')),
+            savings_rate=max(MIN_SAVINGS_RATE, min(savings_rate, MAX_SAVINGS_RATE)).quantize(Decimal('0.0001')),
+            liquidity_months=min(liquidity, MAX_LIQUIDITY_MONTHS).quantize(Decimal('0.01')),
+            days_cash_on_hand=min(days_cash, MAX_DAYS_CASH).quantize(Decimal('0.1')),
             income_breakdown=income_breakdown,
             expense_breakdown=expense_breakdown,
             asset_breakdown=state.get_asset_breakdown(),
@@ -1480,14 +1485,32 @@ class ScenarioEngine:
         )
 
     def _to_monthly(self, amount, frequency: str) -> Decimal:
-        """Convert amount to monthly."""
+        """Convert amount to monthly.
+
+        Args:
+            amount: The amount to convert
+            frequency: The frequency string (must be a valid Frequency enum value)
+
+        Returns:
+            Monthly equivalent amount
+
+        Raises:
+            ValueError: If frequency is invalid
+        """
         # Convert string frequency to Frequency enum if needed
         if isinstance(frequency, str):
             try:
                 frequency = Frequency(frequency)
             except ValueError:
-                pass  # Keep as string if invalid
-        mult = FREQUENCY_TO_MONTHLY.get(frequency, Decimal('1'))
+                raise ValueError(
+                    f"Invalid frequency '{frequency}'. Must be one of: "
+                    f"{', '.join([f.value for f in Frequency])}"
+                )
+
+        mult = FREQUENCY_TO_MONTHLY.get(frequency)
+        if mult is None:
+            raise ValueError(f"No conversion multiplier found for frequency: {frequency}")
+
         return Decimal(str(amount)) * mult
 
     def _get_state_annual_income(self, state: MonthlyState, exclude_id: str | None = None) -> Decimal:
