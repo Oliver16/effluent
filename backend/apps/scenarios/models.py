@@ -132,8 +132,21 @@ class ScenarioChange(TimestampedModel):
     description = models.TextField(blank=True)
 
     # Timing
-    effective_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    effective_date = models.DateField(
+        help_text="Date when this change takes effect (inclusive)"
+    )
+    end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional date when this change stops applying (inclusive). "
+            "For recurring changes (ADD_INCOME, ADD_EXPENSE), the change continues "
+            "to apply through and including this date, then is removed starting "
+            "the next month. Leave blank for changes that apply indefinitely. "
+            "Example: For temporary income with end_date=2026-12-31, the income "
+            "is included in December 2026 and removed starting January 2027."
+        )
+    )
 
     # Reference to existing objects (optional)
     source_account_id = models.UUIDField(null=True, blank=True)

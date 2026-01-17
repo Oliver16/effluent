@@ -255,7 +255,10 @@ class ScenarioEngine:
 
         # Only save to DB if not in_memory mode
         if not in_memory:
+            # Use transaction to ensure atomic delete+create (rollback on failure)
             with transaction.atomic():
+                # Delete old projections only after new ones are computed successfully
+                # This prevents data loss if computation succeeds but DB write fails
                 ScenarioProjection.objects.filter(scenario=self.scenario).delete()
                 ScenarioProjection.objects.bulk_create(projections)
 

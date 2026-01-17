@@ -35,6 +35,10 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         # Exclude stress test scenarios by default (they're accessed via stress-tests endpoint)
         if self.request.query_params.get('include_stress_tests', 'false').lower() != 'true':
             qs = qs.filter(is_stress_test=False)
+
+        # Optimize queries by prefetching related objects to avoid N+1 queries
+        qs = qs.prefetch_related('changes', 'projections').select_related('parent_scenario')
+
         return qs
 
     def get_serializer_class(self):
