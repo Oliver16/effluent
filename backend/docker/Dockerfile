@@ -8,6 +8,9 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Upgrade pip, setuptools, and wheel
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
 COPY requirements/base.txt requirements/dev.txt ./requirements/
 RUN pip install --no-cache-dir -r requirements/dev.txt
 
