@@ -68,6 +68,8 @@ class MonthlyState:
     deferred_incomes: list = field(default_factory=list)
     deferred_expenses: list = field(default_factory=list)
     income_tax_map: dict = field(default_factory=dict)  # income_id -> tax_expense_id mapping
+    # Track overdraft: how much cash flow would have gone negative if not clamped
+    overdraft_amount: Decimal = field(default_factory=lambda: Decimal('0'))
 
     @property
     def total_assets(self) -> Decimal:
@@ -1514,10 +1516,24 @@ class ScenarioEngine:
         # users to specify which account to use for cash flow operations.
         liquid_asset = next((k for k, a in state.assets.items() if a.is_liquid), None)
         if liquid_asset:
-            state.assets[liquid_asset].balance = max(Decimal('0'), state.assets[liquid_asset].balance + net_flow)
+            new_balance = state.assets[liquid_asset].balance + net_flow
+            # Track overdraft if balance would go negative
+            if new_balance < 0:
+                state.overdraft_amount = abs(new_balance)
+            else:
+                state.overdraft_amount = Decimal('0')
+            # Clamp to zero (prevents negative balances but masks cash flow problems)
+            state.assets[liquid_asset].balance = max(Decimal('0'), new_balance)
         elif state.assets:
             first_key = next(iter(state.assets.keys()))
-            state.assets[first_key].balance = max(Decimal('0'), state.assets[first_key].balance + net_flow)
+            new_balance = state.assets[first_key].balance + net_flow
+            # Track overdraft if balance would go negative
+            if new_balance < 0:
+                state.overdraft_amount = abs(new_balance)
+            else:
+                state.overdraft_amount = Decimal('0')
+            # Clamp to zero
+            state.assets[first_key].balance = max(Decimal('0'), new_balance)
 
         # Process transfers (move money between accounts)
         for transfer in state.transfers:
