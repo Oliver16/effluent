@@ -648,7 +648,33 @@ class ScenarioEngine:
         return state
 
     def _apply_change(self, state: MonthlyState, change: ScenarioChange, current_date: date) -> MonthlyState:
-        """Apply a scenario change to the state."""
+        """
+        Apply a scenario change to the state.
+
+        This is the core logic for modifying the financial state based on scenario changes.
+        Handles 40+ different change types including:
+        - Income/expense additions, modifications, and removals
+        - Debt additions, payoffs, and refinancing
+        - Asset additions and sales
+        - Tax withholding and deduction modifications
+        - Savings transfers and contribution rate changes
+        - Life event changes (job changes, retirement, etc.)
+
+        Args:
+            state: Current monthly state to modify
+            change: ScenarioChange object containing the change type and parameters
+            current_date: Current date in the projection (used for effective date checking)
+
+        Returns:
+            Modified MonthlyState with the change applied
+
+        Notes:
+            - One-time changes (ADD_INCOME, ADD_DEBT, etc.) are tracked to prevent duplicate application
+            - Many changes trigger tax recalculation by calling _recalculate_all_taxes()
+            - Income/expense changes update state.incomes/expenses lists
+            - Debt/asset changes update state.liabilities/assets dictionaries
+            - Some changes (MODIFY_401K, MODIFY_HSA) update contribution_rates
+        """
         params = change.parameters
         change_key = str(change.id)
 
@@ -1416,6 +1442,10 @@ class ScenarioEngine:
                 state.contribution_rates.pop('_investment_recovery_monthly', None)
                 state.contribution_rates.pop('_investment_recovery_remaining', None)
 
+        # INTENTIONAL: Annual growth is applied as step changes at year boundaries (months 12, 24, 36, etc.)
+        # This creates discrete annual raises rather than continuous growth.
+        # For example, a 3% salary growth rate means salaries increase by 3% at the start of each year,
+        # not 0.25% each month. This matches how most compensation adjustments work in reality.
         if month > 0 and month % 12 == 0:
             # Annual salary growth
             growth = 1 + float(salary_growth_rate)
@@ -1442,10 +1472,37 @@ class ScenarioEngine:
         return state
 
     def _advance_month(self, state: MonthlyState) -> MonthlyState:
-        """Apply monthly cash flow to assets/liabilities."""
+        """
+        Advance the financial state by one month.
+
+        This function executes all monthly financial operations:
+        1. Applies net cash flow to liquid assets (or first asset if no liquid assets)
+        2. Processes inter-account transfers (savings, extra debt payments)
+        3. Calculates and applies employer 401k match (with annual limit tracking)
+        4. Updates debt balances with interest accrual and payments
+        5. Applies investment returns to asset balances
+        6. Applies annual growth rates (salary, inflation) at year boundaries
+
+        Args:
+            state: Current monthly state
+
+        Returns:
+            Updated MonthlyState with all monthly operations applied
+
+        Notes:
+            - Negative balances are clamped to zero (masks cash flow problems)
+            - First liquid asset is always selected for cash flow operations
+            - Employer match YTD resets at month 0, 12, 24, etc.
+            - Growth rates (salary, inflation) apply at month 12, 24, 36, etc.
+            - Investment returns compound monthly at rate/12
+        """
         net_flow = state.net_cash_flow
 
         # Add net cash flow to first liquid asset
+        # DESIGN DECISION: Always selects the FIRST liquid asset found in the dictionary.
+        # Dictionary iteration order is guaranteed in Python 3.7+, so this is deterministic.
+        # In practice, this is usually a checking account. Future enhancement could allow
+        # users to specify which account to use for cash flow operations.
         liquid_asset = next((k for k, a in state.assets.items() if a.is_liquid), None)
         if liquid_asset:
             state.assets[liquid_asset].balance = max(Decimal('0'), state.assets[liquid_asset].balance + net_flow)

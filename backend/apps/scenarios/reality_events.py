@@ -109,6 +109,10 @@ def process_reality_changes(batch_size: int = 100) -> dict:
             f"Processing {len(events)} reality change events for household {household_id}: {event_types}"
         )
 
+        # Detect potential conflicts - multiple events affecting the same account/flow
+        # Use last-write-wins semantics: most recent event takes precedence
+        _detect_and_log_conflicts(events)
+
         try:
             with transaction.atomic():
                 # Check if any events require system flow regeneration
@@ -258,3 +262,63 @@ def cleanup_old_events() -> dict:
     logger.info(f"Reality change event cleanup complete: {stats}")
 
     return stats
+
+
+def _detect_and_log_conflicts(events: list) -> None:
+    """
+    Detect and log potential conflicts between reality change events.
+
+    Conflicts occur when multiple pending events affect the same account or flow.
+    Uses last-write-wins semantics: the most recent event (by created_at) takes precedence.
+
+    Args:
+        events: List of RealityChangeEvent objects for a single household
+
+    Side Effects:
+        Logs warnings for detected conflicts
+    """
+    if len(events) <= 1:
+        return
+
+    # Track which accounts/flows are affected by which events
+    accounts_affected = defaultdict(list)
+    flows_affected = defaultdict(list)
+
+    for event in events:
+        payload = event.payload or {}
+
+        # Track account changes
+        if event.event_type == RealityChangeEventType.ACCOUNTS_CHANGED:
+            account_id = payload.get('account_id')
+            if account_id:
+                accounts_affected[account_id].append(event)
+            else:
+                # Event affects all accounts (no specific ID)
+                accounts_affected['__ALL__'].append(event)
+
+        # Track flow changes
+        elif event.event_type == RealityChangeEventType.FLOWS_CHANGED:
+            flow_id = payload.get('flow_id')
+            if flow_id:
+                flows_affected[flow_id].append(event)
+            else:
+                # Event affects all flows (no specific ID)
+                flows_affected['__ALL__'].append(event)
+
+    # Log conflicts for accounts
+    for account_id, conflicting_events in accounts_affected.items():
+        if len(conflicting_events) > 1:
+            event_times = [e.created_at.isoformat() for e in conflicting_events]
+            logger.warning(
+                f"Conflict detected: {len(conflicting_events)} events affect account {account_id}. "
+                f"Event times: {event_times}. Using last-write-wins (most recent event)."
+            )
+
+    # Log conflicts for flows
+    for flow_id, conflicting_events in flows_affected.items():
+        if len(conflicting_events) > 1:
+            event_times = [e.created_at.isoformat() for e in conflicting_events]
+            logger.warning(
+                f"Conflict detected: {len(conflicting_events)} events affect flow {flow_id}. "
+                f"Event times: {event_times}. Using last-write-wins (most recent event)."
+            )

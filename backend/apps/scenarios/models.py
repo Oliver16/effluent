@@ -129,8 +129,19 @@ class ScenarioChange(TimestampedModel):
     description = models.TextField(blank=True)
 
     # Timing
-    effective_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    effective_date = models.DateField(
+        help_text="Date when this change takes effect. Must be within the scenario's projection period."
+    )
+    end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional end date for this change (inclusive). "
+            "For recurring changes (e.g., ADD_INCOME, ADD_EXPENSE), the change applies from effective_date to end_date. "
+            "On end_date, the change is still active. After end_date, the change no longer applies. "
+            "Example: Income with effective_date=2024-01-01 and end_date=2024-12-31 applies for all of 2024."
+        )
+    )
 
     # Reference to existing objects (optional)
     source_account_id = models.UUIDField(null=True, blank=True)
@@ -152,6 +163,39 @@ class ScenarioChange(TimestampedModel):
     class Meta:
         db_table = 'scenario_changes'
         ordering = ['effective_date', 'display_order']
+
+    def clean(self):
+        """Validate that effective_date is within the scenario's projection period."""
+        from django.core.exceptions import ValidationError
+        from dateutil.relativedelta import relativedelta
+
+        if self.scenario and self.effective_date:
+            # Calculate the end of the projection period
+            projection_end_date = self.scenario.start_date + relativedelta(months=self.scenario.projection_months)
+
+            # Validate effective_date is within range
+            if self.effective_date < self.scenario.start_date:
+                raise ValidationError({
+                    'effective_date': f'Effective date ({self.effective_date}) cannot be before scenario start date ({self.scenario.start_date})'
+                })
+
+            if self.effective_date >= projection_end_date:
+                raise ValidationError({
+                    'effective_date': f'Effective date ({self.effective_date}) must be before projection end date ({projection_end_date}). '
+                                     f'This change would never take effect in the {self.scenario.projection_months}-month projection.'
+                })
+
+            # Validate end_date if provided
+            if self.end_date:
+                if self.end_date < self.effective_date:
+                    raise ValidationError({
+                        'end_date': f'End date ({self.end_date}) cannot be before effective date ({self.effective_date})'
+                    })
+
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.scenario.name} - {self.name}"

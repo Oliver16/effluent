@@ -671,11 +671,11 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 'suggested_changes': template.suggested_changes,
             }
         except Exception:
-            # Fall back to defaults - pk might be template name (URL-decoded)
+            # Fall back to defaults - lookup by UUID only
             templates = LifeEventTemplate.get_default_templates()
             for t in templates:
-                # Match by id or name (name comparison is case-sensitive)
-                if str(t.get('id', '')) == pk or t['name'] == pk:
+                # Match by id only (UUID)
+                if str(t.get('id', '')) == pk:
                     template_data = t
                     break
 
