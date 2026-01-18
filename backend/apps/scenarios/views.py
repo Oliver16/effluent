@@ -7,6 +7,8 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.views import APIView
 
+from .throttles import ExpensiveComputationThrottle, TemplateApplyThrottle, BaselineRefreshThrottle
+
 from .models import Scenario, ScenarioChange, ScenarioProjection, ScenarioComparison, LifeEventTemplate, LifeEventCategory, ChangeType
 from .serializers import (
     ScenarioSerializer, ScenarioDetailSerializer, ScenarioChangeSerializer,
@@ -53,7 +55,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         # Related ScenarioChange and ScenarioProjection records are deleted via CASCADE
         instance.delete()
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[ExpensiveComputationThrottle])
     def compute(self, request, pk=None):
         """Compute projections for this scenario (async by default)."""
         scenario = self.get_object()
@@ -92,7 +94,7 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         serializer = ScenarioProjectionSerializer(projections, many=True)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['post'])
+    @action(detail=False, methods=['post'], throttle_classes=[ExpensiveComputationThrottle])
     def compare(self, request):
         """
         Compare projections across scenarios with driver decomposition.
@@ -473,8 +475,10 @@ class ScenarioChangeViewSet(viewsets.ModelViewSet):
             return ScenarioChange.objects.filter(
                 scenario_id=scenario_id,
                 scenario__household=self.request.household
-            )
-        return ScenarioChange.objects.filter(scenario__household=self.request.household)
+            ).select_related('scenario')
+        return ScenarioChange.objects.filter(
+            scenario__household=self.request.household
+        ).select_related('scenario')
 
     def perform_create(self, serializer):
         # Ensure the scenario belongs to the user's household
@@ -489,7 +493,9 @@ class ScenarioComparisonViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        return ScenarioComparison.objects.filter(household=self.request.household)
+        return ScenarioComparison.objects.filter(
+            household=self.request.household
+        ).prefetch_related('scenarios')
 
     def perform_create(self, serializer):
         serializer.save(household=self.request.household)
@@ -505,6 +511,7 @@ class BaselineView(APIView):
     POST /api/scenarios/baseline/unpin/ - Unpin baseline
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [BaselineRefreshThrottle]
 
     def get(self, request):
         """Get the baseline scenario with health summary."""
@@ -651,7 +658,7 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
             ]
         })
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['post'], throttle_classes=[TemplateApplyThrottle])
     def apply(self, request, pk=None):
         """Apply a template to a scenario, creating changes."""
         template_data = None

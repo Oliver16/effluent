@@ -505,6 +505,40 @@ class ScenarioEngine:
                 if deduction.amount_type == 'percentage':
                     contribution_rates['hsa'] = deduction.amount
 
+        # Calculate initial employer_match_ytd for mid-year scenario starts
+        # If scenario starts in June, the household may have already received 6 months of employer match
+        initial_employer_match_ytd = Decimal('0')
+        if employer_match.match_percentage > 0 and employer_match.limit_annual:
+            # Calculate how many complete months have passed in the current calendar year
+            months_elapsed_in_year = self.scenario.start_date.month - 1
+
+            if months_elapsed_in_year > 0:
+                # Estimate monthly employer match based on current income and contribution rates
+                gross_monthly_salary = sum(
+                    inc['monthly'] for inc in incomes
+                    if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly')
+                )
+
+                if gross_monthly_salary > 0:
+                    contribution_rate = contribution_rates.get('401k', Decimal('0'))
+                    employee_contribution = gross_monthly_salary * contribution_rate
+
+                    # Calculate matchable contribution
+                    if employer_match.limit_percentage > 0:
+                        max_matchable = gross_monthly_salary * employer_match.limit_percentage
+                        matchable_contribution = min(employee_contribution, max_matchable)
+                    else:
+                        matchable_contribution = employee_contribution
+
+                    # Calculate estimated monthly match
+                    estimated_monthly_match = matchable_contribution * employer_match.match_percentage
+
+                    # Estimate YTD match (assuming constant income/contribution year-to-date)
+                    estimated_ytd = estimated_monthly_match * Decimal(str(months_elapsed_in_year))
+
+                    # Cap at annual limit
+                    initial_employer_match_ytd = min(estimated_ytd, employer_match.limit_annual)
+
         return MonthlyState(
             date=self.scenario.start_date,
             month=0,
@@ -516,7 +550,7 @@ class ScenarioEngine:
             contribution_rates=contribution_rates,
             applied_changes=set(),
             employer_match=employer_match,
-            employer_match_ytd=Decimal('0'),
+            employer_match_ytd=initial_employer_match_ytd,
             deferred_incomes=deferred_incomes,
             deferred_expenses=deferred_expenses,
             income_tax_map=income_tax_map,

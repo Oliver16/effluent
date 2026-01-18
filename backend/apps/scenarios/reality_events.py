@@ -6,6 +6,7 @@ baseline scenario recomputation.
 """
 import logging
 from collections import defaultdict
+from datetime import timedelta
 
 from django.db import transaction
 from django.utils import timezone
@@ -16,6 +17,11 @@ from .models import RealityChangeEvent, RealityChangeEventType, RealityChangeEve
 from .baseline import BaselineScenarioService
 
 logger = logging.getLogger(__name__)
+
+# Configuration constants
+MAX_EVENT_AGE_DAYS = 7  # Delete processed/failed events older than this
+MAX_PENDING_AGE_HOURS = 24  # Mark pending events as failed if older than this
+CLEANUP_BATCH_SIZE = 1000  # Delete this many old events per cleanup run
 
 
 # Event types that should trigger system flow regeneration before baseline refresh.
@@ -194,3 +200,61 @@ def emit_manual_refresh(household: Household) -> RealityChangeEvent:
         household,
         RealityChangeEventType.MANUAL_REFRESH,
     )
+
+
+def cleanup_old_events() -> dict:
+    """
+    Clean up old reality change events to prevent infinite accumulation.
+
+    This function:
+    1. Deletes processed/failed events older than MAX_EVENT_AGE_DAYS
+    2. Marks pending events older than MAX_PENDING_AGE_HOURS as failed (stuck events)
+
+    Should be run periodically (e.g., daily via cron/celery beat).
+
+    Returns:
+        Dictionary with cleanup statistics
+    """
+    stats = {
+        'deleted_count': 0,
+        'stuck_events_failed': 0,
+    }
+
+    now = timezone.now()
+
+    # Delete old processed/failed events
+    old_threshold = now - timedelta(days=MAX_EVENT_AGE_DAYS)
+    deleted = RealityChangeEvent.objects.filter(
+        status__in=[RealityChangeEventStatus.PROCESSED, RealityChangeEventStatus.FAILED],
+        created_at__lt=old_threshold
+    )[:CLEANUP_BATCH_SIZE].delete()
+
+    stats['deleted_count'] = deleted[0] if deleted else 0
+
+    logger.info(f"Deleted {stats['deleted_count']} old reality change events")
+
+    # Mark stuck pending events as failed
+    # If an event has been pending for more than MAX_PENDING_AGE_HOURS, it's likely stuck
+    stuck_threshold = now - timedelta(hours=MAX_PENDING_AGE_HOURS)
+    stuck_events = RealityChangeEvent.objects.filter(
+        status=RealityChangeEventStatus.PENDING,
+        created_at__lt=stuck_threshold
+    )
+
+    stuck_count = stuck_events.update(
+        status=RealityChangeEventStatus.FAILED,
+        error='Event stuck in pending status for more than 24 hours - marking as failed',
+        processed_at=now
+    )
+
+    stats['stuck_events_failed'] = stuck_count
+
+    if stuck_count > 0:
+        logger.warning(
+            f"Marked {stuck_count} stuck pending events as failed. "
+            f"These events were created more than {MAX_PENDING_AGE_HOURS} hours ago."
+        )
+
+    logger.info(f"Reality change event cleanup complete: {stats}")
+
+    return stats
