@@ -18,6 +18,17 @@ services:
     networks:
       - effluent-internal
 
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - effluent-internal
+
   backend:
     build:
       context: https://github.com/Oliver16/effluent.git#main:backend
@@ -34,8 +45,11 @@ services:
       - CORS_ORIGINS=https://app.effluent.io
       - DJANGO_SETTINGS_MODULE=config.settings.prod
       - SECURE_COOKIES=true
+      - CELERY_BROKER_URL=redis://redis:6379/0
     depends_on:
       db:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     labels:
       - "traefik.enable=true"
@@ -91,6 +105,52 @@ services:
     networks:
       - effluent-internal
       - proxy
+
+  celery_worker:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    command: celery -A config worker --loglevel=info
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - effluent-internal
+
+  celery_beat:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    command: celery -A config beat --loglevel=info
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - effluent-internal
 
 volumes:
   effluent_postgres:

@@ -1,4 +1,5 @@
 from datetime import date
+from decimal import Decimal
 from celery.result import AsyncResult
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
@@ -37,6 +38,10 @@ class ScenarioViewSet(viewsets.ModelViewSet):
         # Exclude stress test scenarios by default (they're accessed via stress-tests endpoint)
         if self.request.query_params.get('include_stress_tests', 'false').lower() != 'true':
             qs = qs.filter(is_stress_test=False)
+
+        # Optimize queries by prefetching related objects to avoid N+1 queries
+        qs = qs.prefetch_related('changes', 'projections').select_related('parent_scenario')
+
         return qs
 
     def get_serializer_class(self):
@@ -58,6 +63,8 @@ class ScenarioViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], throttle_classes=[ExpensiveComputationThrottle])
     def compute(self, request, pk=None):
         """Compute projections for this scenario (async by default)."""
+        from django.core.cache import cache
+
         scenario = self.get_object()
         run_async = request.data.get('async', True)  # Default to async
         horizon_months = request.data.get('horizon_months')
@@ -70,6 +77,9 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     'in_memory': False
                 }
             )
+
+            # Store task -> household mapping for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(scenario.household_id), 3600)
 
             return Response({
                 'task_id': task.id,
@@ -158,22 +168,27 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Extend projections if horizon exceeds current projection_months
-        if horizon_months:
-            for scenario in scenarios:
-                if scenario.projection_months < horizon_months:
-                    # Update scenario's projection_months and recompute
-                    scenario.projection_months = horizon_months
-                    scenario.save(update_fields=['projection_months'])
-                    engine = ScenarioEngine(scenario)
-                    engine.compute_projection()
-
         # Build basic comparison results
+        # If horizon exceeds scenario's projection_months, compute extended projections in-memory
         comparisons = []
         for scenario in scenarios:
-            projections = scenario.projections.all()
-            if horizon_months:
+            if horizon_months and scenario.projection_months < horizon_months:
+                # Compute extended projections in-memory (don't save to DB)
+                # Temporarily increase projection_months for computation only
+                original_months = scenario.projection_months
+                scenario.projection_months = horizon_months
+                engine = ScenarioEngine(scenario)
+                projections = engine.compute_projection(in_memory=True)
+                # Restore original projection_months (no DB write occurred)
+                scenario.projection_months = original_months
+                # Limit to requested horizon
                 projections = projections[:horizon_months]
+            else:
+                # Use existing projections from DB
+                projections = scenario.projections.all()
+                if horizon_months:
+                    projections = projections[:horizon_months]
+
             comparisons.append({
                 'scenario': ScenarioSerializer(scenario).data,
                 'projections': ScenarioProjectionSerializer(projections, many=True).data,
@@ -373,12 +388,217 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     'flow_id': str(flow.id),
                 })
 
-            else:
-                # Overlay adjustments and other synthetic changes can't be adopted
+            elif change.change_type == ChangeType.MODIFY_INCOME:
+                # Update existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household)
+                        if 'amount' in params:
+                            flow.amount = params['amount']
+                        if 'frequency' in params:
+                            flow.frequency = params['frequency']
+                        if 'category' in params or 'income_category' in params:
+                            flow.income_category = params.get('income_category') or params.get('category')
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_INCOME',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_EXPENSE:
+                # Update existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household)
+                        if 'amount' in params:
+                            flow.amount = params['amount']
+                        if 'frequency' in params:
+                            flow.frequency = params['frequency']
+                        if 'category' in params or 'expense_category' in params:
+                            flow.expense_category = params.get('expense_category') or params.get('category')
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_EXPENSE',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.REMOVE_INCOME:
+                # Delete existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household, flow_type=FlowType.INCOME)
+                        flow.is_active = False
+                        flow.end_date = change.effective_date
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'REMOVE_INCOME',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.REMOVE_EXPENSE:
+                # Delete existing flow
+                flow_id = change.source_flow_id or params.get('source_flow_id')
+                if flow_id:
+                    try:
+                        flow = RecurringFlow.objects.get(id=flow_id, household=request.household, flow_type=FlowType.EXPENSE)
+                        flow.is_active = False
+                        flow.end_date = change.effective_date
+                        flow.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'REMOVE_EXPENSE',
+                            'flow_id': str(flow.id),
+                        })
+                    except RecurringFlow.DoesNotExist:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Flow {flow_id} not found',
+                        })
+                else:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': 'No source_flow_id specified',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_401K:
+                # Update pre-tax deduction
+                from apps.taxes.models import PreTaxDeduction
+                try:
+                    # Find existing 401k deduction for this household
+                    deduction = PreTaxDeduction.objects.filter(
+                        income_source__household=request.household,
+                        deduction_type__in=['traditional_401k', 'roth_401k'],
+                        is_active=True
+                    ).first()
+
+                    if deduction:
+                        # Update percentage
+                        new_percentage = Decimal(str(params.get('percentage', 0)))
+                        deduction.amount = new_percentage / 100  # Convert to decimal
+                        deduction.amount_type = 'percentage'
+                        deduction.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_401K',
+                            'deduction_id': str(deduction.id),
+                        })
+                    else:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'No active 401k deduction found',
+                        })
+                except Exception as e:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': f'Error: {str(e)}',
+                    })
+
+            elif change.change_type == ChangeType.MODIFY_HSA:
+                # Update pre-tax deduction
+                from apps.taxes.models import PreTaxDeduction
+                try:
+                    # Find existing HSA deduction for this household
+                    deduction = PreTaxDeduction.objects.filter(
+                        income_source__household=request.household,
+                        deduction_type='hsa',
+                        is_active=True
+                    ).first()
+
+                    if deduction:
+                        # Update percentage
+                        new_percentage = Decimal(str(params.get('percentage', 0)))
+                        deduction.amount = new_percentage / 100  # Convert to decimal
+                        deduction.amount_type = 'percentage'
+                        deduction.save()
+                        adopted_changes.append({
+                            'change_id': str(change.id),
+                            'type': 'MODIFY_HSA',
+                            'deduction_id': str(deduction.id),
+                        })
+                    else:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'No active HSA deduction found',
+                        })
+                except Exception as e:
+                    skipped_changes.append({
+                        'change_id': str(change.id),
+                        'type': change.change_type,
+                        'reason': f'Error: {str(e)}',
+                    })
+
+            # One-time and synthetic changes cannot be adopted as persistent flows
+            elif change.change_type in [
+                ChangeType.LUMP_SUM_INCOME,
+                ChangeType.LUMP_SUM_EXPENSE,
+                ChangeType.ADJUST_TOTAL_INCOME,
+                ChangeType.ADJUST_TOTAL_EXPENSES,
+                ChangeType.OVERRIDE_ASSUMPTIONS,
+                ChangeType.OVERRIDE_INFLATION,
+                ChangeType.OVERRIDE_INVESTMENT_RETURN,
+                ChangeType.OVERRIDE_SALARY_GROWTH,
+                ChangeType.ADJUST_INTEREST_RATES,
+                ChangeType.ADJUST_INVESTMENT_VALUE,
+            ]:
                 skipped_changes.append({
                     'change_id': str(change.id),
                     'type': change.change_type,
-                    'reason': 'Overlay/synthetic changes cannot be adopted',
+                    'reason': 'One-time or synthetic changes cannot be adopted as persistent flows',
+                })
+
+            else:
+                # Other change types not yet supported for adoption
+                skipped_changes.append({
+                    'change_id': str(change.id),
+                    'type': change.change_type,
+                    'reason': 'Adopt not yet implemented for this change type',
                 })
 
         # Archive the scenario after adoption
@@ -525,6 +745,8 @@ class BaselineView(APIView):
 
     def post(self, request):
         """Handle baseline actions via action parameter."""
+        from django.core.cache import cache
+
         action_type = request.data.get('action')
         run_async = request.data.get('async', True)  # Default to async
 
@@ -533,6 +755,9 @@ class BaselineView(APIView):
                 task = refresh_baseline_task.apply_async(
                     kwargs={'household_id': str(request.household.id)}
                 )
+
+                # Store task -> household mapping for security validation (1 hour TTL)
+                cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
 
                 return Response({
                     'task_id': task.id,
@@ -811,6 +1036,26 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 source_account_id = user_values.get('source_account_id')
                 parameters.pop('source_account_id', None)
 
+            # Validate parameters before creating change
+            from .validators import validate_scenario_change_parameters
+            from django.core.exceptions import ValidationError as DjangoValidationError
+            try:
+                validate_scenario_change_parameters(
+                    change_template['change_type'],
+                    parameters,
+                    source_flow_id,
+                    source_account_id
+                )
+            except DjangoValidationError as e:
+                return Response(
+                    {
+                        'error': f"Validation error for change '{change_template['name']}': {str(e)}",
+                        'change_index': idx,
+                        'change_name': change_template['name'],
+                    },
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
             change = ScenarioChange.objects.create(
                 scenario=scenario,
                 change_type=change_template['change_type'],
@@ -848,18 +1093,44 @@ class ScenarioTaskStatusView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, task_id):
-        """Get the status and result of a scenario task."""
+        """
+        Get the status and result of a scenario task.
+
+        Security: Validates that the task belongs to the requesting user's household
+        by checking a task_id -> household_id mapping stored in cache.
+        """
+        from django.core.cache import cache
+
+        # Validate task ownership
+        cached_household_id = cache.get(f'task_household:{task_id}')
+
+        if not cached_household_id:
+            # Task ID not found or expired - could be old task or invalid ID
+            return Response({
+                'error': 'Task not found or expired'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Verify task belongs to requesting user's household
+        if not request.household or str(request.household.id) != str(cached_household_id):
+            return Response({
+                'error': 'Access denied to this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         task_result = AsyncResult(task_id)
 
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
+                # Clean up cache entry after successful retrieval
+                cache.delete(f'task_household:{task_id}')
                 return Response({
                     'task_id': task_id,
                     'status': 'completed',
                     'result': result
                 })
             else:
+                # Clean up cache entry after failed retrieval
+                cache.delete(f'task_household:{task_id}')
                 return Response({
                     'task_id': task_id,
                     'status': 'failed',

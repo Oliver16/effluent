@@ -40,7 +40,10 @@ class Scenario(HouseholdOwnedModel):
     last_projected_at = models.DateTimeField(null=True, blank=True)
 
     # Projection settings
-    projection_months = models.PositiveIntegerField(default=120)  # 10 years
+    projection_months = models.PositiveIntegerField(
+        default=120,  # 10 years
+        validators=[models.validators.MaxValueValidator(360)]  # Max 30 years
+    )
     start_date = models.DateField()
 
     # Assumptions
@@ -130,16 +133,18 @@ class ScenarioChange(TimestampedModel):
 
     # Timing
     effective_date = models.DateField(
-        help_text="Date when this change takes effect. Must be within the scenario's projection period."
+        help_text="Date when this change takes effect (inclusive). Must be within the scenario's projection period."
     )
     end_date = models.DateField(
         null=True,
         blank=True,
         help_text=(
-            "Optional end date for this change (inclusive). "
-            "For recurring changes (e.g., ADD_INCOME, ADD_EXPENSE), the change applies from effective_date to end_date. "
-            "On end_date, the change is still active. After end_date, the change no longer applies. "
-            "Example: Income with effective_date=2024-01-01 and end_date=2024-12-31 applies for all of 2024."
+            "Optional date when this change stops applying (inclusive). "
+            "For recurring changes (ADD_INCOME, ADD_EXPENSE), the change continues "
+            "to apply through and including this date, then is removed starting "
+            "the next month. Leave blank for changes that apply indefinitely. "
+            "Example: For temporary income with end_date=2026-12-31, the income "
+            "is included in December 2026 and removed starting January 2027."
         )
     )
 
@@ -165,10 +170,12 @@ class ScenarioChange(TimestampedModel):
         ordering = ['effective_date', 'display_order']
 
     def clean(self):
-        """Validate that effective_date is within the scenario's projection period."""
+        """Validate that effective_date is within the scenario's projection period and parameters match schema."""
         from django.core.exceptions import ValidationError
         from dateutil.relativedelta import relativedelta
+        from .validators import validate_scenario_change_parameters
 
+        # Validate effective_date is within the scenario's projection period
         if self.scenario and self.effective_date:
             # Calculate the end of the projection period
             projection_end_date = self.scenario.start_date + relativedelta(months=self.scenario.projection_months)
@@ -191,6 +198,14 @@ class ScenarioChange(TimestampedModel):
                     raise ValidationError({
                         'end_date': f'End date ({self.end_date}) cannot be before effective date ({self.effective_date})'
                     })
+
+        # Validate parameters match the schema for this change type
+        validate_scenario_change_parameters(
+            self.change_type,
+            self.parameters,
+            self.source_flow_id,
+            self.source_account_id
+        )
 
     def save(self, *args, **kwargs):
         """Override save to run validation."""
@@ -265,7 +280,7 @@ class LifeEventCategory(models.TextChoices):
 class LifeEventTemplate(models.Model):
     """Template for common life events with suggested changes."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, unique=True, help_text='Unique name for this life event template')
     description = models.TextField()
     category = models.CharField(max_length=30, choices=LifeEventCategory.choices)
     icon = models.CharField(max_length=50, default='calendar')  # Icon name for UI
