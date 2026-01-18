@@ -40,7 +40,10 @@ class Scenario(HouseholdOwnedModel):
     last_projected_at = models.DateTimeField(null=True, blank=True)
 
     # Projection settings
-    projection_months = models.PositiveIntegerField(default=120)  # 10 years
+    projection_months = models.PositiveIntegerField(
+        default=120,  # 10 years
+        validators=[models.validators.MaxValueValidator(360)]  # Max 30 years
+    )
     start_date = models.DateField()
 
     # Assumptions
@@ -129,8 +132,21 @@ class ScenarioChange(TimestampedModel):
     description = models.TextField(blank=True)
 
     # Timing
-    effective_date = models.DateField()
-    end_date = models.DateField(null=True, blank=True)
+    effective_date = models.DateField(
+        help_text="Date when this change takes effect (inclusive)"
+    )
+    end_date = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Optional date when this change stops applying (inclusive). "
+            "For recurring changes (ADD_INCOME, ADD_EXPENSE), the change continues "
+            "to apply through and including this date, then is removed starting "
+            "the next month. Leave blank for changes that apply indefinitely. "
+            "Example: For temporary income with end_date=2026-12-31, the income "
+            "is included in December 2026 and removed starting January 2027."
+        )
+    )
 
     # Reference to existing objects (optional)
     source_account_id = models.UUIDField(null=True, blank=True)
@@ -152,6 +168,21 @@ class ScenarioChange(TimestampedModel):
     class Meta:
         db_table = 'scenario_changes'
         ordering = ['effective_date', 'display_order']
+
+    def clean(self):
+        """Validate parameters match the schema for this change type."""
+        from .validators import validate_scenario_change_parameters
+        validate_scenario_change_parameters(
+            self.change_type,
+            self.parameters,
+            self.source_flow_id,
+            self.source_account_id
+        )
+
+    def save(self, *args, **kwargs):
+        """Override save to run validation."""
+        self.full_clean()
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.scenario.name} - {self.name}"
@@ -221,7 +252,7 @@ class LifeEventCategory(models.TextChoices):
 class LifeEventTemplate(models.Model):
     """Template for common life events with suggested changes."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    name = models.CharField(max_length=200)
+    name = models.CharField(max_length=200, unique=True, help_text='Unique name for this life event template')
     description = models.TextField()
     category = models.CharField(max_length=30, choices=LifeEventCategory.choices)
     icon = models.CharField(max_length=50, default='calendar')  # Icon name for UI
