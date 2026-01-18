@@ -12,6 +12,15 @@ from apps.taxes.services import ScenarioTaxCalculator
 from .models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 
 
+# Financial metric ceiling constants
+# These prevent database overflow and ensure reasonable display in UI
+MAX_DSCR = Decimal('999')  # Maximum debt service coverage ratio (capped for display)
+MAX_SAVINGS_RATE = Decimal('9.9999')  # Maximum savings rate (capped at 999.99%)
+MIN_SAVINGS_RATE = Decimal('-9.9999')  # Minimum savings rate (allows for -999.99% when spending exceeds income)
+MAX_LIQUIDITY_MONTHS = Decimal('999')  # Maximum liquidity months (capped for display)
+MAX_DAYS_CASH = Decimal('999.9')  # Maximum days of cash on hand (capped for display)
+
+
 @dataclass
 class AssetInfo:
     """Information about an asset account."""
@@ -1620,10 +1629,10 @@ class ScenarioEngine:
 
         non_debt_exp = total_exp - debt_service
         operating_income = state.total_income - non_debt_exp
-        dscr = operating_income / debt_service if debt_service > 0 else Decimal('999')
+        dscr = operating_income / debt_service if debt_service > 0 else MAX_DSCR
 
         savings_rate = state.net_cash_flow / state.total_income if state.total_income > 0 else Decimal('0')
-        liquidity = state.liquid_assets / total_exp if total_exp > 0 else Decimal('999')
+        liquidity = state.liquid_assets / total_exp if total_exp > 0 else MAX_DSCR
         days_cash = (state.liquid_assets * Decimal('30')) / total_exp if total_exp > 0 else Decimal('999.9')
 
         # Build income breakdown aggregating by category
@@ -1658,9 +1667,9 @@ class ScenarioEngine:
             total_income=state.total_income.quantize(Decimal('0.01')),
             total_expenses=total_exp.quantize(Decimal('0.01')),
             net_cash_flow=state.net_cash_flow.quantize(Decimal('0.01')),
-            dscr=min(dscr, Decimal('999')).quantize(Decimal('0.001')),
-            savings_rate=max(Decimal('-9.9999'), min(savings_rate, Decimal('9.9999'))).quantize(Decimal('0.0001')),
-            liquidity_months=min(liquidity, Decimal('999')).quantize(Decimal('0.01')),
+            dscr=min(dscr, MAX_DSCR).quantize(Decimal('0.001')),
+            savings_rate=max(Decimal('-9.9999'), min(savings_rate, MAX_SAVINGS_RATE)).quantize(Decimal('0.0001')),
+            liquidity_months=min(liquidity, MAX_DSCR).quantize(Decimal('0.01')),
             days_cash_on_hand=min(days_cash, Decimal('999.9')).quantize(Decimal('0.1')),
             income_breakdown=income_breakdown,
             expense_breakdown=expense_breakdown,
@@ -1669,14 +1678,33 @@ class ScenarioEngine:
         )
 
     def _to_monthly(self, amount, frequency: str) -> Decimal:
-        """Convert amount to monthly."""
+        """
+        Convert amount to monthly based on frequency.
+
+        Args:
+            amount: The amount to convert
+            frequency: Frequency string ('monthly', 'annually', 'weekly', etc.) or Frequency enum
+
+        Returns:
+            Monthly amount as Decimal
+
+        Raises:
+            ValueError: If frequency is not a valid frequency string or enum
+        """
         # Convert string frequency to Frequency enum if needed
         if isinstance(frequency, str):
             try:
                 frequency = Frequency(frequency)
             except ValueError:
-                pass  # Keep as string if invalid
-        mult = FREQUENCY_TO_MONTHLY.get(frequency, Decimal('1'))
+                raise ValueError(
+                    f"Invalid frequency '{frequency}'. Must be one of: monthly, annually, "
+                    f"semi_annually, quarterly, semi_monthly, bi_weekly, weekly"
+                )
+
+        mult = FREQUENCY_TO_MONTHLY.get(frequency)
+        if mult is None:
+            raise ValueError(f"Invalid frequency enum: {frequency}")
+
         return Decimal(str(amount)) * mult
 
     def _get_state_annual_income(self, state: MonthlyState, exclude_id: str | None = None) -> Decimal:
