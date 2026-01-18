@@ -144,7 +144,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   const availableExpenseFlows = useMemo(() => {
     if (!flowsData) return []
     return flowsData
-      .filter((flow: RecurringFlow) => flow.flowType === 'expense')
+      .filter((flow: RecurringFlow) => flow.flowType === 'expense' && flow.isActive !== false)
       .map((flow: RecurringFlow) => ({
         id: flow.id,
         name: flow.name,
@@ -176,21 +176,47 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
         wasCreated = false
       }
 
-      // Apply the life event template to the scenario
-      const response = await lifeEventTemplates.apply(template.name, {
-        scenarioId: scenarioId,
-        effectiveDate: effectiveDate,
-        changeValues: changeValues,
-      })
+      try {
+        // Apply the life event template to the scenario
+        const response = await lifeEventTemplates.apply(template.name, {
+          scenarioId: scenarioId,
+          effectiveDate: effectiveDate,
+          changeValues: changeValues,
+        })
 
-      // Compute projections so the scenario is immediately usable
-      await scenarios.compute(scenarioId)
+        try {
+          // Compute projections so the scenario is immediately usable
+          await scenarios.compute(scenarioId)
+        } catch (computeError) {
+          // If compute fails, rollback the scenario if we just created it
+          if (wasCreated) {
+            console.error('Compute failed, rolling back scenario:', computeError)
+            try {
+              await scenarios.delete(scenarioId)
+            } catch (deleteError) {
+              console.error('Failed to rollback scenario:', deleteError)
+            }
+          }
+          throw new Error(`Failed to compute projections: ${computeError instanceof Error ? computeError.message : 'Unknown error'}`)
+        }
 
-      return {
-        scenarioId: scenarioId,
-        scenarioName: response.templateName ? `${response.templateName} scenario` : scenarioNameResult,
-        changesApplied: response.changesCreated || Object.values(changeValues).filter(v => !v._skip).length,
-        wasCreated: wasCreated,
+        return {
+          scenarioId: scenarioId,
+          scenarioName: response.templateName ? `${response.templateName} scenario` : scenarioNameResult,
+          changesApplied: response.changesCreated || Object.values(changeValues).filter(v => !v._skip).length,
+          wasCreated: wasCreated,
+        }
+      } catch (applyError) {
+        // If apply fails, rollback the scenario if we just created it
+        if (wasCreated) {
+          console.error('Apply failed, rolling back scenario:', applyError)
+          try {
+            await scenarios.delete(scenarioId)
+          } catch (deleteError) {
+            console.error('Failed to rollback scenario:', deleteError)
+          }
+        }
+        throw applyError
       }
     },
     onSuccess: (data) => {
@@ -214,11 +240,22 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   })
 
   const handleChangeValue = (changeIdx: number, field: string, value: unknown) => {
+    // Convert value to appropriate type based on field name
+    let convertedValue = value
+
+    if (field === 'amount' || field === 'principal' || field === 'rate' || field === 'payment') {
+      // Convert to number for numeric fields
+      convertedValue = value ? parseFloat(String(value)) : 0
+    } else if (field === 'term_months' || field === 'months' || field === 'recovery_months') {
+      // Convert to integer for month fields
+      convertedValue = value ? parseInt(String(value), 10) : 0
+    }
+
     setChangeValues((prev) => ({
       ...prev,
       [String(changeIdx)]: {
         ...prev[String(changeIdx)],
-        [field]: value,
+        [field]: convertedValue,
       },
     }))
   }
@@ -259,6 +296,46 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
   }
 
   const handleSubmit = () => {
+    // Validate required fields before submission
+    const validationErrors: string[] = []
+
+    // Check each enabled change for required fields
+    Object.entries(changeValues).forEach(([changeIdxStr, values]) => {
+      if (values._skip) return // Skip disabled changes
+
+      const changeIdx = parseInt(changeIdxStr)
+      const change = suggestedChanges[changeIdx]
+      if (!change) return
+
+      const params = change.parametersTemplate || {}
+
+      // Check for amount field (required for most change types)
+      if ('amount' in params && (!values.amount || values.amount === 0)) {
+        validationErrors.push(`"${change.name}" requires an amount`)
+      }
+
+      // Check for frequency field
+      if ('frequency' in params && !values.frequency) {
+        validationErrors.push(`"${change.name}" requires a frequency`)
+      }
+
+      // Check for source_flow_id/source_account_id for MODIFY/REMOVE changes
+      if (change.changeType?.includes('MODIFY') || change.changeType?.includes('REMOVE')) {
+        if (!values.source_flow_id && !values.source_account_id) {
+          validationErrors.push(`"${change.name}" requires selecting a source`)
+        }
+      }
+    })
+
+    // Show validation errors
+    if (validationErrors.length > 0) {
+      toast.error('Please fix the following errors:', {
+        description: validationErrors.join('\n'),
+        duration: 5000,
+      })
+      return
+    }
+
     createMutation.mutate()
   }
 

@@ -12,12 +12,13 @@ from apps.taxes.services import ScenarioTaxCalculator
 from .models import Scenario, ScenarioChange, ScenarioProjection, ChangeType
 
 
-# Financial calculation constants
+# Financial metric ceiling constants
+# These prevent database overflow and ensure reasonable display in UI
 MAX_DSCR = Decimal('999')  # Maximum debt service coverage ratio (capped for display)
-MAX_SAVINGS_RATE = Decimal('9.9999')  # Maximum savings rate (capped for display)
-MIN_SAVINGS_RATE = Decimal('-9.9999')  # Minimum savings rate (negative = overspending)
+MAX_SAVINGS_RATE = Decimal('9.9999')  # Maximum savings rate (capped at 999.99%)
+MIN_SAVINGS_RATE = Decimal('-9.9999')  # Minimum savings rate (allows for -999.99% when spending exceeds income)
 MAX_LIQUIDITY_MONTHS = Decimal('999')  # Maximum liquidity months (capped for display)
-MAX_DAYS_CASH = Decimal('999.9')  # Maximum days cash on hand (capped for display)
+MAX_DAYS_CASH = Decimal('999.9')  # Maximum days of cash on hand (capped for display)
 
 
 @dataclass
@@ -67,6 +68,8 @@ class MonthlyState:
     deferred_incomes: list = field(default_factory=list)
     deferred_expenses: list = field(default_factory=list)
     income_tax_map: dict = field(default_factory=dict)  # income_id -> tax_expense_id mapping
+    # Track overdraft: how much cash flow would have gone negative if not clamped
+    overdraft_amount: Decimal = field(default_factory=lambda: Decimal('0'))
 
     @property
     def total_assets(self) -> Decimal:
@@ -639,7 +642,33 @@ class ScenarioEngine:
         return state
 
     def _apply_change(self, state: MonthlyState, change: ScenarioChange, current_date: date) -> MonthlyState:
-        """Apply a scenario change to the state."""
+        """
+        Apply a scenario change to the state.
+
+        This is the core logic for modifying the financial state based on scenario changes.
+        Handles 40+ different change types including:
+        - Income/expense additions, modifications, and removals
+        - Debt additions, payoffs, and refinancing
+        - Asset additions and sales
+        - Tax withholding and deduction modifications
+        - Savings transfers and contribution rate changes
+        - Life event changes (job changes, retirement, etc.)
+
+        Args:
+            state: Current monthly state to modify
+            change: ScenarioChange object containing the change type and parameters
+            current_date: Current date in the projection (used for effective date checking)
+
+        Returns:
+            Modified MonthlyState with the change applied
+
+        Notes:
+            - One-time changes (ADD_INCOME, ADD_DEBT, etc.) are tracked to prevent duplicate application
+            - Many changes trigger tax recalculation by calling _recalculate_all_taxes()
+            - Income/expense changes update state.incomes/expenses lists
+            - Debt/asset changes update state.liabilities/assets dictionaries
+            - Some changes (MODIFY_401K, MODIFY_HSA) update contribution_rates
+        """
         params = change.parameters
         change_key = str(change.id)
 
@@ -1386,6 +1415,10 @@ class ScenarioEngine:
                 state.contribution_rates.pop('_investment_recovery_monthly', None)
                 state.contribution_rates.pop('_investment_recovery_remaining', None)
 
+        # INTENTIONAL: Annual growth is applied as step changes at year boundaries (months 12, 24, 36, etc.)
+        # This creates discrete annual raises rather than continuous growth.
+        # For example, a 3% salary growth rate means salaries increase by 3% at the start of each year,
+        # not 0.25% each month. This matches how most compensation adjustments work in reality.
         if month > 0 and month % 12 == 0:
             # Annual salary growth
             growth = 1 + float(salary_growth_rate)
@@ -1412,16 +1445,57 @@ class ScenarioEngine:
         return state
 
     def _advance_month(self, state: MonthlyState) -> MonthlyState:
-        """Apply monthly cash flow to assets/liabilities."""
+        """
+        Advance the financial state by one month.
+
+        This function executes all monthly financial operations:
+        1. Applies net cash flow to liquid assets (or first asset if no liquid assets)
+        2. Processes inter-account transfers (savings, extra debt payments)
+        3. Calculates and applies employer 401k match (with annual limit tracking)
+        4. Updates debt balances with interest accrual and payments
+        5. Applies investment returns to asset balances
+        6. Applies annual growth rates (salary, inflation) at year boundaries
+
+        Args:
+            state: Current monthly state
+
+        Returns:
+            Updated MonthlyState with all monthly operations applied
+
+        Notes:
+            - Negative balances are clamped to zero (masks cash flow problems)
+            - First liquid asset is always selected for cash flow operations
+            - Employer match YTD resets at month 0, 12, 24, etc.
+            - Growth rates (salary, inflation) apply at month 12, 24, 36, etc.
+            - Investment returns compound monthly at rate/12
+        """
         net_flow = state.net_cash_flow
 
         # Add net cash flow to first liquid asset
+        # DESIGN DECISION: Always selects the FIRST liquid asset found in the dictionary.
+        # Dictionary iteration order is guaranteed in Python 3.7+, so this is deterministic.
+        # In practice, this is usually a checking account. Future enhancement could allow
+        # users to specify which account to use for cash flow operations.
         liquid_asset = next((k for k, a in state.assets.items() if a.is_liquid), None)
         if liquid_asset:
-            state.assets[liquid_asset].balance = max(Decimal('0'), state.assets[liquid_asset].balance + net_flow)
+            new_balance = state.assets[liquid_asset].balance + net_flow
+            # Track overdraft if balance would go negative
+            if new_balance < 0:
+                state.overdraft_amount = abs(new_balance)
+            else:
+                state.overdraft_amount = Decimal('0')
+            # Clamp to zero (prevents negative balances but masks cash flow problems)
+            state.assets[liquid_asset].balance = max(Decimal('0'), new_balance)
         elif state.assets:
             first_key = next(iter(state.assets.keys()))
-            state.assets[first_key].balance = max(Decimal('0'), state.assets[first_key].balance + net_flow)
+            new_balance = state.assets[first_key].balance + net_flow
+            # Track overdraft if balance would go negative
+            if new_balance < 0:
+                state.overdraft_amount = abs(new_balance)
+            else:
+                state.overdraft_amount = Decimal('0')
+            # Clamp to zero
+            state.assets[first_key].balance = max(Decimal('0'), new_balance)
 
         # Process transfers (move money between accounts)
         for transfer in state.transfers:
@@ -1631,17 +1705,18 @@ class ScenarioEngine:
         return None
 
     def _to_monthly(self, amount, frequency: str) -> Decimal:
-        """Convert amount to monthly.
+        """
+        Convert amount to monthly based on frequency.
 
         Args:
             amount: The amount to convert
-            frequency: The frequency string (must be a valid Frequency enum value)
+            frequency: Frequency string ('monthly', 'annually', 'weekly', etc.) or Frequency enum
 
         Returns:
-            Monthly equivalent amount
+            Monthly amount as Decimal
 
         Raises:
-            ValueError: If frequency is invalid
+            ValueError: If frequency is not a valid frequency string or enum
         """
         # Convert string frequency to Frequency enum if needed
         if isinstance(frequency, str):

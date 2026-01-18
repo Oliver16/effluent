@@ -133,7 +133,7 @@ class ScenarioChange(TimestampedModel):
 
     # Timing
     effective_date = models.DateField(
-        help_text="Date when this change takes effect (inclusive)"
+        help_text="Date when this change takes effect (inclusive). Must be within the scenario's projection period."
     )
     end_date = models.DateField(
         null=True,
@@ -170,8 +170,36 @@ class ScenarioChange(TimestampedModel):
         ordering = ['effective_date', 'display_order']
 
     def clean(self):
-        """Validate parameters match the schema for this change type."""
+        """Validate that effective_date is within the scenario's projection period and parameters match schema."""
+        from django.core.exceptions import ValidationError
+        from dateutil.relativedelta import relativedelta
         from .validators import validate_scenario_change_parameters
+
+        # Validate effective_date is within the scenario's projection period
+        if self.scenario and self.effective_date:
+            # Calculate the end of the projection period
+            projection_end_date = self.scenario.start_date + relativedelta(months=self.scenario.projection_months)
+
+            # Validate effective_date is within range
+            if self.effective_date < self.scenario.start_date:
+                raise ValidationError({
+                    'effective_date': f'Effective date ({self.effective_date}) cannot be before scenario start date ({self.scenario.start_date})'
+                })
+
+            if self.effective_date >= projection_end_date:
+                raise ValidationError({
+                    'effective_date': f'Effective date ({self.effective_date}) must be before projection end date ({projection_end_date}). '
+                                     f'This change would never take effect in the {self.scenario.projection_months}-month projection.'
+                })
+
+            # Validate end_date if provided
+            if self.end_date:
+                if self.end_date < self.effective_date:
+                    raise ValidationError({
+                        'end_date': f'End date ({self.end_date}) cannot be before effective date ({self.effective_date})'
+                    })
+
+        # Validate parameters match the schema for this change type
         validate_scenario_change_parameters(
             self.change_type,
             self.parameters,

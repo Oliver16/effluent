@@ -896,11 +896,11 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                 'suggested_changes': template.suggested_changes,
             }
         except Exception:
-            # Fall back to defaults - pk might be template name (URL-decoded)
+            # Fall back to defaults - lookup by UUID only
             templates = LifeEventTemplate.get_default_templates()
             for t in templates:
-                # Match by id or name (name comparison is case-sensitive)
-                if str(t.get('id', '')) == pk or t['name'] == pk:
+                # Match by id only (UUID)
+                if str(t.get('id', '')) == pk:
                     template_data = t
                     break
 
@@ -977,6 +977,25 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
         created_changes = []
         suggested_changes = template_data.get('suggested_changes', [])
+
+        # Validate choice groups - ensure only one option per group is selected
+        choice_groups = {}
+        for idx, change_template in enumerate(suggested_changes):
+            choice_group = change_template.get('choice_group')
+            if choice_group:
+                user_values = change_values.get(str(idx), change_values.get(change_template['name'], {}))
+                is_skipped = user_values.get('_skip', False)
+
+                if not is_skipped:
+                    if choice_group in choice_groups:
+                        return Response(
+                            {
+                                'error': f'Invalid choice group selection: Only one option can be selected from group "{choice_group}". '
+                                        f'Both "{choice_groups[choice_group]}" and "{change_template["name"]}" are selected.'
+                            },
+                            status=status.HTTP_400_BAD_REQUEST
+                        )
+                    choice_groups[choice_group] = change_template['name']
 
         # Get starting display_order for append mode
         from django.db.models import Max

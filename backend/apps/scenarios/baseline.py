@@ -99,6 +99,9 @@ class BaselineScenarioService:
             baseline.projection_months = cls.DEFAULT_PROJECTION_MONTHS
             baseline.save(update_fields=['projection_months'])
 
+        # Pre-flight data integrity checks
+        cls._validate_household_data_integrity(household)
+
         # Compute projection using ScenarioEngine
         engine = ScenarioEngine(baseline)
 
@@ -291,3 +294,55 @@ class BaselineScenarioService:
             }
 
         return health
+
+    @classmethod
+    def _validate_household_data_integrity(cls, household: Household) -> None:
+        """
+        Validate household data integrity before refreshing baseline.
+
+        Checks for data integrity issues that would cause projection computation to fail:
+        - Income sources without household members
+        - Active accounts without latest snapshots
+        - Invalid recurring flow configurations
+
+        Raises:
+            ValueError: If data integrity issues are found
+
+        Args:
+            household: The household to validate
+        """
+        from apps.taxes.models import IncomeSource
+        from apps.accounts.models import Account
+        from apps.flows.models import RecurringFlow
+
+        errors = []
+
+        # Check for income sources without household members
+        orphaned_income_sources = IncomeSource.objects.filter(
+            household=household,
+            household_member__isnull=True
+        ).count()
+        if orphaned_income_sources > 0:
+            errors.append(f'{orphaned_income_sources} income source(s) have no household member assigned')
+
+        # Check for active accounts without snapshots
+        accounts_without_snapshots = Account.objects.filter(
+            household=household,
+            is_active=True,
+            snapshots__isnull=True
+        ).count()
+        if accounts_without_snapshots > 0:
+            errors.append(f'{accounts_without_snapshots} active account(s) have no balance snapshots')
+
+        # Check for recurring flows with invalid frequencies
+        invalid_flows = RecurringFlow.objects.filter(
+            household=household,
+            is_active=True,
+            frequency__isnull=True
+        ).count()
+        if invalid_flows > 0:
+            errors.append(f'{invalid_flows} active recurring flow(s) have invalid frequency')
+
+        if errors:
+            error_message = 'Household data integrity issues found:\n' + '\n'.join(f'  - {e}' for e in errors)
+            raise ValueError(error_message)
