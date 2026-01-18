@@ -62,6 +62,11 @@ app.conf.update(
             'task': 'apps.scenarios.tasks.process_reality_changes_task',
             'schedule': 30.0,  # Every 30 seconds
         },
+        # Clean up old reality change events daily
+        'cleanup-old-reality-events': {
+            'task': 'apps.scenarios.tasks.cleanup_old_reality_events_task',
+            'schedule': crontab(hour=3, minute=0),  # 3 AM daily
+        },
         # Optional: Run data quality checks nightly
         # 'run-data-quality-checks': {
         #     'task': 'apps.metrics.tasks.run_data_quality_checks',

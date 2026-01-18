@@ -96,6 +96,11 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.IsAuthenticated',
     ],
     'COERCE_DECIMAL_TO_STRING': True,
+    'DEFAULT_THROTTLE_RATES': {
+        'expensive_computation': '20/hour',  # For compute, compare, stress test operations
+        'template_apply': '30/hour',  # For life event template application
+        'baseline_refresh': '10/hour',  # For baseline scenario refresh
+    },
 }
 
 SIMPLE_JWT = {

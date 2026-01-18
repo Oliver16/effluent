@@ -11,6 +11,7 @@ from rest_framework.views import APIView
 
 from celery.result import AsyncResult
 
+from apps.scenarios.throttles import ExpensiveComputationThrottle
 from .services import StressTestService
 from .templates import get_stress_test_templates, get_stress_test_by_key
 from .tasks import run_stress_test_task, run_batch_stress_tests_task
@@ -40,6 +41,7 @@ class StressTestListView(APIView):
 class StressTestRunView(APIView):
     """Run a stress test."""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ExpensiveComputationThrottle]
 
     def post(self, request):
         """Run a stress test against the household's baseline scenario (async)."""
@@ -122,6 +124,7 @@ class StressTestRunView(APIView):
 class StressTestBatchRunView(APIView):
     """Run multiple stress tests in batch."""
     permission_classes = [IsAuthenticated]
+    throttle_classes = [ExpensiveComputationThrottle]
 
     def post(self, request):
         """Run multiple stress tests in batch (async by default)."""

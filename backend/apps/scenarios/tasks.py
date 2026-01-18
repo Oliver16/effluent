@@ -52,6 +52,39 @@ def process_reality_changes_task(self, batch_size=100):
 
 
 @shared_task(
+    name='apps.scenarios.tasks.cleanup_old_reality_events_task',
+    bind=True,
+)
+def cleanup_old_reality_events_task(self):
+    """
+    Clean up old reality change events.
+
+    This task is scheduled to run periodically (daily) via Celery Beat.
+    It prevents infinite accumulation of events by:
+    1. Deleting old processed/failed events
+    2. Marking stuck pending events as failed
+
+    Returns:
+        dict: Cleanup statistics
+    """
+    from .reality_events import cleanup_old_events
+
+    try:
+        logger.info("Cleaning up old reality change events")
+        stats = cleanup_old_events()
+
+        logger.info(
+            f"Reality event cleanup complete: {stats['deleted_count']} events deleted, "
+            f"{stats['stuck_events_failed']} stuck events marked as failed"
+        )
+
+        return stats
+    except Exception as exc:
+        logger.error(f"Failed to cleanup reality events: {exc}", exc_info=True)
+        raise self.retry(exc=exc)
+
+
+@shared_task(
     name='apps.scenarios.tasks.refresh_baseline_task',
     bind=True,
     max_retries=2,
