@@ -146,14 +146,16 @@ CHANGE_TYPE_SCHEMAS = {
         'optional': [],
         'types': {
             'percentage': (int, float, Decimal, str),
-        }
+        },
+        'requires_source': True,  # Required to identify which income source to modify (multi-job support)
     },
     ChangeType.MODIFY_HSA: {
         'required': ['percentage'],
         'optional': [],
         'types': {
             'percentage': (int, float, Decimal, str),
-        }
+        },
+        'requires_source': True,  # Required to identify which income source to modify (multi-job support)
     },
     ChangeType.ADJUST_TOTAL_EXPENSES: {
         'required': [],

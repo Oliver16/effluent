@@ -59,14 +59,15 @@ class MonthlyState:
     incomes: list  # active flows (gross income)
     expenses: list  # active flows (includes taxes)
     transfers: list = field(default_factory=list)  # transfer flows (move money between accounts)
-    contribution_rates: dict = field(default_factory=dict)  # 401k, HSA percentages
+    contribution_rates: dict = field(default_factory=dict)  # DEPRECATED: Use per-income _401k_rate fields instead
     applied_changes: set = field(default_factory=set)  # Track one-time changes applied
-    employer_match: EmployerMatchInfo = field(default_factory=EmployerMatchInfo)  # Employer 401k match config
-    employer_match_ytd: Decimal = field(default_factory=lambda: Decimal('0'))  # Track YTD employer match for annual limits
+    employer_match: EmployerMatchInfo = field(default_factory=EmployerMatchInfo)  # DEPRECATED: Use per-income _401k_employer_match_* fields
+    employer_match_ytd: Decimal = field(default_factory=lambda: Decimal('0'))  # DEPRECATED: Use per-income _401k_employer_match_ytd
     # Deferred flows: flows with future start dates that activate during the projection
     deferred_incomes: list = field(default_factory=list)
     deferred_expenses: list = field(default_factory=list)
     income_tax_map: dict = field(default_factory=dict)  # income_id -> tax_expense_id mapping
+    needs_tax_recalc: bool = False  # Flag to optimize tax recalculation - set when income or pre-tax deductions change
 
     @property
     def total_assets(self) -> Decimal:
@@ -242,6 +243,13 @@ class ScenarioEngine:
                 if change.effective_date <= current_date:
                     if not change.end_date or change.end_date >= current_date:
                         state = self._apply_change(state, change, current_date)
+
+            # Recalculate taxes once per month if income or pre-tax deductions changed
+            # This optimizes performance by batching tax calculations instead of recalculating
+            # after every single change (which was causing O(n²) behavior)
+            if state.needs_tax_recalc:
+                self._recalculate_all_taxes(state)
+                state.needs_tax_recalc = False
 
             # Apply growth rates
             state = self._apply_growth(state, month)
@@ -492,29 +500,74 @@ class ScenarioEngine:
             elif flow.flow_type == FlowType.TRANSFER:
                 transfers.append(f)
 
-        # Initialize contribution rates from pre-tax deductions
-        contribution_rates = {'401k': Decimal('0'), 'hsa': Decimal('0')}
-        employer_match = EmployerMatchInfo()
-
-        # Safely query deductions - query may fail if no income sources exist
+        # Initialize per-income 401k/HSA rates from pre-tax deductions
+        # Map deductions by income_source_id to attach to the correct income
+        deductions_by_income = {}
         deductions = PreTaxDeduction.objects.filter(
             income_source__household=self.household,
             is_active=True
-        )
+        ).select_related('income_source')
+
         for deduction in deductions:
-            if deduction.deduction_type in ('traditional_401k', 'roth_401k'):
-                if deduction.amount_type == 'percentage':
-                    contribution_rates['401k'] = deduction.amount
-                # Load employer match configuration
-                if deduction.employer_match_percentage:
-                    employer_match = EmployerMatchInfo(
-                        match_percentage=deduction.employer_match_percentage,
-                        limit_percentage=deduction.employer_match_limit_percentage or Decimal('0'),
-                        limit_annual=deduction.employer_match_limit_annual,
-                    )
-            elif deduction.deduction_type == 'hsa':
-                if deduction.amount_type == 'percentage':
-                    contribution_rates['hsa'] = deduction.amount
+            income_source_id = f'income_source_{deduction.income_source_id}'
+            if income_source_id not in deductions_by_income:
+                deductions_by_income[income_source_id] = []
+            deductions_by_income[income_source_id].append(deduction)
+
+        # Attach 401k/HSA rates to each income
+        for income in incomes:
+            income_id = income['id']
+            income_deductions = deductions_by_income.get(income_id, [])
+
+            # Initialize default values
+            income['_401k_rate'] = Decimal('0')
+            income['_401k_employer_match_pct'] = Decimal('0')
+            income['_401k_employer_match_limit_pct'] = Decimal('0')
+            income['_401k_employer_match_limit_annual'] = None
+            income['_401k_employer_match_ytd'] = Decimal('0')
+            income['_hsa_rate'] = Decimal('0')
+
+            # Apply deduction settings
+            for deduction in income_deductions:
+                if deduction.deduction_type in ('traditional_401k', 'roth_401k'):
+                    if deduction.amount_type == 'percentage':
+                        income['_401k_rate'] = deduction.amount
+                    # Load employer match configuration for this income
+                    if deduction.employer_match_percentage:
+                        income['_401k_employer_match_pct'] = deduction.employer_match_percentage
+                        income['_401k_employer_match_limit_pct'] = deduction.employer_match_limit_percentage or Decimal('0')
+                        income['_401k_employer_match_limit_annual'] = deduction.employer_match_limit_annual
+                elif deduction.deduction_type == 'hsa':
+                    if deduction.amount_type == 'percentage':
+                        income['_hsa_rate'] = deduction.amount
+
+        # Also attach to deferred incomes
+        for income in deferred_incomes:
+            income_id = income['id']
+            income_deductions = deductions_by_income.get(income_id, [])
+
+            income['_401k_rate'] = Decimal('0')
+            income['_401k_employer_match_pct'] = Decimal('0')
+            income['_401k_employer_match_limit_pct'] = Decimal('0')
+            income['_401k_employer_match_limit_annual'] = None
+            income['_401k_employer_match_ytd'] = Decimal('0')
+            income['_hsa_rate'] = Decimal('0')
+
+            for deduction in income_deductions:
+                if deduction.deduction_type in ('traditional_401k', 'roth_401k'):
+                    if deduction.amount_type == 'percentage':
+                        income['_401k_rate'] = deduction.amount
+                    if deduction.employer_match_percentage:
+                        income['_401k_employer_match_pct'] = deduction.employer_match_percentage
+                        income['_401k_employer_match_limit_pct'] = deduction.employer_match_limit_percentage or Decimal('0')
+                        income['_401k_employer_match_limit_annual'] = deduction.employer_match_limit_annual
+                elif deduction.deduction_type == 'hsa':
+                    if deduction.amount_type == 'percentage':
+                        income['_hsa_rate'] = deduction.amount
+
+        # Keep deprecated global fields for backward compatibility (empty)
+        contribution_rates = {}
+        employer_match = EmployerMatchInfo()
 
         return MonthlyState(
             date=self.scenario.start_date,
@@ -555,9 +608,9 @@ class ScenarioEngine:
                 still_deferred_incomes.append(flow)
         state.deferred_incomes = still_deferred_incomes
 
-        # Recalculate ALL taxes if any income was activated, since marginal rates change
+        # Flag for tax recalculation if any income was activated (marginal rates change)
         if any_income_activated:
-            self._recalculate_all_taxes(state)
+            state.needs_tax_recalc = True
 
         # Activate deferred expenses
         still_deferred_expenses = []
@@ -648,9 +701,9 @@ class ScenarioEngine:
                 '_income_type': income_type,
             })
 
-            # Recalculate ALL taxes since marginal rates change when income is added
+            # Flag for tax recalculation since marginal rates change when income is added
             # This ensures existing income sources are taxed at the correct marginal rate
-            self._recalculate_all_taxes(state)
+            state.needs_tax_recalc = True
 
         elif change.change_type == ChangeType.MODIFY_INCOME:
             # Modify existing income flow and recalculate taxes
@@ -678,9 +731,9 @@ class ScenarioEngine:
             if params.get('tax_treatment'):
                 income['_income_type'] = params['tax_treatment']
 
-            # Recalculate ALL taxes if income changed since marginal rates may have shifted
+            # Flag for tax recalculation if income changed (marginal rates may have shifted)
             if new_monthly != old_monthly or params.get('tax_treatment'):
-                self._recalculate_all_taxes(state)
+                state.needs_tax_recalc = True
 
         elif change.change_type == ChangeType.REMOVE_INCOME:
             flow_id = self._get_flow_id(change.source_flow_id, params)
@@ -700,8 +753,8 @@ class ScenarioEngine:
             if income_id_to_remove in state.income_tax_map:
                 del state.income_tax_map[income_id_to_remove]
 
-            # Recalculate ALL taxes since removing income changes marginal rates for remaining income
-            self._recalculate_all_taxes(state)
+            # Flag for tax recalculation since removing income changes marginal rates for remaining income
+            state.needs_tax_recalc = True
 
         elif change.change_type == ChangeType.ADD_EXPENSE:
             state.expenses.append({
@@ -1002,22 +1055,28 @@ class ScenarioEngine:
                 state.assets[first_key].balance = max(Decimal('0'), state.assets[first_key].balance - amount)
 
         elif change.change_type == ChangeType.MODIFY_401K:
-            # Change 401(k) contribution rate
+            # Change 401(k) contribution rate for a SPECIFIC income source
+            # Multi-job support: each income has its own 401k rate
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"MODIFY_401K requires source_flow_id to identify which income source to modify")
+
+            income = self._find_income_by_id(state, flow_id)
+            if not income:
+                raise ValueError(f"Income source {flow_id} not found in scenario state")
+
+            # Update this income's 401k contribution rate
             new_percentage = Decimal(str(params.get('percentage', 0)))
             new_rate = new_percentage / 100  # Convert to decimal
-            state.contribution_rates['401k'] = new_rate
+            income['_401k_rate'] = new_rate
 
-            # Calculate contribution amount from ALL gross salary income sources (handles multiple jobs)
-            total_gross_monthly = Decimal('0')
-            for inc in state.incomes:
-                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly'):
-                    total_gross_monthly += inc['monthly']
+            # Calculate new contribution amount for THIS income only
+            new_contribution = income['monthly'] * new_rate
 
-            new_contribution = total_gross_monthly * new_rate
-
-            # Add 401(k) contribution as expense (reduces take-home pay)
+            # Update or create 401(k) contribution expense for this specific income
+            expense_id = f'401k_contribution_{flow_id}'
             existing_expense = next(
-                (e for e in state.expenses if '401k_contribution' in e.get('id', '')),
+                (e for e in state.expenses if e.get('id') == expense_id),
                 None
             )
             if existing_expense:
@@ -1025,22 +1084,24 @@ class ScenarioEngine:
                 existing_expense['amount'] = new_contribution
             elif new_contribution > 0:
                 state.expenses.append({
-                    'id': f'401k_contribution_{change.id}',
-                    'name': f'{change.name} - 401(k) Contribution',
+                    'id': expense_id,
+                    'name': f'{income["name"]} - 401(k) Contribution',
                     'category': 'retirement_contribution',
                     'amount': new_contribution,
                     'frequency': 'monthly',
                     'monthly': new_contribution,
+                    '_source_income_id': flow_id,
                 })
 
-            # Add transfer to retirement account
+            # Add transfer to retirement account for this income
             retirement_acct = next(
                 (k for k, a in state.assets.items() if a.is_retirement),
                 None
             )
             if retirement_acct and new_contribution > 0:
+                transfer_id = f'401k_transfer_{flow_id}'
                 existing_transfer = next(
-                    (t for t in state.transfers if '401k_transfer' in t.get('id', '')),
+                    (t for t in state.transfers if t.get('id') == transfer_id),
                     None
                 )
                 if existing_transfer:
@@ -1048,8 +1109,8 @@ class ScenarioEngine:
                     existing_transfer['amount'] = new_contribution
                 else:
                     state.transfers.append({
-                        'id': f'401k_transfer_{change.id}',
-                        'name': '401(k) Contribution',
+                        'id': transfer_id,
+                        'name': f'{income["name"]} - 401(k) Transfer',
                         'category': 'retirement_transfer',
                         'amount': new_contribution,
                         'frequency': 'monthly',
@@ -1057,26 +1118,32 @@ class ScenarioEngine:
                         'linked_account': retirement_acct,
                     })
 
-            # Recalculate taxes since pre-tax deductions affect taxable income
-            self._recalculate_all_taxes(state)
+            # Flag for tax recalculation (pre-tax deductions affect taxable income)
+            state.needs_tax_recalc = True
 
         elif change.change_type == ChangeType.MODIFY_HSA:
-            # Change HSA contribution rate
+            # Change HSA contribution rate for a SPECIFIC income source
+            # Multi-job support: each income has its own HSA rate
+            flow_id = self._get_flow_id(change.source_flow_id, params)
+            if not flow_id:
+                raise ValueError(f"MODIFY_HSA requires source_flow_id to identify which income source to modify")
+
+            income = self._find_income_by_id(state, flow_id)
+            if not income:
+                raise ValueError(f"Income source {flow_id} not found in scenario state")
+
+            # Update this income's HSA contribution rate
             new_percentage = Decimal(str(params.get('percentage', 0)))
             new_rate = new_percentage / 100  # Convert to decimal
-            state.contribution_rates['hsa'] = new_rate
+            income['_hsa_rate'] = new_rate
 
-            # Calculate HSA contribution amount from ALL gross salary income sources (handles multiple jobs)
-            total_gross_monthly = Decimal('0')
-            for inc in state.incomes:
-                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly'):
-                    total_gross_monthly += inc['monthly']
+            # Calculate new HSA contribution amount for THIS income only
+            new_contribution = income['monthly'] * new_rate
 
-            new_contribution = total_gross_monthly * new_rate
-
-            # Add HSA contribution as expense (reduces take-home pay)
+            # Update or create HSA contribution expense for this specific income
+            expense_id = f'hsa_contribution_{flow_id}'
             existing_expense = next(
-                (e for e in state.expenses if 'hsa_contribution' in e.get('id', '')),
+                (e for e in state.expenses if e.get('id') == expense_id),
                 None
             )
             if existing_expense:
@@ -1084,16 +1151,17 @@ class ScenarioEngine:
                 existing_expense['amount'] = new_contribution
             elif new_contribution > 0:
                 state.expenses.append({
-                    'id': f'hsa_contribution_{change.id}',
-                    'name': f'{change.name} - HSA Contribution',
+                    'id': expense_id,
+                    'name': f'{income["name"]} - HSA Contribution',
                     'category': 'health_savings',
                     'amount': new_contribution,
                     'frequency': 'monthly',
                     'monthly': new_contribution,
+                    '_source_income_id': flow_id,
                 })
 
-            # Recalculate taxes since HSA contributions are pre-tax
-            self._recalculate_all_taxes(state)
+            # Flag for tax recalculation (HSA contributions are pre-tax)
+            state.needs_tax_recalc = True
 
         # TASK-14: Overlay adjustments
         # Supports both legacy (monthly_adjustment) and new schema (amount/mode)
@@ -1159,8 +1227,8 @@ class ScenarioEngine:
                     '_income_type': income_type,
                 })
 
-                # Recalculate ALL taxes since marginal rates change with income adjustment
-                self._recalculate_all_taxes(state)
+                # Flag for tax recalculation since marginal rates change with income adjustment
+                state.needs_tax_recalc = True
 
         elif change.change_type == ChangeType.SET_SAVINGS_TRANSFER:
             # Set up a recurring transfer from liquid to investment account
@@ -1242,7 +1310,8 @@ class ScenarioEngine:
                     asset.balance = asset.balance * multiplier
 
             # Store recovery info for gradual recovery in _apply_growth
-            if recovery_months > 0 and percent_change < 0:
+            # Guard against division by zero: recovery_months must be > 0 and multiplier must be > 0
+            if recovery_months > 0 and percent_change < 0 and multiplier > 0:
                 # Calculate monthly recovery rate to restore over recovery_months
                 # Use compound growth formula: (final/current)^(1/months) - 1
                 # If dropped to 80% (multiplier=0.8), need to grow by (1/0.8)^(1/months) - 1 per month
@@ -1404,49 +1473,59 @@ class ScenarioEngine:
                     state.assets[liquid_asset].balance = max(Decimal('0'), state.assets[liquid_asset].balance - amount)
                 state.liabilities[target_id].balance = max(Decimal('0'), state.liabilities[target_id].balance - amount)
 
-        # Calculate and add employer 401k match to retirement account
-        if state.employer_match.match_percentage > 0:
+        # Calculate and add employer 401k match to retirement account (per-income)
+        # Each income source can have its own 401k contribution rate and employer match configuration
+        total_employer_match = Decimal('0')
+
+        for income in state.incomes:
+            # Only process W-2 employment income
+            if income['category'] not in ('salary', 'hourly_wages', 'w2', 'w2_hourly'):
+                continue
+
+            # Get this income's 401k settings
+            match_pct = income.get('_401k_employer_match_pct', Decimal('0'))
+            if match_pct <= 0:
+                continue  # No employer match for this income
+
             # Reset YTD tracking at year boundary
             if state.month > 0 and state.month % 12 == 0:
-                state.employer_match_ytd = Decimal('0')
+                income['_401k_employer_match_ytd'] = Decimal('0')
 
-            # Calculate gross monthly salary income
-            gross_monthly_salary = sum(
-                inc['monthly'] for inc in state.incomes
-                if inc['category'] in ('salary', 'hourly_wages', 'w2', 'w2_hourly')
+            contribution_rate = income.get('_401k_rate', Decimal('0'))
+            gross_monthly = income['monthly']
+
+            # Calculate employee contribution for this income
+            employee_contribution = gross_monthly * contribution_rate
+
+            # Calculate matchable contribution (limited by employer's limit percentage)
+            limit_pct = income.get('_401k_employer_match_limit_pct', Decimal('0'))
+            if limit_pct > 0:
+                max_matchable = gross_monthly * limit_pct
+                matchable_contribution = min(employee_contribution, max_matchable)
+            else:
+                matchable_contribution = employee_contribution
+
+            # Calculate employer match for this income
+            employer_match_amount = matchable_contribution * match_pct
+
+            # Apply annual limit if set for this income
+            limit_annual = income.get('_401k_employer_match_limit_annual')
+            if limit_annual:
+                ytd = income.get('_401k_employer_match_ytd', Decimal('0'))
+                remaining_annual = limit_annual - ytd
+                employer_match_amount = min(employer_match_amount, max(Decimal('0'), remaining_annual))
+                income['_401k_employer_match_ytd'] = ytd + employer_match_amount
+
+            total_employer_match += employer_match_amount
+
+        # Add total employer match to retirement account (free money!)
+        if total_employer_match > 0:
+            retirement_acct = next(
+                (k for k, a in state.assets.items() if a.is_retirement),
+                None
             )
-
-            if gross_monthly_salary > 0:
-                # Get employee contribution rate
-                contribution_rate = state.contribution_rates.get('401k', Decimal('0'))
-
-                # Calculate employee contribution this month
-                employee_contribution = gross_monthly_salary * contribution_rate
-
-                # Calculate matchable contribution (limited by employer's limit percentage)
-                if state.employer_match.limit_percentage > 0:
-                    max_matchable = gross_monthly_salary * state.employer_match.limit_percentage
-                    matchable_contribution = min(employee_contribution, max_matchable)
-                else:
-                    matchable_contribution = employee_contribution
-
-                # Calculate employer match
-                employer_match_amount = matchable_contribution * state.employer_match.match_percentage
-
-                # Apply annual limit if set
-                if state.employer_match.limit_annual:
-                    remaining_annual = state.employer_match.limit_annual - state.employer_match_ytd
-                    employer_match_amount = min(employer_match_amount, max(Decimal('0'), remaining_annual))
-                    state.employer_match_ytd += employer_match_amount
-
-                # Add employer match to retirement account (free money!)
-                if employer_match_amount > 0:
-                    retirement_acct = next(
-                        (k for k, a in state.assets.items() if a.is_retirement),
-                        None
-                    )
-                    if retirement_acct:
-                        state.assets[retirement_acct].balance += employer_match_amount
+            if retirement_acct:
+                state.assets[retirement_acct].balance += total_employer_match
 
         # Reduce debt balances based on payments
         for lid, liab in list(state.liabilities.items()):

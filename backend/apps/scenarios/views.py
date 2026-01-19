@@ -503,18 +503,49 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     })
 
             elif change.change_type == ChangeType.MODIFY_401K:
-                # Update pre-tax deduction
-                from apps.taxes.models import PreTaxDeduction
+                # Update pre-tax deduction for SPECIFIC income source (multi-job support)
+                from apps.taxes.models import PreTaxDeduction, IncomeSource
                 try:
-                    # Find existing 401k deduction for this household
+                    # Extract source_flow_id to identify which income source
+                    source_flow_id = change.source_flow_id
+                    if not source_flow_id:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'Missing source_flow_id - required to identify income source',
+                        })
+                        continue
+
+                    # Parse income_source_id from source_flow_id (format: "income_source_{uuid}")
+                    if source_flow_id.startswith('income_source_'):
+                        income_source_id = source_flow_id.replace('income_source_', '')
+                    else:
+                        income_source_id = source_flow_id
+
+                    # Find the specific income source
+                    income_source = IncomeSource.objects.filter(
+                        id=income_source_id,
+                        household=request.household,
+                        is_active=True
+                    ).first()
+
+                    if not income_source:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Income source {income_source_id} not found',
+                        })
+                        continue
+
+                    # Find existing 401k deduction for THIS specific income source
                     deduction = PreTaxDeduction.objects.filter(
-                        income_source__household=request.household,
+                        income_source=income_source,
                         deduction_type__in=['traditional_401k', 'roth_401k'],
                         is_active=True
                     ).first()
 
                     if deduction:
-                        # Update percentage
+                        # Update percentage for this specific income
                         new_percentage = Decimal(str(params.get('percentage', 0)))
                         deduction.amount = new_percentage / 100  # Convert to decimal
                         deduction.amount_type = 'percentage'
@@ -523,12 +554,13 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                             'change_id': str(change.id),
                             'type': 'MODIFY_401K',
                             'deduction_id': str(deduction.id),
+                            'income_source_id': str(income_source.id),
                         })
                     else:
                         skipped_changes.append({
                             'change_id': str(change.id),
                             'type': change.change_type,
-                            'reason': 'No active 401k deduction found',
+                            'reason': f'No active 401k deduction found for income source {income_source.name}',
                         })
                 except Exception as e:
                     skipped_changes.append({
@@ -538,18 +570,49 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                     })
 
             elif change.change_type == ChangeType.MODIFY_HSA:
-                # Update pre-tax deduction
-                from apps.taxes.models import PreTaxDeduction
+                # Update pre-tax deduction for SPECIFIC income source (multi-job support)
+                from apps.taxes.models import PreTaxDeduction, IncomeSource
                 try:
-                    # Find existing HSA deduction for this household
+                    # Extract source_flow_id to identify which income source
+                    source_flow_id = change.source_flow_id
+                    if not source_flow_id:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': 'Missing source_flow_id - required to identify income source',
+                        })
+                        continue
+
+                    # Parse income_source_id from source_flow_id (format: "income_source_{uuid}")
+                    if source_flow_id.startswith('income_source_'):
+                        income_source_id = source_flow_id.replace('income_source_', '')
+                    else:
+                        income_source_id = source_flow_id
+
+                    # Find the specific income source
+                    income_source = IncomeSource.objects.filter(
+                        id=income_source_id,
+                        household=request.household,
+                        is_active=True
+                    ).first()
+
+                    if not income_source:
+                        skipped_changes.append({
+                            'change_id': str(change.id),
+                            'type': change.change_type,
+                            'reason': f'Income source {income_source_id} not found',
+                        })
+                        continue
+
+                    # Find existing HSA deduction for THIS specific income source
                     deduction = PreTaxDeduction.objects.filter(
-                        income_source__household=request.household,
+                        income_source=income_source,
                         deduction_type='hsa',
                         is_active=True
                     ).first()
 
                     if deduction:
-                        # Update percentage
+                        # Update percentage for this specific income
                         new_percentage = Decimal(str(params.get('percentage', 0)))
                         deduction.amount = new_percentage / 100  # Convert to decimal
                         deduction.amount_type = 'percentage'
@@ -558,12 +621,13 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                             'change_id': str(change.id),
                             'type': 'MODIFY_HSA',
                             'deduction_id': str(deduction.id),
+                            'income_source_id': str(income_source.id),
                         })
                     else:
                         skipped_changes.append({
                             'change_id': str(change.id),
                             'type': change.change_type,
-                            'reason': 'No active HSA deduction found',
+                            'reason': f'No active HSA deduction found for income source {income_source.name}',
                         })
                 except Exception as e:
                     skipped_changes.append({
