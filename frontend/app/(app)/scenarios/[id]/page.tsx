@@ -25,6 +25,7 @@ import { Loader2, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { Scenario, ScenarioProjection } from '@/lib/types';
+import { toast } from 'sonner';
 
 function isBaselineScenario(scenario: Scenario) {
   return scenario.isBaseline === true;
@@ -69,6 +70,11 @@ export default function ScenarioDetailPage() {
     mutationFn: () => scenarios.compute(scenarioId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scenarios', scenarioId, 'projections'] });
+      toast.success('Projection computed successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Failed to compute projection';
+      toast.error(message);
     },
   });
 

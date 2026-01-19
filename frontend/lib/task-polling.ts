@@ -11,6 +11,40 @@ export interface TaskResponse {
   message?: string;
 }
 
+/**
+ * Attempt to refresh the access token during polling.
+ */
+async function refreshAccessToken(): Promise<string | null> {
+  const refreshToken = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+  if (!refreshToken) {
+    return null;
+  }
+
+  try {
+    const response = await fetch('/api/auth/token/refresh/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ refresh: refreshToken }),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.access) {
+      localStorage.setItem('token', data.access);
+      if (data.refresh) {
+        localStorage.setItem('refreshToken', data.refresh);
+      }
+      return data.access;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export interface PollOptions {
   interval?: number; // Polling interval in ms (default: 1000)
   timeout?: number; // Max time to poll in ms (default: 300000 = 5 minutes)
@@ -40,7 +74,7 @@ export async function pollTaskStatus<T = any>(
   const url = statusUrl.replace('{taskId}', taskId);
 
   return new Promise<T>((resolve, reject) => {
-    const poll = async () => {
+    const poll = async (isRetry = false) => {
       try {
         // Check if we've exceeded timeout
         if (Date.now() - startTime > timeout) {
@@ -70,6 +104,19 @@ export async function pollTaskStatus<T = any>(
           headers,
         });
 
+        // Handle 401 Unauthorized - try to refresh token and retry once
+        if (response.status === 401 && !isRetry && typeof window !== 'undefined') {
+          const newToken = await refreshAccessToken();
+          if (newToken) {
+            // Retry with new token
+            setTimeout(() => poll(true), 100);
+            return;
+          }
+          // Refresh failed - user needs to log in again
+          reject(new Error('Authentication expired. Please log in again.'));
+          return;
+        }
+
         if (!response.ok) {
           reject(new Error(`Failed to fetch task status: ${response.statusText}`));
           return;
@@ -96,14 +143,14 @@ export async function pollTaskStatus<T = any>(
         }
 
         // Task still pending, continue polling
-        setTimeout(poll, interval);
+        setTimeout(() => poll(false), interval);
       } catch (error) {
         reject(error);
       }
     };
 
     // Start polling
-    poll();
+    poll(false);
   });
 }
 

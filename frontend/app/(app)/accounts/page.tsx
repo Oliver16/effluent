@@ -53,6 +53,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { toast } from 'sonner';
 
 const LIABILITY_TYPES = new Set([
   'credit_card',
@@ -244,11 +245,41 @@ export default function AccountsPage() {
   const updateBalanceMutation = useMutation({
     mutationFn: ({ id, balance }: { id: string; balance: string }) =>
       accountsApi.updateBalance(id, balance, new Date().toISOString().split('T')[0]),
+    onMutate: async ({ id, balance }) => {
+      // Cancel outgoing refetches to avoid overwriting our optimistic update
+      await queryClient.cancelQueries({ queryKey: ['accounts'] });
+
+      // Snapshot the previous value
+      const previousAccounts = queryClient.getQueryData<Account[]>(['accounts']);
+
+      // Optimistically update to the new value
+      if (previousAccounts) {
+        queryClient.setQueryData<Account[]>(['accounts'], old =>
+          old ? old.map(account =>
+            account.id === id
+              ? { ...account, currentBalance: balance, balanceUpdatedAt: new Date().toISOString() }
+              : account
+          ) : old
+        );
+      }
+
+      // Return context with the previous value for rollback
+      return { previousAccounts };
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
       setUpdateModalOpen(false);
       setSelectedAccount(null);
+      toast.success('Balance updated successfully');
+    },
+    onError: (error: any, variables, context) => {
+      // Rollback to previous value on error
+      if (context?.previousAccounts) {
+        queryClient.setQueryData(['accounts'], context.previousAccounts);
+      }
+      const message = error?.message || error?.errors?.balance?.[0] || 'Failed to update balance';
+      toast.error(message);
     },
   });
 
@@ -263,6 +294,11 @@ export default function AccountsPage() {
         institution: '',
         currentBalance: '0',
       });
+      toast.success('Account created successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.message || error?.errors?.name?.[0] || 'Failed to create account';
+      toast.error(message);
     },
   });
 
@@ -281,6 +317,11 @@ export default function AccountsPage() {
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
       setEditModalOpen(false);
       setSelectedAccount(null);
+      toast.success('Account updated successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Failed to update account';
+      toast.error(message);
     },
   });
 
@@ -289,10 +330,15 @@ export default function AccountsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['accounts'] });
       queryClient.invalidateQueries({ queryKey: ['metrics'] });
+      toast.success('Account deleted successfully');
+    },
+    onError: (error: any) => {
+      const message = error?.message || 'Failed to delete account';
+      toast.error(message);
     },
   });
 
-  const allAccounts = accountsData?.results || [];
+  const allAccounts = accountsData || [];
 
   // Separate into accounts (financial), fixed assets (tangible property), and liabilities
   const accounts = allAccounts.filter((a) => ACCOUNT_ASSET_TYPES.has(a.accountType));

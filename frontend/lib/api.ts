@@ -116,7 +116,6 @@ export class ApiError extends Error {
 }
 
 // Token refresh state to prevent concurrent refresh attempts
-let isRefreshing = false
 let refreshPromise: Promise<string | null> | null = null
 
 /**
@@ -157,18 +156,28 @@ async function refreshAccessToken(): Promise<string | null> {
 
 /**
  * Get a refreshed token, handling concurrent refresh attempts.
- * Multiple calls will share the same refresh promise.
+ * Multiple calls will share the same refresh promise to prevent race conditions.
+ * The promise is cleared only after completion, ensuring no gaps where
+ * multiple refresh attempts could be initiated.
  */
 async function getRefreshedToken(): Promise<string | null> {
-  if (isRefreshing && refreshPromise) {
+  // If a refresh is already in progress, wait for it
+  if (refreshPromise) {
     return refreshPromise
   }
 
-  isRefreshing = true
-  refreshPromise = refreshAccessToken().finally(() => {
-    isRefreshing = false
-    refreshPromise = null
-  })
+  // Start a new refresh and store the promise
+  refreshPromise = refreshAccessToken()
+    .then((token) => {
+      // Clear the promise on successful completion
+      refreshPromise = null
+      return token
+    })
+    .catch((error) => {
+      // Clear the promise on error
+      refreshPromise = null
+      throw error
+    })
 
   return refreshPromise
 }
@@ -194,9 +203,17 @@ function snakeToCamel(str: string): string {
 
 /**
  * Convert a camelCase string to snake_case.
+ * Preserves patterns like '401k' by not adding underscores before uppercase letters
+ * that directly follow numbers.
  */
 function camelToSnake(str: string): string {
-  return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
+  return str.replace(/[A-Z]/g, (letter, index) => {
+    // Don't add underscore if the previous character is a digit
+    if (index > 0 && /\d/.test(str[index - 1])) {
+      return letter.toLowerCase();
+    }
+    return `_${letter.toLowerCase()}`;
+  })
 }
 
 /**
@@ -294,8 +311,28 @@ async function request<T>(endpoint: string, options: RequestOptions = {}, isRetr
       }
     }
 
+    // Parse error response, handling multiple formats
     const error = await response.json().catch(() => ({}))
-    throw new ApiError(response.status, error.detail || 'Request failed', error.errors)
+
+    // Extract error message from various formats:
+    // - { detail: "message" } - DRF standard format
+    // - { error: "message" } - Custom error format
+    // - { message: "message" } - Alternative format
+    // - { non_field_errors: ["message"] } - DRF validation errors
+    let errorMessage = 'Request failed'
+    if (error.detail) {
+      errorMessage = error.detail
+    } else if (error.error) {
+      errorMessage = error.error
+    } else if (error.message) {
+      errorMessage = error.message
+    } else if (error.non_field_errors && Array.isArray(error.non_field_errors)) {
+      errorMessage = error.non_field_errors[0]
+    } else if (typeof error === 'string') {
+      errorMessage = error
+    }
+
+    throw new ApiError(response.status, errorMessage, error.errors || error)
   }
 
   // Handle 204 No Content (common for DELETE requests)
@@ -403,11 +440,9 @@ export const members = {
 
 // Account endpoints
 export const accounts = {
-  list: () => api.get<Account[] | { results: Account[] }>('/api/v1/accounts/').then(data => {
-    // Handle both flat array and paginated responses
-    const items = Array.isArray(data) ? data : (data.results || [])
-    return { results: toCamelCase<Account[]>(items) }
-  }),
+  list: () => api.get<Account[] | { results: Account[] }>('/api/v1/accounts/')
+    .then(normalizeListResponse)
+    .then(data => toCamelCase<Account[]>(data)),
   get: (id: string) => api.get<Account>(`/api/v1/accounts/${id}/`).then(data => toCamelCase<Account>(data)),
   create: (data: Partial<Account>) => {
     // Convert camelCase to snake_case and map currentBalance to initial_balance

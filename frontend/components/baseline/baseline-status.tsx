@@ -50,7 +50,19 @@ export function BaselineStatus({ health, onRefresh }: BaselineStatusProps) {
       onRefresh?.();
     },
     onError: (error: any) => {
-      const errorMessage = error?.message || 'Failed to refresh baseline';
+      // Extract error message from various error formats
+      let errorMessage = 'Failed to refresh baseline';
+      if (error instanceof Error) {
+        errorMessage = error.message;
+      } else if (typeof error === 'string') {
+        errorMessage = error;
+      } else if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.detail) {
+        errorMessage = error.detail;
+      } else if (error?.error) {
+        errorMessage = error.error;
+      }
       toast.error(errorMessage, { id: 'baseline-refresh' });
     },
   });
