@@ -11,9 +11,6 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     && rm -rf /var/lib/apt/lists/*
 
-# Upgrade pip, setuptools, and wheel
-RUN pip install --no-cache-dir --upgrade pip setuptools wheel
-
 # Install Python dependencies
 COPY requirements/base.txt requirements/prod.txt ./requirements/
 RUN pip install --no-cache-dir -r requirements/prod.txt
