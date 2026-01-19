@@ -9,6 +9,9 @@ Handles async execution of system flow generation which recalculates:
 """
 import logging
 from celery import shared_task
+from django.db import transaction
+
+from apps.core.task_utils import with_task_lock
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +22,8 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     default_retry_delay=60,
 )
+@with_task_lock('flow_regen:{household_id}', timeout=300)
+@transaction.atomic
 def regenerate_system_flows_task(self, household_id):
     """
     Regenerate all system-generated flows for a household.
@@ -35,11 +40,14 @@ def regenerate_system_flows_task(self, household_id):
     - Account details change
     - Pre-tax deductions are modified
 
+    Uses distributed locking to prevent concurrent regeneration for the same household.
+    Wrapped in a transaction to ensure atomicity of delete+create operations.
+
     Args:
         household_id: UUID of the household
 
     Returns:
-        dict: Regeneration statistics
+        dict: Regeneration statistics (or {'skipped': True} if lock held)
     """
     from .services import generate_system_flows_for_household
 
@@ -71,6 +79,8 @@ def regenerate_system_flows_task(self, household_id):
     bind=True,
     max_retries=2,
 )
+@with_task_lock('tax_withholding:{household_id}', timeout=300)
+@transaction.atomic
 def recalculate_tax_withholding_task(self, household_id):
     """
     Recalculate tax withholding flows for all income sources.
@@ -78,11 +88,14 @@ def recalculate_tax_withholding_task(self, household_id):
     This is a subset of system flow regeneration focused only
     on tax-related flows. Useful when only tax configuration changes.
 
+    Uses distributed locking to prevent concurrent recalculation for the same household.
+    Wrapped in a transaction to ensure atomicity of delete+create operations.
+
     Args:
         household_id: UUID of the household
 
     Returns:
-        dict: Recalculation statistics
+        dict: Recalculation statistics (or {'skipped': True} if lock held)
     """
     from apps.core.models import Household
     from .services import SystemFlowGenerator

@@ -12,6 +12,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import Household
+from apps.core.task_utils import get_household_lock, release_household_lock
 from apps.flows.services import generate_system_flows_for_household
 from .models import RealityChangeEvent, RealityChangeEventType, RealityChangeEventStatus
 from .baseline import BaselineScenarioService
@@ -109,6 +110,15 @@ def process_reality_changes(batch_size: int = 100) -> dict:
             f"Processing {len(events)} reality change events for household {household_id}: {event_types}"
         )
 
+        # Try to acquire lock for this household
+        # Skip if another task is already processing this household's events
+        if not get_household_lock(str(household_id), 'reality_processing', timeout=300):
+            logger.info(
+                f"Household {household_id} already being processed by another task, skipping"
+            )
+            # Events will be picked up in the next Beat cycle
+            continue
+
         # Detect potential conflicts - multiple events affecting the same account/flow
         # Use last-write-wins semantics: most recent event takes precedence
         _detect_and_log_conflicts(events)
@@ -152,6 +162,10 @@ def process_reality_changes(batch_size: int = 100) -> dict:
                 event.save(update_fields=['status', 'error'])
 
             stats['events_failed'] += len(events)
+
+        finally:
+            # Always release the lock, even if processing failed
+            release_household_lock(str(household_id), 'reality_processing')
 
     logger.info(
         f"Reality change processing complete: {stats['events_processed']} events processed, "

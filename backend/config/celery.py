@@ -41,7 +41,7 @@ app.conf.update(
     task_soft_time_limit=25 * 60,  # 25 minutes soft limit
 
     # Result backend settings
-    result_expires=3600,  # Results expire after 1 hour
+    result_expires=7200,  # Results expire after 2 hours (increased from 1 hour to prevent edge case data loss)
     result_extended=True,  # Store additional task metadata
 
     # Worker settings

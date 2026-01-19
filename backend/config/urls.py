@@ -11,7 +11,7 @@ from apps.core.views import (
 )
 from apps.core.views_health import HealthCheckView, CeleryHealthCheckView
 from apps.accounts.views import AccountViewSet
-from apps.flows.views import RecurringFlowViewSet
+from apps.flows.views import RecurringFlowViewSet, FlowTaskStatusView
 from apps.taxes.views import (
     IncomeSourceViewSet, W2WithholdingViewSet,
     PreTaxDeductionViewSet, PostTaxDeductionViewSet,
@@ -118,6 +118,9 @@ urlpatterns = [
 
     # Admin Tasks (manual triggers for scheduled background tasks)
     path('api/v1/scenarios/admin-tasks/', AdminTasksView.as_view(), name='admin-tasks'),
+
+    # Flow Task Status
+    path('api/v1/flows/tasks/<str:task_id>/', FlowTaskStatusView.as_view(), name='flow-task-status'),
 
     # Goals
     path('api/v1/goals/status/', GoalStatusView.as_view(), name='goal-status'),

@@ -2,8 +2,10 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.views import APIView
 from django_filters.rest_framework import DjangoFilterBackend
 from django.core.cache import cache
+from celery.result import AsyncResult
 
 from .models import RecurringFlow
 from .serializers import RecurringFlowSerializer
@@ -63,7 +65,7 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
             return Response({
                 'task_id': task.id,
                 'status': 'pending',
-                'message': 'System flow regeneration started. This will complete shortly.'
+                'message': 'System flow regeneration started. Poll /api/v1/flows/tasks/{task_id}/ for results.'
             }, status=status.HTTP_202_ACCEPTED)
 
         # Synchronous for backwards compatibility
@@ -98,7 +100,7 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
             return Response({
                 'task_id': task.id,
                 'status': 'pending',
-                'message': 'Tax withholding recalculation started. This will complete shortly.'
+                'message': 'Tax withholding recalculation started. Poll /api/v1/flows/tasks/{task_id}/ for results.'
             }, status=status.HTTP_202_ACCEPTED)
 
         # Synchronous for backwards compatibility
@@ -130,3 +132,61 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
             'flows_created': created_count,
             'message': 'Tax withholding recalculated successfully'
         }, status=status.HTTP_200_OK)
+
+
+class FlowTaskStatusView(APIView):
+    """Check status of an async flow task (regeneration or tax withholding)."""
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, task_id):
+        """
+        Get the status and result of a flow task.
+
+        Security: Validates that the task belongs to the requesting user's household
+        by checking a task_id -> household_id mapping stored in cache.
+
+        This endpoint handles status for:
+        - System flow regeneration tasks
+        - Tax withholding recalculation tasks
+        """
+        # Validate task ownership
+        cached_household_id = cache.get(f'task_household:{task_id}')
+
+        if not cached_household_id:
+            # Task ID not found or expired - could be old task or invalid ID
+            return Response({
+                'error': 'Task not found or expired'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Verify task belongs to requesting user's household
+        if not request.household or str(request.household.id) != str(cached_household_id):
+            return Response({
+                'error': 'Access denied to this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        task_result = AsyncResult(task_id)
+
+        if task_result.ready():
+            if task_result.successful():
+                result = task_result.result
+                # Clean up cache entry after successful retrieval
+                cache.delete(f'task_household:{task_id}')
+                return Response({
+                    'task_id': task_id,
+                    'status': 'completed',
+                    'result': result
+                })
+            else:
+                # Clean up cache entry after failed retrieval
+                cache.delete(f'task_household:{task_id}')
+                return Response({
+                    'task_id': task_id,
+                    'status': 'failed',
+                    'error': str(task_result.result)
+                }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        else:
+            return Response({
+                'task_id': task_id,
+                'status': 'pending',
+                'state': task_result.state
+            })

@@ -267,39 +267,35 @@ def compare_scenarios_task(self, household_id, scenario_ids, horizon_months=None
         # Add driver decomposition if requested and we have multiple scenarios
         if include_drivers and len(scenarios) >= 2:
             service = ScenarioComparisonService(household)
-            try:
-                driver_analysis = service.compare_multiple(
-                    scenarios,
-                    horizon_months=horizon_months
-                )
+            driver_analysis = service.compare_multiple(
+                scenarios,
+                horizon_months=horizon_months
+            )
 
-                # Convert driver objects to dicts
-                result['driver_analysis'] = {
-                    'baseline_id': driver_analysis['baseline_id'],
-                    'baseline_name': driver_analysis['baseline_name'],
-                    'comparisons': [
-                        {
-                            'scenario_id': c.scenario_id,
-                            'horizon_months': c.horizon_months,
-                            'baseline_end_nw': float(c.baseline_end_nw),
-                            'scenario_end_nw': float(c.scenario_end_nw),
-                            'net_worth_delta': float(c.net_worth_delta),
-                            'drivers': [
-                                {
-                                    'name': d.name,
-                                    'amount': float(d.amount),
-                                    'description': d.description,
-                                }
-                                for d in c.drivers
-                            ],
-                            'reconciliation_error_percent': float(c.reconciliation_error_percent),
-                        }
-                        for c in driver_analysis['comparisons']
-                    ],
-                }
-            except ValueError as e:
-                # Include error but don't fail the whole request
-                result['driver_analysis'] = {'error': str(e)}
+            # Convert driver objects to dicts
+            result['driver_analysis'] = {
+                'baseline_id': driver_analysis['baseline_id'],
+                'baseline_name': driver_analysis['baseline_name'],
+                'comparisons': [
+                    {
+                        'scenario_id': c.scenario_id,
+                        'horizon_months': c.horizon_months,
+                        'baseline_end_nw': float(c.baseline_end_nw),
+                        'scenario_end_nw': float(c.scenario_end_nw),
+                        'net_worth_delta': float(c.net_worth_delta),
+                        'drivers': [
+                            {
+                                'name': d.name,
+                                'amount': float(d.amount),
+                                'description': d.description,
+                            }
+                            for d in c.drivers
+                        ],
+                        'reconciliation_error_percent': float(c.reconciliation_error_percent),
+                    }
+                    for c in driver_analysis['comparisons']
+                ],
+            }
 
         logger.info(f"Scenario comparison complete: {len(scenario_ids)} scenarios")
 
