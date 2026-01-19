@@ -22,7 +22,7 @@ class ExpensiveComputationThrottle(UserRateThrottle):
 
     Rate: 20 requests per hour per user
     """
-    rate = 'expensive_computation'
+    scope = 'expensive_computation'
 
 
 class TemplateApplyThrottle(UserRateThrottle):
@@ -34,7 +34,7 @@ class TemplateApplyThrottle(UserRateThrottle):
 
     Rate: 30 requests per hour per user
     """
-    rate = 'template_apply'
+    scope = 'template_apply'
 
 
 class BaselineRefreshThrottle(UserRateThrottle):
@@ -46,4 +46,4 @@ class BaselineRefreshThrottle(UserRateThrottle):
 
     Rate: 10 requests per hour per user
     """
-    rate = 'baseline_refresh'
+    scope = 'baseline_refresh'
