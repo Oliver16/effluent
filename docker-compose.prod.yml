@@ -1,0 +1,162 @@
+version: "3.8"
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: effluent
+      POSTGRES_USER: effluent
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - effluent_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U effluent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - effluent-internal
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - effluent-internal
+
+  backend:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - ALLOWED_HOSTS=api.effluent.io,app.effluent.io,backend,localhost
+      - CORS_ORIGINS=https://app.effluent.io
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - SECURE_COOKIES=true
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      # Direct API host (api.effluent.io) - HTTPS
+      - "traefik.http.routers.effluent-api.rule=Host(`api.effluent.io`)"
+      - "traefik.http.routers.effluent-api.entrypoints=websecure"
+      - "traefik.http.routers.effluent-api.tls=true"
+      - "traefik.http.routers.effluent-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.effluent-api.loadbalancer.server.port=8000"
+      # Same-origin API via app host (/api/* on app.effluent.io -> Django) - HTTPS
+      # Next.js auth routes are handled by frontend with priority 300
+      - "traefik.http.routers.effluent-api-app.rule=Host(`app.effluent.io`) && PathPrefix(`/api`)"
+      - "traefik.http.routers.effluent-api-app.entrypoints=websecure"
+      - "traefik.http.routers.effluent-api-app.tls=true"
+      - "traefik.http.routers.effluent-api-app.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.effluent-api-app.priority=200"
+      - "traefik.http.routers.effluent-api-app.service=effluent-api"
+    networks:
+      - effluent-internal
+      - traefik-public
+
+  frontend:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:frontend
+      dockerfile: Dockerfile.prod
+      args:
+        # Internal URL for server-side API calls within Docker network
+        # Note: NEXT_PUBLIC_API_URL is intentionally NOT set - client uses same-origin /api/* routing
+        - INTERNAL_API_URL=http://backend:8000
+    restart: unless-stopped
+    environment:
+      # Internal routing - HTTP is fine within Docker network, Traefik handles HTTPS externally
+      - INTERNAL_API_URL=http://backend:8000
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+      # Main frontend router
+      - "traefik.http.routers.effluent-web.rule=Host(`app.effluent.io`)"
+      - "traefik.http.routers.effluent-web.entrypoints=websecure"
+      - "traefik.http.routers.effluent-web.tls=true"
+      - "traefik.http.routers.effluent-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.effluent-web.priority=100"
+      - "traefik.http.services.effluent-web.loadbalancer.server.port=3000"
+      # Next.js auth API routes - must be handled by frontend, not Django
+      # Priority 300 ensures these match before the Django /api/* router (priority 200)
+      - "traefik.http.routers.effluent-nextjs-auth.rule=Host(`app.effluent.io`) && (PathPrefix(`/api/auth/set-cookies`) || PathPrefix(`/api/auth/clear-cookies`))"
+      - "traefik.http.routers.effluent-nextjs-auth.entrypoints=websecure"
+      - "traefik.http.routers.effluent-nextjs-auth.tls=true"
+      - "traefik.http.routers.effluent-nextjs-auth.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.effluent-nextjs-auth.priority=300"
+      - "traefik.http.routers.effluent-nextjs-auth.service=effluent-web"
+    networks:
+      - effluent-internal
+      - traefik-public
+
+  celery_worker:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    command: celery -A config worker --loglevel=info
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - effluent-internal
+
+  celery_beat:
+    build:
+      context: https://github.com/Oliver16/effluent.git#main:backend
+      dockerfile: docker/Dockerfile.prod
+    command: celery -A config beat --loglevel=info
+    restart: unless-stopped
+    environment:
+      - DEBUG=0
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_HOST=db
+      - DB_NAME=effluent
+      - DB_USER=effluent
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DJANGO_SETTINGS_MODULE=config.settings.prod
+      - CELERY_BROKER_URL=redis://redis:6379/0
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - effluent-internal
+
+volumes:
+  effluent_postgres:
+
+networks:
+  effluent-internal:
+    driver: bridge
+  traefik-public:
+    external: true
