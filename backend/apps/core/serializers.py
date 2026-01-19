@@ -1,8 +1,13 @@
 from django.core.exceptions import ObjectDoesNotExist
 from rest_framework import serializers
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer as BaseTokenRefreshSerializer
+from rest_framework_simplejwt.serializers import TokenRefreshSerializer as BaseTokenRefreshSerializer, TokenObtainPairSerializer as BaseTokenObtainPairSerializer
 from rest_framework_simplejwt.exceptions import InvalidToken
 from .models import Household, HouseholdMember, HouseholdMembership, User, UserSettings
+
+
+class TokenObtainPairSerializer(BaseTokenObtainPairSerializer):
+    """Custom token serializer that accepts 'email' field instead of 'username'."""
+    username_field = 'email'
 
 
 class TokenRefreshSerializer(BaseTokenRefreshSerializer):

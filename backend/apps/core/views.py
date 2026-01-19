@@ -9,12 +9,12 @@ from django.utils import timezone
 import uuid
 
 from .models import Household, HouseholdMember, HouseholdMembership
-from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView
+from rest_framework_simplejwt.views import TokenRefreshView as BaseTokenRefreshView, TokenObtainPairView as BaseTokenObtainPairView
 from .serializers import (
     HouseholdSerializer, HouseholdDetailSerializer,
     HouseholdMemberSerializer,
     UserProfileSerializer, UserSettingsSerializer, ChangePasswordSerializer,
-    UserRegistrationSerializer, TokenRefreshSerializer
+    UserRegistrationSerializer, TokenRefreshSerializer, TokenObtainPairSerializer
 )
 from apps.accounts.models import Account
 from apps.accounts.serializers import AccountDetailSerializer
@@ -114,6 +114,11 @@ class UserRegistrationView(APIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response({'status': 'user_created'}, status=status.HTTP_201_CREATED)
+
+
+class TokenObtainPairView(BaseTokenObtainPairView):
+    """Custom token obtain view that accepts 'email' field instead of 'username'."""
+    serializer_class = TokenObtainPairSerializer
 
 
 class TokenRefreshView(BaseTokenRefreshView):
