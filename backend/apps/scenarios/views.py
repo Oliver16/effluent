@@ -779,12 +779,26 @@ class BaselineView(APIView):
 
         if action_type == 'refresh':
             if run_async:
+                # Check if baseline refresh is already in progress (idempotency)
+                idempotency_key = f'baseline_refresh_in_progress:{request.household.id}'
+                existing_task_id = cache.get(idempotency_key)
+
+                if existing_task_id:
+                    return Response({
+                        'task_id': existing_task_id,
+                        'status': 'already_in_progress',
+                        'message': 'Baseline refresh already in progress. Poll /api/v1/scenarios/tasks/{task_id}/ for results.'
+                    }, status=status.HTTP_409_CONFLICT)
+
                 task = refresh_baseline_task.apply_async(
                     kwargs={'household_id': str(request.household.id)}
                 )
 
                 # Store task -> household mapping for security validation (1 hour TTL)
                 cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+
+                # Store idempotency key (5 min TTL - enough for refresh to complete)
+                cache.set(idempotency_key, task.id, 300)
 
                 return Response({
                     'task_id': task.id,
@@ -793,15 +807,34 @@ class BaselineView(APIView):
                 }, status=status.HTTP_202_ACCEPTED)
 
             # Synchronous for backwards compatibility
-            baseline = BaselineScenarioService.refresh_baseline(
-                request.household,
-                force=request.data.get('force', False)
-            )
-            return Response({
-                'status': 'refreshed',
-                'baseline': BaselineScenarioSerializer(baseline).data,
-                'last_projected_at': baseline.last_projected_at.isoformat() if baseline.last_projected_at else None,
-            })
+            # Check idempotency (unless force=true)
+            force = request.data.get('force', False)
+            if not force:
+                idempotency_key = f'baseline_refresh_in_progress:{request.household.id}'
+                if cache.get(idempotency_key):
+                    return Response({
+                        'error': 'Baseline refresh already in progress',
+                        'message': 'Wait for current refresh to complete or use force=true to override'
+                    }, status=status.HTTP_409_CONFLICT)
+                # Set key to prevent concurrent requests (30 sec TTL for sync operations)
+                cache.set(idempotency_key, 'sync', 30)
+
+            try:
+                baseline = BaselineScenarioService.refresh_baseline(
+                    request.household,
+                    force=force
+                )
+                return Response({
+                    'status': 'refreshed',
+                    'baseline': BaselineScenarioSerializer(baseline).data,
+                    'last_projected_at': baseline.last_projected_at.isoformat() if baseline.last_projected_at else None,
+                })
+            finally:
+                # Clear idempotency key after sync operation completes
+                if not force:
+                    idempotency_key = f'baseline_refresh_in_progress:{request.household.id}'
+                    if cache.get(idempotency_key) == 'sync':
+                        cache.delete(idempotency_key)
 
         elif action_type == 'pin':
             as_of_date_str = request.data.get('as_of_date')

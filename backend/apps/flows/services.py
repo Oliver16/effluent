@@ -540,13 +540,37 @@ class SystemFlowGenerator:
         return category_map.get(account_type, ExpenseCategory.OTHER_DEBT)
 
 
-def generate_system_flows_for_household(household_id) -> None:
+def generate_system_flows_for_household(household_id) -> dict:
     """
     Generate all system flows for a household.
 
     This is the main entry point for flow generation.
     Safe to call repeatedly - idempotent.
+
+    Uses distributed locking to prevent concurrent regeneration for the same household.
+    This protects all entry points: async tasks, sync API calls, onboarding, reality events.
+
+    Returns:
+        dict: Result with 'success': True or 'skipped': True if lock held
     """
-    household = Household.objects.get(id=household_id)
-    generator = SystemFlowGenerator(household)
-    generator.generate_all_flows()
+    from apps.core.task_utils import get_household_lock, release_household_lock
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Acquire distributed lock for this household's flow regeneration
+    lock_acquired = get_household_lock(str(household_id), 'flow_generation', timeout=300)
+
+    if not lock_acquired:
+        logger.info(f"Flow generation already in progress for household {household_id}, skipping")
+        return {'skipped': True, 'reason': 'lock_held'}
+
+    try:
+        household = Household.objects.get(id=household_id)
+        generator = SystemFlowGenerator(household)
+        generator.generate_all_flows()
+        logger.info(f"Flow generation completed for household {household_id}")
+        return {'success': True}
+    finally:
+        # Always release lock, even if generation fails
+        release_household_lock(str(household_id), 'flow_generation')

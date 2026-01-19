@@ -6,12 +6,12 @@ Handles async execution of system flow generation which recalculates:
 - Pre-tax deductions (401k, HSA, etc.)
 - Debt payment flows
 - Insurance premium flows
+
+All tasks use generate_system_flows_for_household() which includes
+distributed locking to prevent concurrent regeneration.
 """
 import logging
 from celery import shared_task
-from django.db import transaction
-
-from apps.core.task_utils import with_task_lock
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +22,6 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     default_retry_delay=60,
 )
-@with_task_lock('flow_regen:{household_id}', timeout=300)
-@transaction.atomic
 def regenerate_system_flows_task(self, household_id):
     """
     Regenerate all system-generated flows for a household.
@@ -40,8 +38,8 @@ def regenerate_system_flows_task(self, household_id):
     - Account details change
     - Pre-tax deductions are modified
 
-    Uses distributed locking to prevent concurrent regeneration for the same household.
-    Wrapped in a transaction to ensure atomicity of delete+create operations.
+    Locking is handled by generate_system_flows_for_household() itself,
+    which uses distributed locking to prevent concurrent regeneration.
 
     Args:
         household_id: UUID of the household
@@ -79,8 +77,6 @@ def regenerate_system_flows_task(self, household_id):
     bind=True,
     max_retries=2,
 )
-@with_task_lock('tax_withholding:{household_id}', timeout=300)
-@transaction.atomic
 def recalculate_tax_withholding_task(self, household_id):
     """
     Recalculate tax withholding flows for all income sources.
@@ -88,8 +84,9 @@ def recalculate_tax_withholding_task(self, household_id):
     This is a subset of system flow regeneration focused only
     on tax-related flows. Useful when only tax configuration changes.
 
-    Uses distributed locking to prevent concurrent recalculation for the same household.
-    Wrapped in a transaction to ensure atomicity of delete+create operations.
+    Transaction ensures atomicity of delete+create operations.
+    Note: This regenerates ALL flows, not just tax withholding, because
+    generate_system_flows_for_household() handles all flows together.
 
     Args:
         household_id: UUID of the household
@@ -97,41 +94,26 @@ def recalculate_tax_withholding_task(self, household_id):
     Returns:
         dict: Recalculation statistics (or {'skipped': True} if lock held)
     """
-    from apps.core.models import Household
-    from .services import SystemFlowGenerator
+    from .services import generate_system_flows_for_household
 
     try:
         logger.info(f"Recalculating tax withholding for household {household_id}")
 
-        household = Household.objects.get(id=household_id)
-        generator = SystemFlowGenerator(household)
+        # Note: We regenerate ALL flows, not just tax withholding, because:
+        # 1. Tax withholding affects net pay deposits
+        # 2. Prevents partial/inconsistent state
+        # 3. Centralized locking in generate_system_flows_for_household()
+        result = generate_system_flows_for_household(household_id)
 
-        # Delete existing tax withholding flows
-        from .models import RecurringFlow, ExpenseCategory
-        deleted_count, _ = RecurringFlow.objects.filter(
-            household=household,
-            is_system_generated=True,
-            system_flow_kind='tax_withholding'
-        ).delete()
+        if result.get('skipped'):
+            logger.info(f"Tax withholding recalculation skipped for household {household_id}: {result.get('reason')}")
+            return result
 
-        # Regenerate tax withholding
-        generator._generate_tax_withholding_flows()
-
-        created_count = RecurringFlow.objects.filter(
-            household=household,
-            is_system_generated=True,
-            system_flow_kind='tax_withholding'
-        ).count()
-
-        logger.info(
-            f"Tax withholding recalculated for household {household_id}: "
-            f"{deleted_count} deleted, {created_count} created"
-        )
+        logger.info(f"Tax withholding recalculated for household {household_id}")
 
         return {
             'household_id': str(household_id),
-            'flows_deleted': deleted_count,
-            'flows_created': created_count,
+            'flows_regenerated': True,
         }
     except Exception as exc:
         logger.error(
