@@ -13,6 +13,7 @@ import {
   CalendarHeart,
   Target,
   FlaskConical,
+  ListTodo,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -24,6 +25,7 @@ const navigation = [
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
   { name: 'Stress Tests', href: '/stress-tests', icon: FlaskConical },
   { name: 'Goals', href: '/goals', icon: Target },
+  { name: 'Admin Tasks', href: '/admin/tasks', icon: ListTodo },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 

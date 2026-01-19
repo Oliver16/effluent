@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 from django_filters.rest_framework import DjangoFilterBackend
+from django.core.cache import cache
 
 from .models import RecurringFlow
 from .serializers import RecurringFlowSerializer
@@ -53,6 +54,9 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
                 kwargs={'household_id': str(request.household.id)}
             )
 
+            # Cache task ownership for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+
             # Still emit reality change event (will be processed by celery beat)
             emit_flows_changed(request.household, 'regenerate')
 
@@ -84,6 +88,9 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
             task = recalculate_tax_withholding_task.apply_async(
                 kwargs={'household_id': str(request.household.id)}
             )
+
+            # Cache task ownership for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
 
             # Still emit reality change event
             emit_flows_changed(request.household, 'tax_recalculation')

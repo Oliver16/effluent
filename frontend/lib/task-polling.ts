@@ -48,9 +48,26 @@ export async function pollTaskStatus<T = any>(
           return;
         }
 
+        // Build headers with authentication
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+
+        // Add auth token if available
+        const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+        if (token) {
+          headers['Authorization'] = `Bearer ${token}`;
+        }
+
+        // Add household ID if available
+        const householdId = typeof window !== 'undefined' ? localStorage.getItem('householdId') : null;
+        if (householdId) {
+          headers['X-Household-ID'] = householdId;
+        }
+
         // Fetch task status
         const response = await fetch(url, {
-          credentials: 'include',
+          headers,
         });
 
         if (!response.ok) {
