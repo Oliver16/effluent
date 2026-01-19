@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db import models
 from django.db.models import Q
 from django.contrib.postgres.fields import ArrayField
+from django.core.validators import MaxValueValidator
 from apps.core.models import HouseholdOwnedModel, TimestampedModel
 
 
@@ -42,7 +43,7 @@ class Scenario(HouseholdOwnedModel):
     # Projection settings
     projection_months = models.PositiveIntegerField(
         default=120,  # 10 years
-        validators=[models.validators.MaxValueValidator(360)]  # Max 30 years
+        validators=[MaxValueValidator(360)]  # Max 30 years
     )
     start_date = models.DateField()
 
