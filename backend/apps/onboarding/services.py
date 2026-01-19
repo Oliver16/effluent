@@ -1,5 +1,6 @@
 from django.db import transaction
 from django.utils import timezone
+from django.core.cache import cache
 from datetime import date
 from decimal import Decimal
 
@@ -936,9 +937,12 @@ class OnboardingService:
             # Auto-generate the baseline scenario now that onboarding is complete
             # This is now async to avoid blocking the onboarding completion response
             # The baseline will be available shortly after onboarding completes
-            refresh_baseline_task.apply_async(
+            task = refresh_baseline_task.apply_async(
                 kwargs={'household_id': str(self.household.id)}
             )
+
+            # Store task -> household mapping for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(self.household.id), 3600)
 
             # Also emit the event for any async processing that may depend on it
             emit_onboarding_completed(self.household)

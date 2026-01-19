@@ -9,7 +9,7 @@ operations involving:
 - Results analysis and breach detection
 """
 import logging
-from celery import shared_task, group
+from celery import shared_task, group, chord
 
 logger = logging.getLogger(__name__)
 
@@ -69,61 +69,97 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
 
 
 @shared_task(
+    name='apps.stress_tests.tasks.collect_batch_results_task',
+    bind=True,
+)
+def collect_batch_results_task(self, results, household_id):
+    """
+    Callback task to collect and aggregate batch stress test results.
+
+    This is called automatically by the chord after all parallel stress tests complete.
+
+    Args:
+        results: List of results from individual stress tests
+        household_id: UUID of the household
+
+    Returns:
+        dict: Aggregated batch results
+    """
+    logger.info(
+        f"Collecting batch stress test results for household {household_id}: "
+        f"{len(results)} tests completed"
+    )
+
+    # Filter out any None results (from failed tasks)
+    valid_results = [r for r in results if r is not None]
+
+    return {
+        'household_id': str(household_id),
+        'test_count': len(valid_results),
+        'results': valid_results,
+        'failed_count': len(results) - len(valid_results),
+    }
+
+
+@shared_task(
     name='apps.stress_tests.tasks.run_batch_stress_tests_task',
     bind=True,
     max_retries=1,
-    time_limit=3600,  # 60 minute timeout for batch
 )
 def run_batch_stress_tests_task(self, household_id, test_configs):
     """
-    Run multiple stress tests in parallel.
+    Run multiple stress tests in parallel using Celery chord.
+
+    This task dispatches a group of parallel stress test tasks and uses a callback
+    to collect results. This avoids blocking a worker thread while waiting for
+    all subtasks to complete.
 
     Args:
         household_id: UUID of the household
         test_configs: List of dicts with 'test_type' and 'parameters'
 
     Returns:
-        list: Results from all stress tests
+        dict: Task dispatch information with chord task ID
     """
     from apps.core.models import Household
 
     try:
         household = Household.objects.get(id=household_id)
         logger.info(
-            f"Running batch of {len(test_configs)} stress tests "
+            f"Dispatching batch of {len(test_configs)} stress tests "
             f"for household {household_id}"
         )
 
-        # Create a group of parallel tasks
-        job = group(
+        # Create a chord: group of parallel tasks + callback
+        callback = collect_batch_results_task.s(household_id=str(household_id))
+        job = chord(
             run_stress_test_task.s(
                 household_id=str(household_id),
                 test_type=config['test_type'],
                 parameters=config.get('parameters')
             )
             for config in test_configs
-        )
-
-        # Execute in parallel and gather results
-        result = job.apply_async()
-        results = result.get(timeout=3600)  # Wait up to 1 hour
+        )(callback)
 
         logger.info(
-            f"Batch stress tests complete for household {household_id}: "
-            f"{len(results)} tests completed"
+            f"Batch stress tests dispatched for household {household_id}, "
+            f"chord task ID: {job.id}"
         )
 
+        # Return immediately with task ID (non-blocking)
         return {
             'household_id': str(household_id),
-            'test_count': len(results),
-            'results': results,
+            'test_count': len(test_configs),
+            'chord_task_id': job.id,
+            'status': 'dispatched',
+            'message': 'Stress tests running in parallel. Poll task status for results.'
         }
     except Household.DoesNotExist:
         logger.error(f"Household {household_id} not found")
         raise
     except Exception as exc:
         logger.error(
-            f"Failed to run batch stress tests for household {household_id}: {exc}",
+            f"Failed to dispatch batch stress tests for household {household_id}: {exc}",
             exc_info=True
         )
         raise self.retry(exc=exc)
