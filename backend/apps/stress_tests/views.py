@@ -14,7 +14,7 @@ from celery.result import AsyncResult
 from apps.scenarios.throttles import ExpensiveComputationThrottle
 from .services import StressTestService
 from .templates import get_stress_test_templates, get_stress_test_by_key
-from .tasks import run_stress_test_task, run_batch_stress_tests_task
+from .tasks import run_stress_test_task, run_batch_stress_tests_task, analyze_stress_test_results_task
 
 
 class StressTestListView(APIView):
@@ -209,7 +209,7 @@ class StressTestBatchRunView(APIView):
                     'error': str(e)
                 })
 
-        # Compute overall resilience score
+        # Compute overall resilience score and analysis
         passed_count = sum(1 for r in results if r['summary']['status'] == 'passed')
         warning_count = sum(1 for r in results if r['summary']['status'] == 'warning')
         failed_count = sum(1 for r in results if r['summary']['status'] == 'failed')
@@ -223,6 +223,23 @@ class StressTestBatchRunView(APIView):
         else:
             resilience_score = 0
 
+        # Prepare results for analysis task
+        analysis_input = []
+        for result in results:
+            analysis_input.append({
+                'test_type': result['test_key'],
+                'has_breach': result['summary']['breached_thresholds_count'] > 0,
+                'status': result['summary']['status'],
+                'breaches': result['summary']['breached_thresholds_count'],
+            })
+
+        # Run analysis task
+        try:
+            analysis = analyze_stress_test_results_task(analysis_input)
+        except Exception as e:
+            # If analysis fails, just log and continue
+            analysis = {'error': str(e)}
+
         return Response({
             'results': results,
             'errors': errors,
@@ -232,7 +249,8 @@ class StressTestBatchRunView(APIView):
                 'warning': warning_count,
                 'failed': failed_count,
                 'resilience_score': resilience_score,
-            }
+            },
+            'analysis': analysis,
         })
 
 
@@ -264,3 +282,40 @@ class StressTestTaskStatusView(APIView):
                 'status': 'pending',
                 'state': task_result.state
             })
+
+
+class StressTestAnalysisView(APIView):
+    """Analyze stress test results to identify patterns and risk levels."""
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        Analyze provided stress test results.
+
+        POST /api/stress-tests/analyze/
+        {
+            "results": [
+                {"test_type": "income_loss", "has_breach": true, "status": "failed", "breaches": 3},
+                {"test_type": "market_downturn", "has_breach": false, "status": "passed", "breaches": 0},
+                ...
+            ]
+        }
+
+        Returns analysis summary with risk level and breach patterns.
+        """
+        stress_test_results = request.data.get('results', [])
+
+        if not stress_test_results:
+            return Response(
+                {'error': 'results array is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            analysis = analyze_stress_test_results_task(stress_test_results)
+            return Response(analysis)
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

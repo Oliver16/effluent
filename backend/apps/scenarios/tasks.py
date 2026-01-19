@@ -204,7 +204,7 @@ def compute_projection_task(self, scenario_id, horizon_months=None, in_memory=Fa
     max_retries=2,
     time_limit=1800,  # 30 minute timeout
 )
-def compare_scenarios_task(self, scenario_ids, horizon_months=None):
+def compare_scenarios_task(self, household_id, scenario_ids, horizon_months=None, include_drivers=True):
     """
     Compare multiple scenarios side-by-side.
 
@@ -212,25 +212,101 @@ def compare_scenarios_task(self, scenario_ids, horizon_months=None):
     projection months for the requested horizon.
 
     Args:
+        household_id: UUID of the household
         scenario_ids: List of scenario UUIDs to compare
         horizon_months: Comparison horizon (default 120)
+        include_drivers: Whether to include driver decomposition (default True)
 
     Returns:
-        dict: Comparison results
+        dict: Comparison results with projections and optional driver analysis
     """
+    from apps.core.models import Household
+    from .models import Scenario
+    from .serializers import ScenarioSerializer, ScenarioProjectionSerializer
     from .comparison import ScenarioComparisonService
+    from .services import ScenarioEngine
 
     try:
-        logger.info(f"Comparing {len(scenario_ids)} scenarios")
+        logger.info(f"Comparing {len(scenario_ids)} scenarios for household {household_id}")
 
-        comparison = ScenarioComparisonService.compare_scenarios(
-            scenario_ids=scenario_ids,
-            horizon_months=horizon_months
-        )
+        household = Household.objects.get(id=household_id)
+
+        # Fetch scenarios with ownership validation
+        scenarios = list(Scenario.objects.filter(
+            household=household,
+            id__in=scenario_ids
+        ))
+
+        if len(scenarios) != len(scenario_ids):
+            raise ValueError('One or more scenarios not found or not accessible')
+
+        # Build comparison results
+        comparisons = []
+        for scenario in scenarios:
+            if horizon_months and scenario.projection_months < horizon_months:
+                # Compute extended projections in-memory
+                original_months = scenario.projection_months
+                scenario.projection_months = horizon_months
+                engine = ScenarioEngine(scenario)
+                projections = engine.compute_projection(in_memory=True)
+                scenario.projection_months = original_months
+                projections = projections[:horizon_months]
+            else:
+                # Use existing projections from DB
+                projections = scenario.projections.all()
+                if horizon_months:
+                    projections = projections[:horizon_months]
+
+            comparisons.append({
+                'scenario': ScenarioSerializer(scenario).data,
+                'projections': ScenarioProjectionSerializer(projections, many=True).data,
+            })
+
+        result = {'results': comparisons}
+
+        # Add driver decomposition if requested and we have multiple scenarios
+        if include_drivers and len(scenarios) >= 2:
+            service = ScenarioComparisonService(household)
+            try:
+                driver_analysis = service.compare_multiple(
+                    scenarios,
+                    horizon_months=horizon_months
+                )
+
+                # Convert driver objects to dicts
+                result['driver_analysis'] = {
+                    'baseline_id': driver_analysis['baseline_id'],
+                    'baseline_name': driver_analysis['baseline_name'],
+                    'comparisons': [
+                        {
+                            'scenario_id': c.scenario_id,
+                            'horizon_months': c.horizon_months,
+                            'baseline_end_nw': float(c.baseline_end_nw),
+                            'scenario_end_nw': float(c.scenario_end_nw),
+                            'net_worth_delta': float(c.net_worth_delta),
+                            'drivers': [
+                                {
+                                    'name': d.name,
+                                    'amount': float(d.amount),
+                                    'description': d.description,
+                                }
+                                for d in c.drivers
+                            ],
+                            'reconciliation_error_percent': float(c.reconciliation_error_percent),
+                        }
+                        for c in driver_analysis['comparisons']
+                    ],
+                }
+            except ValueError as e:
+                # Include error but don't fail the whole request
+                result['driver_analysis'] = {'error': str(e)}
 
         logger.info(f"Scenario comparison complete: {len(scenario_ids)} scenarios")
 
-        return comparison
+        return result
+    except Household.DoesNotExist:
+        logger.error(f"Household {household_id} not found")
+        raise
     except Exception as exc:
         logger.error(f"Failed to compare scenarios: {exc}", exc_info=True)
         raise self.retry(exc=exc)
