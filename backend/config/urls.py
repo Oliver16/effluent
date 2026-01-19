@@ -30,12 +30,12 @@ from apps.onboarding.views import (
     go_back as onboarding_back
 )
 from apps.scenarios.views import (
-    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet, BaselineView, ScenarioTaskStatusView
+    ScenarioViewSet, ScenarioChangeViewSet, LifeEventTemplateViewSet, BaselineView, ScenarioTaskStatusView, TaskManagementView, TaskControlView, AdminTasksView
 )
 from apps.decisions.views import DecisionTemplateViewSet, DecisionRunViewSet
 from apps.goals.views import GoalViewSet, GoalStatusView, GoalSolutionViewSet
 from apps.actions.views import NextActionsView, ApplyActionView, ActionTemplatesView
-from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView, StressTestTaskStatusView
+from apps.stress_tests.views import StressTestListView, StressTestRunView, StressTestBatchRunView, StressTestTaskStatusView, StressTestAnalysisView
 
 # Create routers
 router = DefaultRouter()
@@ -112,8 +112,13 @@ urlpatterns = [
     # Baseline Scenario
     path('api/v1/scenarios/baseline/', BaselineView.as_view(), name='baseline'),
 
-    # Scenario Task Status
+    # Scenario Task Status and Control
+    path('api/v1/scenarios/tasks/', TaskManagementView.as_view(), name='task-management'),
     path('api/v1/scenarios/tasks/<str:task_id>/', ScenarioTaskStatusView.as_view(), name='scenario-task-status'),
+    path('api/v1/scenarios/tasks/<str:task_id>/control/', TaskControlView.as_view(), name='task-control'),
+
+    # Admin Tasks (manual triggers for scheduled background tasks)
+    path('api/v1/scenarios/admin-tasks/', AdminTasksView.as_view(), name='admin-tasks'),
 
     # Goals
     path('api/v1/goals/status/', GoalStatusView.as_view(), name='goal-status'),
@@ -130,5 +135,6 @@ urlpatterns = [
     path('api/v1/stress-tests/', StressTestListView.as_view(), name='stress-test-list'),
     path('api/v1/stress-tests/run/', StressTestRunView.as_view(), name='stress-test-run'),
     path('api/v1/stress-tests/batch/', StressTestBatchRunView.as_view(), name='stress-test-batch'),
+    path('api/v1/stress-tests/analyze/', StressTestAnalysisView.as_view(), name='stress-test-analyze'),
     path('api/v1/stress-tests/status/<str:task_id>/', StressTestTaskStatusView.as_view(), name='stress-test-task-status'),
 ]

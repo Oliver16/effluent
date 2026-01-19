@@ -24,7 +24,9 @@ from .tasks import (
     refresh_baseline_task,
     compute_projection_task,
     compare_scenarios_task,
-    apply_life_event_task
+    apply_life_event_task,
+    process_reality_changes_task,
+    cleanup_old_reality_events_task
 )
 
 
@@ -107,21 +109,25 @@ class ScenarioViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], throttle_classes=[ExpensiveComputationThrottle])
     def compare(self, request):
         """
-        Compare projections across scenarios with driver decomposition.
+        Compare projections across scenarios with driver decomposition (async by default).
 
         POST /api/v1/scenarios/compare/
         {
             "scenario_ids": ["id1", "id2", ...],
             "horizon_months": 60,  // optional, max 360
-            "include_drivers": true  // optional, default true
+            "include_drivers": true,  // optional, default true
+            "async": true  // optional, default true
         }
 
         Returns projections for each scenario and driver decomposition
         explaining what changed and why relative to the first scenario (baseline).
         """
+        from django.core.cache import cache
+
         scenario_ids = request.data.get('scenario_ids', [])
         horizon_months = request.data.get('horizon_months')
         include_drivers = request.data.get('include_drivers', True)
+        run_async = request.data.get('async', True)  # Default to async
 
         # Ensure household is available
         if not request.household:
@@ -168,7 +174,28 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
 
-        # Build basic comparison results
+        # If async, dispatch to Celery
+        if run_async:
+            task = compare_scenarios_task.apply_async(
+                kwargs={
+                    'household_id': str(request.household.id),
+                    'scenario_ids': scenario_ids,
+                    'horizon_months': horizon_months,
+                    'include_drivers': include_drivers,
+                }
+            )
+
+            # Store task -> household mapping for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'scenario_count': len(scenario_ids),
+                'message': 'Scenario comparison started. Poll /api/v1/scenarios/tasks/{task_id}/ for results.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Build basic comparison results (synchronous)
         # If horizon exceeds scenario's projection_months, compute extended projections in-memory
         comparisons = []
         for scenario in scenarios:
@@ -885,7 +912,9 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=['post'], throttle_classes=[TemplateApplyThrottle])
     def apply(self, request, pk=None):
-        """Apply a template to a scenario, creating changes."""
+        """Apply a template to a scenario, creating changes (async by default for new scenarios)."""
+        from django.core.cache import cache
+
         template_data = None
 
         # Try to get from DB first
@@ -915,6 +944,7 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
         parent_scenario_id = request.data.get('parent_scenario_id')
         effective_date_str = request.data.get('effective_date')
         change_values = request.data.get('change_values', {})  # User-provided values
+        run_async = request.data.get('async', True)  # Default to async for new scenarios
 
         # Parse effective_date - use today if not provided
         if effective_date_str:
@@ -1072,8 +1102,34 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
 
         # Compute projections for newly created scenarios
         if scenario_created and created_changes:
-            engine = ScenarioEngine(scenario)
-            engine.compute_projection()
+            # If async and scenario was just created, dispatch to background task
+            if run_async:
+                task = compute_projection_task.apply_async(
+                    kwargs={
+                        'scenario_id': str(scenario.id),
+                        'horizon_months': None,  # Use scenario's default
+                        'in_memory': False
+                    }
+                )
+
+                # Store task -> household mapping for security validation (1 hour TTL)
+                cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+
+                return Response({
+                    'status': 'applied',
+                    'template_name': template_data['name'],
+                    'changes_created': len(created_changes),
+                    'scenario_id': str(scenario.id),
+                    'scenario_name': scenario.name,
+                    'scenario_created': scenario_created,
+                    'task_id': task.id,
+                    'projection_status': 'pending',
+                    'message': 'Life event applied. Projections are being computed. Poll /api/v1/scenarios/tasks/{task_id}/ for results.'
+                }, status=status.HTTP_202_ACCEPTED)
+            else:
+                # Synchronous computation
+                engine = ScenarioEngine(scenario)
+                engine.compute_projection()
 
         response_data = {
             'status': 'applied',
@@ -1142,3 +1198,175 @@ class ScenarioTaskStatusView(APIView):
                 'status': 'pending',
                 'state': task_result.state
             })
+
+
+class TaskManagementView(APIView):
+    """
+    Task management dashboard - list all tasks for the household.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Get all tasks for the household.
+
+        Returns active, pending, completed, and failed tasks from cache.
+        """
+        from django.core.cache import cache
+        from celery import current_app
+
+        household_id = str(request.household.id)
+
+        # Get all task IDs for this household from cache
+        # We scan for keys matching the pattern task_household:*
+        # Note: This is not ideal for production at scale, but works for now
+        # A better approach would be to maintain a separate task registry per household
+
+        tasks = []
+
+        # Try to get task IDs from a household-specific registry if it exists
+        task_ids_key = f'household_tasks:{household_id}'
+        task_ids = cache.get(task_ids_key, [])
+
+        # If no registry exists, we can't list tasks
+        # Return empty list with a message
+        if not task_ids:
+            return Response({
+                'tasks': [],
+                'message': 'No recent tasks found. Tasks are tracked when they are created.'
+            })
+
+        # Get status for each task
+        for task_id in task_ids:
+            task_result = AsyncResult(task_id)
+            task_info = {
+                'task_id': task_id,
+                'status': task_result.state,
+                'name': task_result.name if hasattr(task_result, 'name') else 'Unknown',
+            }
+
+            # Add result or error if available
+            if task_result.ready():
+                if task_result.successful():
+                    task_info['result'] = task_result.result
+                else:
+                    task_info['error'] = str(task_result.result)
+
+            # Add info about the task
+            if task_result.info:
+                task_info['info'] = task_result.info
+
+            tasks.append(task_info)
+
+        return Response({
+            'household_id': household_id,
+            'tasks': tasks,
+            'count': len(tasks)
+        })
+
+
+class TaskControlView(APIView):
+    """
+    Control running Celery tasks (cancel, retry, revoke).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, task_id):
+        """
+        Control a task (cancel/revoke/retry).
+
+        POST /api/v1/scenarios/tasks/{task_id}/control/
+        {
+            "action": "cancel" | "revoke" | "terminate"
+        }
+        """
+        from celery import current_app
+        from django.core.cache import cache
+
+        action = request.data.get('action')
+
+        # Validate task ownership
+        cached_household_id = cache.get(f'task_household:{task_id}')
+        if cached_household_id and str(request.household.id) != str(cached_household_id):
+            return Response({
+                'error': 'Access denied to this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
+        task_result = AsyncResult(task_id)
+
+        if action == 'cancel' or action == 'revoke':
+            # Revoke the task (soft cancel - won't kill running task, but prevents it from starting)
+            task_result.revoke(terminate=False)
+
+            return Response({
+                'task_id': task_id,
+                'action': 'revoked',
+                'message': 'Task has been revoked. If already running, it will complete but results will be discarded.'
+            })
+
+        elif action == 'terminate':
+            # Terminate the task (hard kill - dangerous, use with caution)
+            task_result.revoke(terminate=True, signal='SIGKILL')
+
+            return Response({
+                'task_id': task_id,
+                'action': 'terminated',
+                'message': 'Task has been forcefully terminated. This may leave the system in an inconsistent state.'
+            })
+
+        else:
+            return Response({
+                'error': f'Unknown action: {action}. Valid actions: cancel, revoke, terminate'
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+
+class AdminTasksView(APIView):
+    """
+    Manual triggers for scheduled background tasks (admin/debugging).
+
+    These tasks normally run on a schedule via Celery Beat, but can be
+    manually triggered for testing or immediate execution.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        """
+        Trigger a background task manually.
+
+        POST /api/v1/scenarios/admin-tasks/
+        {
+            "action": "process_reality_changes" | "cleanup_old_events",
+            "batch_size": 100  // optional, for process_reality_changes
+        }
+        """
+        action = request.data.get('action')
+
+        if action == 'process_reality_changes':
+            batch_size = request.data.get('batch_size', 100)
+
+            task = process_reality_changes_task.apply_async(
+                kwargs={'batch_size': batch_size}
+            )
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'action': action,
+                'batch_size': batch_size,
+                'message': 'Reality change processing started. This task runs automatically every 30 seconds.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        elif action == 'cleanup_old_events':
+            task = cleanup_old_reality_events_task.apply_async()
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'action': action,
+                'message': 'Reality event cleanup started. This task normally runs daily at 3 AM UTC.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        else:
+            return Response({
+                'error': f'Unknown action: {action}. Valid actions: process_reality_changes, cleanup_old_events'
+            }, status=status.HTTP_400_BAD_REQUEST)

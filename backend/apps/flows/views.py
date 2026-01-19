@@ -7,7 +7,7 @@ from django_filters.rest_framework import DjangoFilterBackend
 from .models import RecurringFlow
 from .serializers import RecurringFlowSerializer
 from .services import generate_system_flows_for_household
-from .tasks import regenerate_system_flows_task
+from .tasks import regenerate_system_flows_task, recalculate_tax_withholding_task
 from apps.scenarios.reality_events import emit_flows_changed
 
 
@@ -68,4 +68,58 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
         return Response({
             'status': 'success',
             'message': 'System flows regenerated successfully'
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'])
+    def recalculate_tax_withholding(self, request):
+        """
+        Recalculate tax withholding flows for all income sources (async by default).
+
+        This is a subset of system flow regeneration focused only on tax-related flows.
+        Useful when only tax configuration changes without affecting other system flows.
+        """
+        run_async = request.data.get('async', True)  # Default to async
+
+        if run_async:
+            task = recalculate_tax_withholding_task.apply_async(
+                kwargs={'household_id': str(request.household.id)}
+            )
+
+            # Still emit reality change event
+            emit_flows_changed(request.household, 'tax_recalculation')
+
+            return Response({
+                'task_id': task.id,
+                'status': 'pending',
+                'message': 'Tax withholding recalculation started. This will complete shortly.'
+            }, status=status.HTTP_202_ACCEPTED)
+
+        # Synchronous for backwards compatibility
+        from .services import SystemFlowGenerator
+        generator = SystemFlowGenerator(request.household)
+
+        # Delete existing tax withholding flows
+        from .models import ExpenseCategory
+        deleted_count, _ = RecurringFlow.objects.filter(
+            household=request.household,
+            is_system_generated=True,
+            system_flow_kind='tax_withholding'
+        ).delete()
+
+        # Regenerate tax withholding
+        generator._generate_tax_withholding_flows()
+
+        created_count = RecurringFlow.objects.filter(
+            household=request.household,
+            is_system_generated=True,
+            system_flow_kind='tax_withholding'
+        ).count()
+
+        emit_flows_changed(request.household, 'tax_recalculation')
+
+        return Response({
+            'status': 'success',
+            'flows_deleted': deleted_count,
+            'flows_created': created_count,
+            'message': 'Tax withholding recalculated successfully'
         }, status=status.HTTP_200_OK)
