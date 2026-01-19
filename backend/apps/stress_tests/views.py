@@ -10,6 +10,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from celery.result import AsyncResult
+from django.core.cache import cache
 
 from apps.scenarios.throttles import ExpensiveComputationThrottle
 from .services import StressTestService
@@ -78,6 +79,9 @@ class StressTestRunView(APIView):
                     'parameters': custom_inputs or {},
                 }
             )
+
+            # Cache task ownership for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(household.id), 3600)
 
             return Response({
                 'task_id': task.id,
@@ -155,6 +159,9 @@ class StressTestBatchRunView(APIView):
                     'test_configs': test_configs,
                 }
             )
+
+            # Cache task ownership for security validation (1 hour TTL)
+            cache.set(f'task_household:{task.id}', str(household.id), 3600)
 
             return Response({
                 'task_id': task.id,
@@ -260,6 +267,19 @@ class StressTestTaskStatusView(APIView):
 
     def get(self, request, task_id):
         """Get the status and result of a stress test task."""
+        # Validate task ownership - prevent users from accessing other users' tasks
+        cached_household_id = cache.get(f'task_household:{task_id}')
+        if not cached_household_id:
+            return Response({
+                'error': 'Task not found or expired. Task IDs expire after 1 hour.'
+            }, status=status.HTTP_404_NOT_FOUND)
+
+        # Verify task belongs to requesting user's household
+        if not request.household or str(request.household.id) != str(cached_household_id):
+            return Response({
+                'error': 'Access denied to this task'
+            }, status=status.HTTP_403_FORBIDDEN)
+
         task_result = AsyncResult(task_id)
 
         if task_result.ready():

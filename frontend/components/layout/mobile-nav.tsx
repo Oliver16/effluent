@@ -13,9 +13,10 @@ import {
   LogOut,
   Menu,
   X,
-  Lightbulb,
+  CalendarHeart,
   Target,
   FlaskConical,
+  ListTodo,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -23,10 +24,11 @@ const navigation = [
   { name: 'Control Plane', href: '/control-plane', icon: LayoutDashboard },
   { name: 'Accounts', href: '/accounts', icon: Wallet },
   { name: 'Flows', href: '/flows', icon: ArrowLeftRight },
-  { name: 'Decisions', href: '/decisions', icon: Lightbulb },
+  { name: 'Life Events', href: '/life-events', icon: CalendarHeart },
   { name: 'Scenarios', href: '/scenarios', icon: LineChart },
   { name: 'Stress Tests', href: '/stress-tests', icon: FlaskConical },
   { name: 'Goals', href: '/goals', icon: Target },
+  { name: 'Admin Tasks', href: '/admin/tasks', icon: ListTodo },
   { name: 'Settings', href: '/settings', icon: Settings },
 ] as const
 

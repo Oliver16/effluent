@@ -9,6 +9,30 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Loader2, CheckCircle2, XCircle, PlayCircle } from 'lucide-react';
 import { pollTaskStatus } from '@/lib/task-polling';
 
+/**
+ * Build headers with JWT authentication for API requests.
+ * This ensures all admin task requests include proper authentication.
+ */
+function buildAuthHeaders(): HeadersInit {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+
+  // Add auth token if available
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+
+  // Add household ID if available
+  const householdId = typeof window !== 'undefined' ? localStorage.getItem('householdId') : null;
+  if (householdId) {
+    headers['X-Household-ID'] = householdId;
+  }
+
+  return headers;
+}
+
 interface TaskResult {
   status: 'idle' | 'running' | 'success' | 'error';
   message?: string;
@@ -29,8 +53,7 @@ export default function AdminTasksPage() {
     try {
       const response = await fetch('/api/v1/flows/recalculate_tax_withholding/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ async: true }),
       });
 
@@ -87,8 +110,7 @@ export default function AdminTasksPage() {
     try {
       const response = await fetch('/api/v1/scenarios/compare/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: buildAuthHeaders(),
         body: JSON.stringify({
           scenario_ids: ids,
           async: true,
@@ -142,8 +164,7 @@ export default function AdminTasksPage() {
     try {
       const response = await fetch('/api/v1/scenarios/admin-tasks/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ action: 'process_reality_changes', batch_size: 100 }),
       });
 
@@ -169,8 +190,7 @@ export default function AdminTasksPage() {
     try {
       const response = await fetch('/api/v1/scenarios/admin-tasks/', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ action: 'cleanup_old_events' }),
       });
 
