@@ -186,12 +186,12 @@ export function LifeEventTemplatesDialog({
 
   // Get available assets for dropdown
   const availableAssets = useMemo(() => {
-    if (!accountsData?.results) return [];
+    if (!accountsData) return [];
     // Asset account types (non-liability types)
     const assetTypes = ['checking', 'savings', 'brokerage', 'retirement_401k', 'retirement_ira',
       'retirement_roth_ira', 'hsa', 'crypto', 'primary_residence', 'investment_property',
       'vehicle', 'other_asset'];
-    return accountsData.results
+    return accountsData
       .filter((acct: Account) => assetTypes.includes(acct.accountType))
       .map((acct: Account) => ({
         id: acct.id,
@@ -203,11 +203,11 @@ export function LifeEventTemplatesDialog({
 
   // Get available debts for dropdown
   const availableDebts = useMemo(() => {
-    if (!accountsData?.results) return [];
+    if (!accountsData) return [];
     // Liability account types
     const debtTypes = ['credit_card', 'personal_loan', 'auto_loan', 'mortgage',
       'student_loan', 'heloc', 'other_debt'];
-    return accountsData.results
+    return accountsData
       .filter((acct: Account) => debtTypes.includes(acct.accountType))
       .map((acct: Account) => ({
         id: acct.id,
@@ -785,7 +785,7 @@ export function LifeEventTemplatesDialog({
                                 <SelectValue placeholder={`Choose ${change.sourceAccountType === 'asset' ? 'asset' : 'debt'} to ${change.changeType.includes('sell') ? 'sell' : 'pay off'}...`} />
                               </SelectTrigger>
                               <SelectContent>
-                                {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).map((item) => (
+                                {(change.sourceAccountType === 'asset' ? availableAssets : availableDebts).map((item: { id: string; name: string; balance: number; type?: string }) => (
                                   <SelectItem key={item.id} value={item.id}>
                                     {item.name} (${Number(item.balance).toLocaleString()})
                                   </SelectItem>
