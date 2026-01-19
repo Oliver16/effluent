@@ -87,7 +87,7 @@ class StressTestRunView(APIView):
                 'task_id': task.id,
                 'status': 'pending',
                 'test_key': test_key,
-                'message': 'Stress test started. Poll /api/stress-tests/status/{task_id}/ for results.'
+                'message': 'Stress test started. Poll /api/v1/stress-tests/status/{task_id}/ for results.'
             }, status=status.HTTP_202_ACCEPTED)
 
         # Otherwise run synchronously (for backwards compatibility)
@@ -167,7 +167,7 @@ class StressTestBatchRunView(APIView):
                 'task_id': task.id,
                 'status': 'pending',
                 'test_count': len(test_keys),
-                'message': 'Batch stress tests started. Poll /api/stress-tests/status/{task_id}/ for results.'
+                'message': 'Batch stress tests started. Poll /api/v1/stress-tests/status/{task_id}/ for results.'
             }, status=status.HTTP_202_ACCEPTED)
 
         # Otherwise run synchronously

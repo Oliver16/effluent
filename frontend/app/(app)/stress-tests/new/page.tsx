@@ -327,9 +327,9 @@ export default function StressTestsNewPage() {
           {runMutation.isPending ? (
             'Running...'
           ) : selectedTests.size === 0 ? (
-            'Run All Tests'
+            `Run All Tests (${data?.tests?.length || 0})`
           ) : (
-            `Run ${selectedTests.size} Test${selectedTests.size === 1 ? '' : 's'}`
+            `Run ${selectedTests.size} Selected Test${selectedTests.size === 1 ? '' : 's'}`
           )}
         </Button>
       </div>
@@ -339,7 +339,9 @@ export default function StressTestsNewPage() {
           <AlertCircle className="h-4 w-4" />
           <AlertTitle>Error running stress tests</AlertTitle>
           <AlertDescription>
-            Unable to run stress tests. Please ensure you have an active scenario.
+            {runMutation.error instanceof Error
+              ? runMutation.error.message
+              : 'Unable to run stress tests. Please try again or contact support.'}
           </AlertDescription>
         </Alert>
       )}

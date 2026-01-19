@@ -110,8 +110,10 @@ export async function middleware(request: NextRequest) {
   // If we have a token, allow the request
   // The token may be expired, but we'll try to refresh proactively if we also have a refresh token
   if (token) {
-    // Check if token looks expired by attempting a lightweight validation
-    // For now, just allow the request - the server-side fetch will handle 401s
+    // Note: Household context validation is handled by the backend middleware
+    // The frontend sets X-Household-ID header from localStorage in API requests (see lib/api.ts)
+    // The backend validates household membership and access control
+    // If householdId is missing, backend will use user's default household
     return NextResponse.next();
   }
 
