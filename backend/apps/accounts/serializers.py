@@ -9,7 +9,7 @@ class BalanceSnapshotSerializer(serializers.ModelSerializer):
             'id', 'as_of_date', 'balance', 'cost_basis', 'market_value',
             'notes', 'recorded_at'
         ]
-        read_only_fields = ['recorded_at']
+        read_only_fields = ['id', 'recorded_at']
 
 
 class AssetDetailsSerializer(serializers.ModelSerializer):
@@ -22,6 +22,7 @@ class AssetDetailsSerializer(serializers.ModelSerializer):
             'annual_property_tax', 'annual_insurance', 'annual_hoa',
             'monthly_rent_income', 'vin', 'make', 'model', 'year', 'mileage'
         ]
+        read_only_fields = []  # All fields are writable for asset details
 
 
 class LiabilityDetailsSerializer(serializers.ModelSerializer):
@@ -34,6 +35,7 @@ class LiabilityDetailsSerializer(serializers.ModelSerializer):
             'rate_index', 'rate_margin', 'rate_floor', 'rate_ceiling',
             'servicer', 'is_income_driven', 'in_forbearance'
         ]
+        read_only_fields = []  # All fields are writable for liability details
 
 
 class AccountSerializer(serializers.ModelSerializer):
@@ -52,6 +54,8 @@ class AccountSerializer(serializers.ModelSerializer):
             'notes', 'current_balance', 'current_market_value', 'current_cost_basis',
             'balance_updated_at', 'created_at'
         ]
+        read_only_fields = ['id', 'current_balance', 'current_market_value',
+                             'current_cost_basis', 'balance_updated_at', 'created_at']
 
     def get_balance_updated_at(self, obj):
         """Return the timestamp of the most recent balance snapshot."""
@@ -87,6 +91,8 @@ class AccountDetailSerializer(serializers.ModelSerializer):
             'notes', 'latest_balance', 'snapshots', 'asset_details', 'liability_details',
             'created_at', 'updated_at'
         ]
+        read_only_fields = ['id', 'latest_balance', 'snapshots', 'asset_details',
+                             'liability_details', 'created_at', 'updated_at']
 
     def get_latest_balance(self, obj):
         snapshot = obj.latest_snapshot
@@ -113,3 +119,5 @@ class AssetGroupSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'accounts', 'total_market_value',
             'total_debt', 'equity_at_market', 'created_at'
         ]
+        read_only_fields = ['id', 'accounts', 'total_market_value', 'total_debt',
+                             'equity_at_market', 'created_at']

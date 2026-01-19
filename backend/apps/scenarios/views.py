@@ -1160,17 +1160,12 @@ class ScenarioTaskStatusView(APIView):
         # Validate task ownership
         cached_household_id = cache.get(f'task_household:{task_id}')
 
-        if not cached_household_id:
-            # Task ID not found or expired - could be old task or invalid ID
+        # SECURITY: Return same error for both "not found" and "access denied" to prevent enumeration
+        # Combines cache check and household ownership validation into single check
+        if not cached_household_id or not request.household or str(request.household.id) != str(cached_household_id):
             return Response({
-                'error': 'Task not found or expired'
+                'error': 'Task not found or access denied'
             }, status=status.HTTP_404_NOT_FOUND)
-
-        # Verify task belongs to requesting user's household
-        if not request.household or str(request.household.id) != str(cached_household_id):
-            return Response({
-                'error': 'Access denied to this task'
-            }, status=status.HTTP_403_FORBIDDEN)
 
         task_result = AsyncResult(task_id)
 
