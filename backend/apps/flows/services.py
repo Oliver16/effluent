@@ -82,19 +82,105 @@ class SystemFlowGenerator:
 
         This is idempotent - deletes only system-generated flows and recreates them.
         User-created flows are untouched.
+
+        Raises:
+            Exception: If flow generation fails. Transaction will rollback.
+                      Error details are logged for debugging.
         """
-        with transaction.atomic():
-            # Delete existing system-generated flows
-            RecurringFlow.objects.filter(
-                household=self.household,
-                is_system_generated=True
-            ).delete()
+        import logging
+        logger = logging.getLogger(__name__)
 
-            # Generate flows from income sources
-            self._generate_income_flows()
+        try:
+            with transaction.atomic():
+                # Track progress for better error reporting
+                deleted_count = 0
+                income_flows_created = 0
+                liability_flows_created = 0
 
-            # Generate flows from liabilities (mortgage, loan payments)
-            self._generate_liability_payment_flows()
+                # Delete existing system-generated flows
+                logger.debug(f"Deleting system flows for household {self.household.id}")
+                result = RecurringFlow.objects.filter(
+                    household=self.household,
+                    is_system_generated=True
+                ).delete()
+                deleted_count = result[0]  # Django returns (count, dict_of_details)
+                logger.debug(f"Deleted {deleted_count} system flows")
+
+                # Generate flows from income sources
+                try:
+                    logger.debug(f"Generating income flows for household {self.household.id}")
+                    income_sources = IncomeSource.objects.filter(
+                        household=self.household,
+                        is_active=True
+                    ).count()
+                    self._generate_income_flows()
+                    # Count created flows
+                    income_flows_created = RecurringFlow.objects.filter(
+                        household=self.household,
+                        is_system_generated=True,
+                        system_source_model='IncomeSource'
+                    ).count()
+                    logger.debug(
+                        f"Generated {income_flows_created} income flows "
+                        f"from {income_sources} income sources"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Income flow generation failed for household {self.household.id}: {e}",
+                        exc_info=True,
+                        extra={
+                            'household_id': str(self.household.id),
+                            'stage': 'income_flows',
+                            'deleted_count': deleted_count,
+                        }
+                    )
+                    raise Exception(f"Income flow generation failed: {str(e)}") from e
+
+                # Generate flows from liabilities (mortgage, loan payments)
+                try:
+                    logger.debug(f"Generating liability flows for household {self.household.id}")
+                    self._generate_liability_payment_flows()
+                    # Count created flows
+                    liability_flows_created = RecurringFlow.objects.filter(
+                        household=self.household,
+                        is_system_generated=True,
+                        system_source_model='Account'
+                    ).count()
+                    logger.debug(
+                        f"Generated {liability_flows_created} liability payment flows"
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Liability flow generation failed for household {self.household.id}: {e}",
+                        exc_info=True,
+                        extra={
+                            'household_id': str(self.household.id),
+                            'stage': 'liability_flows',
+                            'deleted_count': deleted_count,
+                            'income_flows_created': income_flows_created,
+                        }
+                    )
+                    raise Exception(f"Liability flow generation failed: {str(e)}") from e
+
+                total_created = income_flows_created + liability_flows_created
+                logger.info(
+                    f"Flow generation complete for household {self.household.id}: "
+                    f"deleted {deleted_count}, created {total_created} "
+                    f"({income_flows_created} income + {liability_flows_created} liability)"
+                )
+
+        except Exception as e:
+            # Top-level error handler - logs and re-raises
+            logger.error(
+                f"Flow generation failed for household {self.household.id}: {e}",
+                exc_info=True,
+                extra={
+                    'household_id': str(self.household.id),
+                    'error_type': type(e).__name__,
+                }
+            )
+            # Re-raise to trigger task retry
+            raise
 
     def _get_or_create_payroll_clearing_account(self) -> Account:
         """Get or create the payroll clearing system account."""
@@ -554,9 +640,12 @@ def generate_system_flows_for_household(household_id) -> dict:
         dict: Result with 'success': True or 'skipped': True if lock held
     """
     from apps.core.task_utils import get_household_lock, release_household_lock
+    from apps.core.monitoring import MonitoringService, ErrorSeverity
     import logging
+    import time
 
     logger = logging.getLogger(__name__)
+    start_time = time.time()
 
     # Acquire distributed lock for this household's flow regeneration
     lock_acquired = get_household_lock(str(household_id), 'flow_generation', timeout=300)
@@ -569,8 +658,33 @@ def generate_system_flows_for_household(household_id) -> dict:
         household = Household.objects.get(id=household_id)
         generator = SystemFlowGenerator(household)
         generator.generate_all_flows()
-        logger.info(f"Flow generation completed for household {household_id}")
+
+        # Track performance
+        duration_ms = (time.time() - start_time) * 1000
+        MonitoringService.track_performance(
+            'flow_generation',
+            duration_ms,
+            context={'household_id': str(household_id)},
+            tags={'success': 'true'}
+        )
+
+        logger.info(f"Flow generation completed for household {household_id} in {duration_ms:.0f}ms")
         return {'success': True}
+
+    except Exception as e:
+        # Track error for monitoring
+        duration_ms = (time.time() - start_time) * 1000
+        MonitoringService.track_error(
+            e,
+            context={
+                'household_id': str(household_id),
+                'duration_ms': duration_ms,
+            },
+            severity=ErrorSeverity.HIGH,
+            tags={'component': 'flows', 'operation': 'generation'}
+        )
+        raise
+
     finally:
         # Always release lock, even if generation fails
         release_household_lock(str(household_id), 'flow_generation')

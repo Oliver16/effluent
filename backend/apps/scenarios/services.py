@@ -130,12 +130,62 @@ class ScenarioEngine:
     def __init__(self, scenario: Scenario):
         self.scenario = scenario
         self.household = scenario.household
+
+        # Check for pending reality events and process them immediately
+        # This ensures projections always use fresh flow data
+        self._ensure_flows_are_fresh()
+
         # Initialize tax calculator for income tax calculations
         self.tax_calculator = ScenarioTaxCalculator(
             household=self.household,
             filing_status=self._get_filing_status(),
             state=getattr(self.household, 'state_of_residence', None),
         )
+
+    def _ensure_flows_are_fresh(self):
+        """
+        Ensure flow data is fresh by processing any pending reality events.
+
+        This prevents projections from using stale flow data when:
+        - User modifies income sources
+        - User changes account details
+        - User updates tax configuration
+        - Any other change that triggers flow regeneration
+
+        If pending events exist for this household, they are processed immediately
+        (synchronously) to ensure projection accuracy.
+        """
+        from .models import RealityChangeEvent, RealityChangeEventStatus
+        from .reality_events import process_reality_changes
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+        # Check if this household has any pending reality events
+        pending_events = RealityChangeEvent.objects.filter(
+            household=self.household,
+            status=RealityChangeEventStatus.PENDING
+        ).exists()
+
+        if pending_events:
+            logger.info(
+                f"Processing pending reality events for household {self.household.id} "
+                f"before projection computation"
+            )
+            # Process all pending events immediately (not just this household)
+            # This is more efficient than processing per-household
+            try:
+                stats = process_reality_changes(batch_size=100)
+                logger.info(
+                    f"Processed {stats['events_processed']} reality events, "
+                    f"refreshed {stats['households_refreshed']} households"
+                )
+            except Exception as e:
+                # Log error but don't fail projection - use current flows
+                logger.error(
+                    f"Failed to process reality events before projection: {e}",
+                    exc_info=True
+                )
 
     def _get_filing_status(self) -> str:
         """Get filing status from household W2 withholding or default."""
