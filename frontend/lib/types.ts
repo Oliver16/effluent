@@ -955,8 +955,12 @@ export interface LifeEventApplyResponse {
   status: string
   templateName: string
   changesCreated: number
-  changes: ScenarioChange[]
+  changes?: ScenarioChange[]
   scenarioId: string
   scenarioName: string
   scenarioCreated: boolean
+  // Async compute fields (when scenario is created)
+  taskId?: string
+  projectionStatus?: string
+  message?: string
 }
