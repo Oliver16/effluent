@@ -184,21 +184,28 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
           changeValues: changeValues,
         })
 
-        try {
-          // Compute projections so the scenario is immediately usable
-          await scenarios.compute(scenarioId)
-        } catch (computeError) {
-          // If compute fails, rollback the scenario if we just created it
-          if (wasCreated) {
-            console.error('Compute failed, rolling back scenario:', computeError)
-            try {
-              await scenarios.delete(scenarioId)
-            } catch (deleteError) {
-              console.error('Failed to rollback scenario:', deleteError)
+        // If the apply endpoint started async computation (returns taskId),
+        // the projections will be computed in the background.
+        // Otherwise, we need to trigger computation manually.
+        if (!response.taskId) {
+          try {
+            // Compute projections so the scenario is immediately usable
+            await scenarios.compute(scenarioId)
+          } catch (computeError) {
+            // If compute fails, rollback the scenario if we just created it
+            if (wasCreated) {
+              console.error('Compute failed, rolling back scenario:', computeError)
+              try {
+                await scenarios.delete(scenarioId)
+              } catch (deleteError) {
+                console.error('Failed to rollback scenario:', deleteError)
+              }
             }
+            throw new Error(`Failed to compute projections: ${computeError instanceof Error ? computeError.message : 'Unknown error'}`)
           }
-          throw new Error(`Failed to compute projections: ${computeError instanceof Error ? computeError.message : 'Unknown error'}`)
         }
+        // Note: If taskId is present, the backend is handling computation asynchronously
+        // and the scenario will be ready shortly
 
         return {
           scenarioId: scenarioId,
