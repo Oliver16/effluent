@@ -57,7 +57,7 @@ export function AddChangeDialog({ open, onOpenChange, scenarioId }: AddChangeDia
     enabled: open,
   });
 
-  const accounts = accountsData?.results || [];
+  const accounts = accountsData || [];
   const flows = flowsData || [];
   const members = membersData || [];
   const incomeSources = incomeSourcesData || [];

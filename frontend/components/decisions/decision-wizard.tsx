@@ -325,7 +325,7 @@ export function DecisionWizard({ template }: DecisionWizardProps) {
                     field={field}
                     form={form}
                     watchValues={watchValues}
-                    accounts={accountsData?.results || []}
+                    accounts={accountsData || []}
                   />
                 ))}
               </form>

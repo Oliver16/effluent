@@ -9,11 +9,29 @@ This module configures Celery for async task processing including:
 - System flow regeneration
 """
 import os
+import sys
 from celery import Celery
 from celery.schedules import crontab
 
-# Set the default Django settings module for the 'celery' program.
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.dev')
+# SECURITY: Prevent accidental use of development settings in production
+env = os.environ.get('ENV', '').lower()
+if env == 'production':
+    if not os.environ.get('DJANGO_SETTINGS_MODULE'):
+        sys.stderr.write(
+            "CRITICAL: DJANGO_SETTINGS_MODULE not set in production environment.\n"
+            "Set DJANGO_SETTINGS_MODULE=config.settings.prod\n"
+        )
+        sys.exit(1)
+    settings_module = os.environ.get('DJANGO_SETTINGS_MODULE', '')
+    if 'dev' in settings_module:
+        sys.stderr.write(
+            "CRITICAL: Cannot use dev settings in production.\n"
+            f"DJANGO_SETTINGS_MODULE={settings_module}\n"
+        )
+        sys.exit(1)
+else:
+    # Only set default for non-production environments
+    os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.dev')
 
 app = Celery('effluent')
 

@@ -94,7 +94,7 @@ export function EditChangeDialog({ open, onOpenChange, scenarioId, change }: Edi
     enabled: open,
   });
 
-  const accounts = accountsData?.results || [];
+  const accounts = accountsData || [];
   const flows = flowsData || [];
   const members = membersData || [];
   const incomeSources = incomeSourcesData || [];

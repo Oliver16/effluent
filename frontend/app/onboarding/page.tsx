@@ -564,7 +564,7 @@ export default function OnboardingPage() {
           household: householdList[0] || null,
           members: memberList,
           incomeSources: sourceList,
-          accountsList: accountsData.results || [],
+          accountsList: accountsData || [],
           flowsList: flowsList,
         })
       }
