@@ -30,6 +30,7 @@ function getApiUrl(): string {
 
 // Paths that don't require authentication
 const PUBLIC_PATHS = [
+  '/',
   '/login',
   '/register',
   '/forgot-password',
@@ -91,14 +92,19 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Get tokens from cookies (needed for authenticated user redirect)
+  const token = request.cookies.get('token')?.value;
+  const refreshTokenValue = request.cookies.get('refreshToken')?.value;
+
+  // Redirect authenticated users from landing page to control plane
+  if (pathname === '/' && (token || refreshTokenValue)) {
+    return NextResponse.redirect(new URL('/control-plane', request.url));
+  }
+
   // Allow public paths without authentication
   if (isPublicPath(pathname)) {
     return NextResponse.next();
   }
-
-  // Get tokens from cookies
-  const token = request.cookies.get('token')?.value;
-  const refreshTokenValue = request.cookies.get('refreshToken')?.value;
 
   // If no token and no refresh token, redirect to login
   if (!token && !refreshTokenValue) {
