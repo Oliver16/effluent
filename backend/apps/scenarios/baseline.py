@@ -5,6 +5,8 @@ Manages the single canonical baseline scenario for each household.
 The baseline scenario always reflects the latest reality (accounts + flows + taxes)
 and is automatically re-projected when reality changes.
 """
+import logging
+import time
 from datetime import date
 from decimal import Decimal
 
@@ -12,9 +14,12 @@ from django.db import transaction
 from django.utils import timezone
 
 from apps.core.models import Household
+from apps.core.task_utils import get_household_lock, release_household_lock
 from apps.metrics.models import MetricSnapshot
 from .models import Scenario, BaselineMode
 from .services import ScenarioEngine
+
+logger = logging.getLogger(__name__)
 
 
 class BaselineScenarioService:
@@ -75,48 +80,99 @@ class BaselineScenarioService:
     def refresh_baseline(
         cls,
         household: Household,
-        force: bool = False
-    ) -> Scenario:
+        force: bool = False,
+        skip_if_locked: bool = True
+    ) -> Scenario | dict:
         """
         Refresh the baseline projection for a household.
+
+        Uses distributed locking to prevent concurrent baseline refreshes for the
+        same household. This protects all entry points: async tasks, sync API calls,
+        reality events, and stress tests.
 
         Args:
             household: The household to refresh baseline for
             force: If True, refresh even if baseline is pinned
+            skip_if_locked: If True, return skip dict when lock held.
+                           If False, raise an exception.
 
         Returns:
-            The updated baseline Scenario instance
+            The updated baseline Scenario instance, or
+            {'skipped': True, 'reason': 'lock_held'} if lock is held and skip_if_locked=True
         """
-        baseline = cls.get_or_create_baseline(household)
+        from apps.core.monitoring import MonitoringService, ErrorSeverity
 
-        # Don't refresh pinned baselines unless forced
-        if baseline.baseline_mode == BaselineMode.PINNED and not force:
+        start_time = time.time()
+        household_id = str(household.id)
+
+        # Acquire distributed lock for this household's baseline refresh
+        lock_acquired = get_household_lock(household_id, 'baseline_refresh', timeout=300)
+
+        if not lock_acquired:
+            logger.info(f"Baseline refresh already in progress for household {household_id}, skipping")
+            if skip_if_locked:
+                return {'skipped': True, 'reason': 'lock_held'}
+            raise RuntimeError(f"Baseline refresh already in progress for household {household_id}")
+
+        try:
+            baseline = cls.get_or_create_baseline(household)
+
+            # Don't refresh pinned baselines unless forced
+            if baseline.baseline_mode == BaselineMode.PINNED and not force:
+                return baseline
+
+            # Upgrade projection_months if below current default
+            # This ensures baselines created with older defaults get updated
+            if baseline.projection_months < cls.DEFAULT_PROJECTION_MONTHS:
+                baseline.projection_months = cls.DEFAULT_PROJECTION_MONTHS
+                baseline.save(update_fields=['projection_months'])
+
+            # Pre-flight data integrity checks
+            cls._validate_household_data_integrity(household)
+
+            # Compute projection using ScenarioEngine
+            engine = ScenarioEngine(baseline)
+
+            # For pinned baselines, use the pinned as_of_date
+            as_of_date = None
+            if baseline.baseline_mode == BaselineMode.PINNED:
+                as_of_date = baseline.baseline_pinned_as_of_date
+
+            engine.compute_projection(as_of_date=as_of_date)
+
+            # Update last_projected_at
+            baseline.last_projected_at = timezone.now()
+            baseline.save(update_fields=['last_projected_at'])
+
+            # Track performance
+            duration_ms = (time.time() - start_time) * 1000
+            MonitoringService.track_performance(
+                'baseline_refresh',
+                duration_ms,
+                context={'household_id': household_id},
+                tags={'success': 'true'}
+            )
+
+            logger.info(f"Baseline refresh completed for household {household_id} in {duration_ms:.0f}ms")
             return baseline
 
-        # Upgrade projection_months if below current default
-        # This ensures baselines created with older defaults get updated
-        if baseline.projection_months < cls.DEFAULT_PROJECTION_MONTHS:
-            baseline.projection_months = cls.DEFAULT_PROJECTION_MONTHS
-            baseline.save(update_fields=['projection_months'])
+        except Exception as e:
+            # Track error for monitoring
+            duration_ms = (time.time() - start_time) * 1000
+            MonitoringService.track_error(
+                e,
+                context={
+                    'household_id': household_id,
+                    'duration_ms': duration_ms,
+                },
+                severity=ErrorSeverity.HIGH,
+                tags={'component': 'scenarios', 'operation': 'baseline_refresh'}
+            )
+            raise
 
-        # Pre-flight data integrity checks
-        cls._validate_household_data_integrity(household)
-
-        # Compute projection using ScenarioEngine
-        engine = ScenarioEngine(baseline)
-
-        # For pinned baselines, use the pinned as_of_date
-        as_of_date = None
-        if baseline.baseline_mode == BaselineMode.PINNED:
-            as_of_date = baseline.baseline_pinned_as_of_date
-
-        engine.compute_projection(as_of_date=as_of_date)
-
-        # Update last_projected_at
-        baseline.last_projected_at = timezone.now()
-        baseline.save(update_fields=['last_projected_at'])
-
-        return baseline
+        finally:
+            # Always release lock, even if refresh fails
+            release_household_lock(household_id, 'baseline_refresh')
 
     @classmethod
     def pin_baseline(

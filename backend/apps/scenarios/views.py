@@ -807,34 +807,27 @@ class BaselineView(APIView):
                 }, status=status.HTTP_202_ACCEPTED)
 
             # Synchronous for backwards compatibility
-            # Check idempotency (unless force=true)
             force = request.data.get('force', False)
-            if not force:
-                idempotency_key = f'baseline_refresh_in_progress:{request.household.id}'
-                if cache.get(idempotency_key):
-                    return Response({
-                        'error': 'Baseline refresh already in progress',
-                        'message': 'Wait for current refresh to complete or use force=true to override'
-                    }, status=status.HTTP_409_CONFLICT)
-                # Set key to prevent concurrent requests (30 sec TTL for sync operations)
-                cache.set(idempotency_key, 'sync', 30)
 
-            try:
-                baseline = BaselineScenarioService.refresh_baseline(
-                    request.household,
-                    force=force
-                )
+            result = BaselineScenarioService.refresh_baseline(
+                request.household,
+                force=force,
+                skip_if_locked=True
+            )
+
+            # Check if refresh was skipped due to lock
+            if isinstance(result, dict) and result.get('skipped'):
                 return Response({
-                    'status': 'refreshed',
-                    'baseline': BaselineScenarioSerializer(baseline).data,
-                    'last_projected_at': baseline.last_projected_at.isoformat() if baseline.last_projected_at else None,
-                })
-            finally:
-                # Clear idempotency key after sync operation completes
-                if not force:
-                    idempotency_key = f'baseline_refresh_in_progress:{request.household.id}'
-                    if cache.get(idempotency_key) == 'sync':
-                        cache.delete(idempotency_key)
+                    'error': 'Baseline refresh already in progress',
+                    'message': 'Wait for current refresh to complete or try again later'
+                }, status=status.HTTP_409_CONFLICT)
+
+            baseline = result
+            return Response({
+                'status': 'refreshed',
+                'baseline': BaselineScenarioSerializer(baseline).data,
+                'last_projected_at': baseline.last_projected_at.isoformat() if baseline.last_projected_at else None,
+            })
 
         elif action_type == 'pin':
             as_of_date_str = request.data.get('as_of_date')

@@ -138,7 +138,15 @@ def process_reality_changes(batch_size: int = 100) -> dict:
                     generate_system_flows_for_household(household_id)
 
                 # Refresh baseline for this household
-                BaselineScenarioService.refresh_baseline(household)
+                # Note: We're already holding reality_processing lock, so we use
+                # skip_if_locked=False to ensure refresh happens (baseline_refresh lock
+                # is different from reality_processing lock)
+                result = BaselineScenarioService.refresh_baseline(household, skip_if_locked=True)
+                if isinstance(result, dict) and result.get('skipped'):
+                    logger.warning(
+                        f"Baseline refresh skipped for household {household_id} - "
+                        f"another baseline refresh is in progress"
+                    )
 
                 # Mark all events as processed
                 now = timezone.now()
