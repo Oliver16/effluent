@@ -49,14 +49,35 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
         )
 
         service = StressTestService(household)
-        results = service.run_stress_test(test_type, parameters or {})
+        results = service.run_stress_test(
+            test_key=test_type,
+            custom_inputs=parameters or {}
+        )
 
         logger.info(
             f"Stress test complete for household {household_id}: "
-            f"{test_type}, breach={results.get('has_breach', False)}"
+            f"{test_type}, status={results.summary.status}"
         )
 
-        return results
+        # Convert dataclass result to dict for JSON serialization
+        return {
+            'test_key': results.test_key,
+            'test_name': results.test_name,
+            'scenario_id': results.scenario_id,
+            'summary': {
+                'status': results.summary.status,
+                'first_negative_cash_flow_month': results.summary.first_negative_cash_flow_month,
+                'first_liquidity_breach_month': results.summary.first_liquidity_breach_month,
+                'min_liquidity_months': float(results.summary.min_liquidity_months),
+                'min_dscr': float(results.summary.min_dscr),
+                'max_net_worth_drawdown_percent': float(results.summary.max_net_worth_drawdown_percent),
+                'breached_thresholds_count': results.summary.breached_thresholds_count,
+            },
+            'has_breach': results.summary.breached_thresholds_count > 0,
+            'breaches': results.breaches,
+            'monthly_comparison': results.monthly_comparison,
+            'computed_at': results.computed_at,
+        }
     except Household.DoesNotExist:
         logger.error(f"Household {household_id} not found")
         raise

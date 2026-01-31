@@ -13,6 +13,7 @@ from celery.result import AsyncResult
 from django.core.cache import cache
 
 from apps.scenarios.throttles import ExpensiveComputationThrottle
+from apps.core.task_utils import register_task_for_household, unregister_task_for_household
 from .services import StressTestService
 from .templates import get_stress_test_templates, get_stress_test_by_key
 from .tasks import run_stress_test_task, run_batch_stress_tests_task, analyze_stress_test_results_task
@@ -80,8 +81,12 @@ class StressTestRunView(APIView):
                 }
             )
 
-            # Cache task ownership for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(household.id),
+                task_name=f'stress_test:{test_key}'
+            )
 
             return Response({
                 'task_id': task.id,
@@ -160,8 +165,12 @@ class StressTestBatchRunView(APIView):
                 }
             )
 
-            # Cache task ownership for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(household.id),
+                task_name='batch_stress_tests'
+            )
 
             return Response({
                 'task_id': task.id,
@@ -282,12 +291,16 @@ class StressTestTaskStatusView(APIView):
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
+                # Clean up task from registry after successful retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'completed',
                     'result': result
                 })
             else:
+                # Clean up task from registry after failed retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'failed',

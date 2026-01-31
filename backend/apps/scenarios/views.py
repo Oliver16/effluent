@@ -28,6 +28,7 @@ from .tasks import (
     process_reality_changes_task,
     cleanup_old_reality_events_task
 )
+from apps.core.task_utils import register_task_for_household, unregister_task_for_household
 
 
 class ScenarioViewSet(viewsets.ModelViewSet):
@@ -80,8 +81,12 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 }
             )
 
-            # Store task -> household mapping for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(scenario.household_id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(scenario.household_id),
+                task_name='compute_projection'
+            )
 
             return Response({
                 'task_id': task.id,
@@ -185,8 +190,12 @@ class ScenarioViewSet(viewsets.ModelViewSet):
                 }
             )
 
-            # Store task -> household mapping for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(request.household.id),
+                task_name='compare_scenarios'
+            )
 
             return Response({
                 'task_id': task.id,
@@ -794,8 +803,12 @@ class BaselineView(APIView):
                     kwargs={'household_id': str(request.household.id)}
                 )
 
-                # Store task -> household mapping for security validation (1 hour TTL)
-                cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+                # Register task for household tracking and security validation
+                register_task_for_household(
+                    task.id,
+                    str(request.household.id),
+                    task_name='refresh_baseline'
+                )
 
                 # Store idempotency key (5 min TTL - enough for refresh to complete)
                 cache.set(idempotency_key, task.id, 300)
@@ -1145,8 +1158,12 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                     }
                 )
 
-                # Store task -> household mapping for security validation (1 hour TTL)
-                cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+                # Register task for household tracking and security validation
+                register_task_for_household(
+                    task.id,
+                    str(request.household.id),
+                    task_name='apply_life_event'
+                )
 
                 return Response({
                     'status': 'applied',
@@ -1205,16 +1222,16 @@ class ScenarioTaskStatusView(APIView):
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
-                # Clean up cache entry after successful retrieval
-                cache.delete(f'task_household:{task_id}')
+                # Clean up task from registry after successful retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'completed',
                     'result': result
                 })
             else:
-                # Clean up cache entry after failed retrieval
-                cache.delete(f'task_household:{task_id}')
+                # Clean up task from registry after failed retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'failed',
@@ -1241,36 +1258,40 @@ class TaskManagementView(APIView):
         Returns active, pending, completed, and failed tasks from cache.
         """
         from django.core.cache import cache
-        from celery import current_app
 
         household_id = str(request.household.id)
 
-        # Get all task IDs for this household from cache
-        # We scan for keys matching the pattern task_household:*
-        # Note: This is not ideal for production at scale, but works for now
-        # A better approach would be to maintain a separate task registry per household
-
         tasks = []
 
-        # Try to get task IDs from a household-specific registry if it exists
-        task_ids_key = f'household_tasks:{household_id}'
-        task_ids = cache.get(task_ids_key, [])
+        # Get task registry for this household
+        task_registry_key = f'household_tasks:{household_id}'
+        task_registry = cache.get(task_registry_key, [])
 
-        # If no registry exists, we can't list tasks
-        # Return empty list with a message
-        if not task_ids:
+        # If no registry exists, return empty list with a message
+        if not task_registry:
             return Response({
                 'tasks': [],
                 'message': 'No recent tasks found. Tasks are tracked when they are created.'
             })
 
-        # Get status for each task
-        for task_id in task_ids:
+        # Get status for each task in the registry
+        for task_entry in task_registry:
+            # Handle both old format (list of strings) and new format (list of dicts)
+            if isinstance(task_entry, dict):
+                task_id = task_entry.get('task_id')
+                task_name = task_entry.get('task_name', 'Unknown')
+            else:
+                task_id = task_entry
+                task_name = 'Unknown'
+
+            if not task_id:
+                continue
+
             task_result = AsyncResult(task_id)
             task_info = {
                 'task_id': task_id,
                 'status': task_result.state,
-                'name': task_result.name if hasattr(task_result, 'name') else 'Unknown',
+                'name': task_name,
             }
 
             # Add result or error if available
@@ -1280,8 +1301,8 @@ class TaskManagementView(APIView):
                 else:
                     task_info['error'] = str(task_result.result)
 
-            # Add info about the task
-            if task_result.info:
+            # Add info about the task (e.g., progress)
+            if task_result.info and isinstance(task_result.info, dict):
                 task_info['info'] = task_result.info
 
             tasks.append(task_info)

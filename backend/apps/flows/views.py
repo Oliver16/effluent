@@ -12,6 +12,7 @@ from .serializers import RecurringFlowSerializer
 from .services import generate_system_flows_for_household
 from .tasks import regenerate_system_flows_task, recalculate_tax_withholding_task
 from apps.scenarios.reality_events import emit_flows_changed
+from apps.core.task_utils import register_task_for_household, unregister_task_for_household
 
 
 class RecurringFlowViewSet(viewsets.ModelViewSet):
@@ -56,8 +57,12 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
                 kwargs={'household_id': str(request.household.id)}
             )
 
-            # Cache task ownership for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(request.household.id),
+                task_name='regenerate_system_flows'
+            )
 
             # Still emit reality change event (will be processed by celery beat)
             emit_flows_changed(request.household, 'regenerate')
@@ -91,8 +96,12 @@ class RecurringFlowViewSet(viewsets.ModelViewSet):
                 kwargs={'household_id': str(request.household.id)}
             )
 
-            # Cache task ownership for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(request.household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(request.household.id),
+                task_name='recalculate_tax_withholding'
+            )
 
             # Still emit reality change event
             emit_flows_changed(request.household, 'tax_recalculation')
@@ -152,33 +161,28 @@ class FlowTaskStatusView(APIView):
         # Validate task ownership
         cached_household_id = cache.get(f'task_household:{task_id}')
 
-        if not cached_household_id:
-            # Task ID not found or expired - could be old task or invalid ID
+        # SECURITY: Return same error for both "not found" and "access denied" to prevent enumeration
+        # Combines cache check and household ownership validation into single check
+        if not cached_household_id or not request.household or str(request.household.id) != str(cached_household_id):
             return Response({
-                'error': 'Task not found or expired'
+                'error': 'Task not found or access denied'
             }, status=status.HTTP_404_NOT_FOUND)
-
-        # Verify task belongs to requesting user's household
-        if not request.household or str(request.household.id) != str(cached_household_id):
-            return Response({
-                'error': 'Access denied to this task'
-            }, status=status.HTTP_403_FORBIDDEN)
 
         task_result = AsyncResult(task_id)
 
         if task_result.ready():
             if task_result.successful():
                 result = task_result.result
-                # Clean up cache entry after successful retrieval
-                cache.delete(f'task_household:{task_id}')
+                # Clean up task from registry after successful retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'completed',
                     'result': result
                 })
             else:
-                # Clean up cache entry after failed retrieval
-                cache.delete(f'task_household:{task_id}')
+                # Clean up task from registry after failed retrieval
+                unregister_task_for_household(task_id, cached_household_id)
                 return Response({
                     'task_id': task_id,
                     'status': 'failed',
