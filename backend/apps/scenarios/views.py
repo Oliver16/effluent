@@ -966,6 +966,15 @@ class LifeEventTemplateViewSet(viewsets.ReadOnlyModelViewSet):
                     template_data = t
                     break
 
+        # If not found by ID, also try matching by name (for frontend compatibility)
+        if not template_data:
+            templates = LifeEventTemplate.get_default_templates()
+            for t in templates:
+                # Match by name (URL-encoded names will be decoded by Django)
+                if t.get('name', '') == pk:
+                    template_data = t
+                    break
+
         if not template_data:
             return Response(
                 {'error': 'Template not found'},
@@ -1356,6 +1365,29 @@ class AdminTasksView(APIView):
     manually triggered for testing or immediate execution.
     """
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        """
+        Get information about available admin task actions.
+
+        GET /api/v1/scenarios/admin-tasks/
+        """
+        return Response({
+            'available_actions': [
+                {
+                    'action': 'process_reality_changes',
+                    'description': 'Process pending reality change events. Normally runs every 30 seconds.',
+                    'optional_params': {'batch_size': 'Number of events to process (default: 100)'}
+                },
+                {
+                    'action': 'cleanup_old_events',
+                    'description': 'Clean up old reality events. Normally runs daily at 3 AM UTC.',
+                    'optional_params': {}
+                }
+            ],
+            'method': 'POST',
+            'message': 'Use POST request with {"action": "<action_name>"} to trigger a task.'
+        })
 
     def post(self, request):
         """

@@ -9,7 +9,7 @@ operations involving:
 - Results analysis and breach detection
 """
 import logging
-from celery import shared_task, group, chord
+from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
         parameters: Dict of stress test parameters (optional)
 
     Returns:
-        dict: Stress test results
+        dict: Stress test results in camelCase format for frontend compatibility
     """
     from apps.core.models import Household
     from .services import StressTestService
@@ -49,14 +49,31 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
         )
 
         service = StressTestService(household)
-        results = service.run_stress_test(test_type, parameters or {})
+        result = service.run_stress_test(test_type, parameters or {})
 
         logger.info(
             f"Stress test complete for household {household_id}: "
-            f"{test_type}, breach={results.get('has_breach', False)}"
+            f"{test_type}, status={result.summary.status}"
         )
 
-        return results
+        # Return in camelCase format for frontend compatibility
+        return {
+            'testKey': result.test_key,
+            'testName': result.test_name,
+            'scenarioId': result.scenario_id,
+            'summary': {
+                'status': result.summary.status,
+                'firstNegativeCashFlowMonth': result.summary.first_negative_cash_flow_month,
+                'firstLiquidityBreachMonth': result.summary.first_liquidity_breach_month,
+                'minLiquidityMonths': float(result.summary.min_liquidity_months),
+                'minDscr': float(result.summary.min_dscr),
+                'maxNetWorthDrawdownPercent': float(result.summary.max_net_worth_drawdown_percent),
+                'breachedThresholdsCount': result.summary.breached_thresholds_count,
+            },
+            'breaches': result.breaches,
+            'monthlyComparison': result.monthly_comparison,
+            'computedAt': result.computed_at,
+        }
     except Household.DoesNotExist:
         logger.error(f"Household {household_id} not found")
         raise
@@ -105,61 +122,123 @@ def collect_batch_results_task(self, results, household_id):
     name='apps.stress_tests.tasks.run_batch_stress_tests_task',
     bind=True,
     max_retries=1,
+    time_limit=3600,  # 1 hour timeout for batch (multiple tests)
 )
 def run_batch_stress_tests_task(self, household_id, test_configs):
     """
-    Run multiple stress tests in parallel using Celery chord.
+    Run multiple stress tests sequentially within a single task.
 
-    This task dispatches a group of parallel stress test tasks and uses a callback
-    to collect results. This avoids blocking a worker thread while waiting for
-    all subtasks to complete.
+    This task runs tests one by one and returns the aggregated results.
+    While sequential, this still runs asynchronously from the frontend's
+    perspective and avoids the complexity of chord-based result aggregation.
 
     Args:
         household_id: UUID of the household
         test_configs: List of dicts with 'test_type' and 'parameters'
 
     Returns:
-        dict: Task dispatch information with chord task ID
+        dict: Complete batch results with summary and individual test results
     """
     from apps.core.models import Household
+    from apps.scenarios.baseline import BaselineScenarioService
+    from .services import StressTestService
 
     try:
         household = Household.objects.get(id=household_id)
         logger.info(
-            f"Dispatching batch of {len(test_configs)} stress tests "
+            f"Running batch of {len(test_configs)} stress tests "
             f"for household {household_id}"
         )
 
-        # Create a chord: group of parallel tasks + callback
-        callback = collect_batch_results_task.s(household_id=str(household_id))
-        job = chord(
-            run_stress_test_task.s(
-                household_id=str(household_id),
-                test_type=config['test_type'],
-                parameters=config.get('parameters')
-            )
-            for config in test_configs
-        )(callback)
+        # Refresh baseline once before running all tests
+        try:
+            BaselineScenarioService.get_or_create_baseline(household)
+            BaselineScenarioService.refresh_baseline(household)
+        except Exception as e:
+            logger.error(f"Failed to initialize baseline: {e}")
+            return {
+                'error': f'Failed to initialize baseline scenario: {str(e)}',
+                'results': [],
+                'errors': [],
+                'summary': {
+                    'totalTests': 0,
+                    'passed': 0,
+                    'warning': 0,
+                    'failed': 0,
+                    'resilienceScore': 0,
+                }
+            }
+
+        service = StressTestService(household)
+        results = []
+        errors = []
+
+        for config in test_configs:
+            test_type = config['test_type']
+            parameters = config.get('parameters', {})
+
+            try:
+                result = service.run_stress_test(
+                    test_key=test_type,
+                    custom_inputs=parameters,
+                    skip_baseline_refresh=True  # Already refreshed above
+                )
+                results.append({
+                    'testKey': result.test_key,
+                    'testName': result.test_name,
+                    'scenarioId': result.scenario_id,
+                    'summary': {
+                        'status': result.summary.status,
+                        'firstNegativeCashFlowMonth': result.summary.first_negative_cash_flow_month,
+                        'firstLiquidityBreachMonth': result.summary.first_liquidity_breach_month,
+                        'minLiquidityMonths': float(result.summary.min_liquidity_months),
+                        'minDscr': float(result.summary.min_dscr),
+                        'maxNetWorthDrawdownPercent': float(result.summary.max_net_worth_drawdown_percent),
+                        'breachedThresholdsCount': result.summary.breached_thresholds_count,
+                    },
+                    'computedAt': result.computed_at,
+                })
+                logger.info(f"Completed stress test: {test_type}")
+            except Exception as e:
+                logger.error(f"Stress test {test_type} failed: {e}")
+                errors.append({
+                    'testKey': test_type,
+                    'error': str(e)
+                })
+
+        # Compute overall summary
+        passed_count = sum(1 for r in results if r['summary']['status'] == 'passed')
+        warning_count = sum(1 for r in results if r['summary']['status'] == 'warning')
+        failed_count = sum(1 for r in results if r['summary']['status'] == 'failed')
+        total = len(results)
+
+        if total > 0:
+            resilience_score = round((passed_count * 100 + warning_count * 50) / total)
+        else:
+            resilience_score = 0
 
         logger.info(
-            f"Batch stress tests dispatched for household {household_id}, "
-            f"chord task ID: {job.id}"
+            f"Batch stress tests complete for household {household_id}: "
+            f"{passed_count} passed, {warning_count} warning, {failed_count} failed"
         )
 
-        # Return immediately with task ID (non-blocking)
         return {
-            'household_id': str(household_id),
-            'test_count': len(test_configs),
-            'chord_task_id': job.id,
-            'status': 'dispatched',
-            'message': 'Stress tests running in parallel. Poll task status for results.'
+            'results': results,
+            'errors': errors,
+            'summary': {
+                'totalTests': total,
+                'passed': passed_count,
+                'warning': warning_count,
+                'failed': failed_count,
+                'resilienceScore': resilience_score,
+            }
         }
     except Household.DoesNotExist:
         logger.error(f"Household {household_id} not found")
         raise
     except Exception as exc:
         logger.error(
-            f"Failed to dispatch batch stress tests for household {household_id}: {exc}",
+            f"Failed to run batch stress tests for household {household_id}: {exc}",
             exc_info=True
         )
         raise self.retry(exc=exc)
