@@ -12,6 +12,7 @@ from apps.taxes.models import IncomeSource, W2Withholding, PreTaxDeduction
 from apps.scenarios.reality_events import emit_onboarding_completed
 from apps.scenarios.baseline import BaselineScenarioService
 from apps.scenarios.tasks import refresh_baseline_task
+from apps.core.task_utils import register_task_for_household
 from .models import OnboardingProgress, OnboardingStepData, OnboardingStep
 
 
@@ -941,8 +942,12 @@ class OnboardingService:
                 kwargs={'household_id': str(self.household.id)}
             )
 
-            # Store task -> household mapping for security validation (1 hour TTL)
-            cache.set(f'task_household:{task.id}', str(self.household.id), 3600)
+            # Register task for household tracking and security validation
+            register_task_for_household(
+                task.id,
+                str(self.household.id),
+                task_name='onboarding_baseline_refresh'
+            )
 
             # Also emit the event for any async processing that may depend on it
             emit_onboarding_completed(self.household)

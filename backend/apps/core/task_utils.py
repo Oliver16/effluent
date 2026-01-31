@@ -73,10 +73,18 @@ def unregister_task_for_household(task_id: str, household_id: str) -> None:
     # Remove task ownership
     cache.delete(ownership_key)
 
-    # Remove from registry
+    # Remove from registry - handle both old format (list of strings) and new format (list of dicts)
     task_registry = cache.get(registry_key, [])
-    task_registry = [t for t in task_registry if t.get('task_id') != task_id]
-    cache.set(registry_key, task_registry, TASK_REGISTRY_TTL)
+    new_registry = []
+    for entry in task_registry:
+        if isinstance(entry, dict):
+            if entry.get('task_id') != task_id:
+                new_registry.append(entry)
+        elif isinstance(entry, str):
+            # Legacy format: entry is just the task_id string
+            if entry != task_id:
+                new_registry.append(entry)
+    cache.set(registry_key, new_registry, TASK_REGISTRY_TTL)
 
     logger.debug(f"Unregistered task {task_id} for household {household_id}")
 
