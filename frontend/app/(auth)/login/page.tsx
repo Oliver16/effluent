@@ -18,6 +18,8 @@ function isValidRedirectUrl(url: string): boolean {
   if (url.startsWith('//')) return false
   // Prevent redirect to login page itself
   if (url.startsWith('/login')) return false
+  // Prevent redirect to landing page (should go to control plane instead)
+  if (url === '/') return false
   return true
 }
 
