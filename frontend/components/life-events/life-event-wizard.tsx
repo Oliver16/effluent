@@ -178,7 +178,7 @@ export function LifeEventWizard({ template }: LifeEventWizardProps) {
 
       try {
         // Apply the life event template to the scenario
-        const response = await lifeEventTemplates.apply(template.name, {
+        const response = await lifeEventTemplates.apply(template.id || template.name, {
           scenarioId: scenarioId,
           effectiveDate: effectiveDate,
           changeValues: changeValues,
