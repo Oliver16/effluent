@@ -278,6 +278,10 @@ class LifeEventCategory(models.TextChoices):
     RETIREMENT = 'retirement', 'Retirement Planning'
 
 
+# Namespace UUID for generating stable default template IDs
+LIFE_EVENT_TEMPLATE_NAMESPACE = uuid.UUID('a3e4c5d6-7f8e-4a9b-8c1d-2e3f4a5b6c7d')
+
+
 class LifeEventTemplate(models.Model):
     """Template for common life events with suggested changes."""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -301,10 +305,15 @@ class LifeEventTemplate(models.Model):
     def __str__(self):
         return f"{self.category}: {self.name}"
 
+    @staticmethod
+    def generate_template_id(name: str) -> str:
+        """Generate a stable UUID for a default template based on its name."""
+        return str(uuid.uuid5(LIFE_EVENT_TEMPLATE_NAMESPACE, name))
+
     @classmethod
     def get_default_templates(cls):
         """Return default templates for common life events."""
-        return [
+        templates = [
             # Career Events
             {
                 'name': 'Get a New Job',
@@ -1170,6 +1179,12 @@ class LifeEventTemplate(models.Model):
                 ],
             },
         ]
+
+        # Add stable IDs to each template based on name
+        for template in templates:
+            template['id'] = cls.generate_template_id(template['name'])
+
+        return templates
 
 
 class RealityChangeEventType(models.TextChoices):

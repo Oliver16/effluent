@@ -229,13 +229,12 @@ export function LifeEventTemplatesDialog({
 
   const applyMutation = useMutation({
     mutationFn: (data: {
-      templateName: string;
+      templateId: string;
       scenarioId: string;
       effectiveDate: string;
       changeValues: Record<string, Record<string, unknown>>;
     }) => {
-      // Use template name as ID since we're using defaults
-      return lifeEventTemplates.apply(data.templateName, {
+      return lifeEventTemplates.apply(data.templateId, {
         scenarioId: data.scenarioId,
         effectiveDate: data.effectiveDate,
         changeValues: data.changeValues,
@@ -403,7 +402,7 @@ export function LifeEventTemplatesDialog({
     if (!selectedTemplate) return;
 
     applyMutation.mutate({
-      templateName: selectedTemplate.name,
+      templateId: selectedTemplate.id || selectedTemplate.name,
       scenarioId: scenarioId,
       effectiveDate: effectiveDate,
       changeValues: changeValues,
