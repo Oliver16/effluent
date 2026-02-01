@@ -177,10 +177,16 @@ class StressTestBatchRunView(APIView):
 
         # Refresh baseline once before running all tests
         # This avoids redundant refreshes for each test
+        # Use skip_if_locked=False because stress tests need a fresh baseline
         try:
             from apps.scenarios.baseline import BaselineScenarioService
             BaselineScenarioService.get_or_create_baseline(household)
-            BaselineScenarioService.refresh_baseline(household)
+            result = BaselineScenarioService.refresh_baseline(household, skip_if_locked=False)
+            if isinstance(result, dict) and result.get('skipped'):
+                return Response(
+                    {'error': 'Baseline refresh is blocked by another process. Please try again.'},
+                    status=status.HTTP_409_CONFLICT
+                )
         except Exception as e:
             return Response(
                 {'error': f'Failed to initialize baseline scenario: {str(e)}'},

@@ -218,7 +218,8 @@ class BaselineScenarioService:
             ])
 
         # Refresh baseline with pinned initialization
-        return cls.refresh_baseline(household, force=True)
+        # Use skip_if_locked=False to ensure the refresh completes (pinning must succeed)
+        return cls.refresh_baseline(household, force=True, skip_if_locked=False)
 
     @classmethod
     def unpin_baseline(cls, household: Household) -> Scenario:
@@ -246,7 +247,8 @@ class BaselineScenarioService:
             ])
 
         # Refresh baseline with live data
-        return cls.refresh_baseline(household)
+        # Use skip_if_locked=False to ensure the refresh completes (unpinning must succeed)
+        return cls.refresh_baseline(household, skip_if_locked=False)
 
     @classmethod
     def get_baseline_health(cls, household: Household) -> dict:
