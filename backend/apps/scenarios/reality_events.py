@@ -138,17 +138,30 @@ def process_reality_changes(batch_size: int = 100) -> dict:
                     generate_system_flows_for_household(household_id)
 
                 # Refresh baseline for this household
-                BaselineScenarioService.refresh_baseline(household)
+                # Note: baseline_refresh lock is different from reality_processing lock
+                result = BaselineScenarioService.refresh_baseline(household, skip_if_locked=True)
 
-                # Mark all events as processed
-                now = timezone.now()
-                for event in events:
-                    event.status = RealityChangeEventStatus.PROCESSED
-                    event.processed_at = now
-                    event.save(update_fields=['status', 'processed_at'])
+                if isinstance(result, dict) and result.get('skipped'):
+                    # Baseline refresh was skipped due to lock contention
+                    # Do NOT mark events as processed - leave them pending for next run
+                    # This ensures events are fully processed (flows + baseline) before marking done
+                    logger.warning(
+                        f"Baseline refresh skipped for household {household_id} - "
+                        f"another baseline refresh is in progress. "
+                        f"Events will remain pending for next processing cycle."
+                    )
+                    stats['events_skipped'] = stats.get('events_skipped', 0) + len(events)
+                else:
+                    # Baseline refresh completed successfully
+                    # Mark all events as processed
+                    now = timezone.now()
+                    for event in events:
+                        event.status = RealityChangeEventStatus.PROCESSED
+                        event.processed_at = now
+                        event.save(update_fields=['status', 'processed_at'])
 
-                stats['events_processed'] += len(events)
-                stats['households_refreshed'] += 1
+                    stats['events_processed'] += len(events)
+                    stats['households_refreshed'] += 1
 
         except Exception as e:
             error_msg = f"Failed to process events for household {household_id}: {str(e)}"
@@ -167,10 +180,12 @@ def process_reality_changes(batch_size: int = 100) -> dict:
             # Always release the lock, even if processing failed
             release_household_lock(str(household_id), 'reality_processing')
 
+    skipped = stats.get('events_skipped', 0)
+    skipped_msg = f", {skipped} events deferred" if skipped else ""
     logger.info(
         f"Reality change processing complete: {stats['events_processed']} events processed, "
         f"{stats['households_refreshed']} households refreshed, "
-        f"{stats['events_failed']} events failed"
+        f"{stats['events_failed']} events failed{skipped_msg}"
     )
 
     return stats

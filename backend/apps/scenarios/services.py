@@ -142,7 +142,7 @@ class ScenarioEngine:
             state=getattr(self.household, 'state_of_residence', None),
         )
 
-    def _ensure_flows_are_fresh(self):
+    def _ensure_flows_are_fresh(self) -> dict:
         """
         Ensure flow data is fresh by processing any pending reality events.
 
@@ -154,6 +154,12 @@ class ScenarioEngine:
 
         If pending events exist for this household, they are processed immediately
         (synchronously) to ensure projection accuracy.
+
+        Returns:
+            dict: Data freshness status with keys:
+                - 'is_fresh': True if data is known to be fresh
+                - 'pending_events': Number of pending events after processing
+                - 'warning': Optional warning message if data may be stale
         """
         from .models import RealityChangeEvent, RealityChangeEventStatus
         from .reality_events import process_reality_changes
@@ -162,15 +168,15 @@ class ScenarioEngine:
         logger = logging.getLogger(__name__)
 
         # Check if this household has any pending reality events
-        pending_events = RealityChangeEvent.objects.filter(
+        initial_pending = RealityChangeEvent.objects.filter(
             household=self.household,
             status=RealityChangeEventStatus.PENDING
-        ).exists()
+        ).count()
 
-        if pending_events:
+        if initial_pending > 0:
             logger.info(
-                f"Processing pending reality events for household {self.household.id} "
-                f"before projection computation"
+                f"Processing {initial_pending} pending reality events for household "
+                f"{self.household.id} before projection computation"
             )
             # Process all pending events immediately (not just this household)
             # This is more efficient than processing per-household
@@ -186,6 +192,50 @@ class ScenarioEngine:
                     f"Failed to process reality events before projection: {e}",
                     exc_info=True
                 )
+
+        # Check if there are STILL pending events after processing
+        # This can happen if another process holds a lock, or if processing failed
+        remaining_pending = RealityChangeEvent.objects.filter(
+            household=self.household,
+            status=RealityChangeEventStatus.PENDING
+        ).count()
+
+        if remaining_pending > 0:
+            warning_msg = (
+                f"Projection may use stale data: {remaining_pending} reality change "
+                f"event(s) are still pending for this household. This can occur when "
+                f"another process is updating flows. Consider retrying in a few seconds."
+            )
+            logger.warning(warning_msg)
+            self._data_freshness = {
+                'is_fresh': False,
+                'pending_events': remaining_pending,
+                'warning': warning_msg,
+            }
+        else:
+            self._data_freshness = {
+                'is_fresh': True,
+                'pending_events': 0,
+                'warning': None,
+            }
+
+        return self._data_freshness
+
+    def get_data_freshness(self) -> dict:
+        """
+        Get the data freshness status from the last check.
+
+        Returns:
+            dict: Data freshness status with keys:
+                - 'is_fresh': True if data is known to be fresh
+                - 'pending_events': Number of pending events
+                - 'warning': Optional warning message if data may be stale
+        """
+        return getattr(self, '_data_freshness', {
+            'is_fresh': True,
+            'pending_events': 0,
+            'warning': None,
+        })
 
     def _get_filing_status(self) -> str:
         """Get filing status from household W2 withholding or default."""

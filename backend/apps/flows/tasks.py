@@ -9,9 +9,15 @@ Handles async execution of system flow generation which recalculates:
 
 All tasks use generate_system_flows_for_household() which includes
 distributed locking to prevent concurrent regeneration.
+
+Idempotency: Tasks use cache-based idempotency keys to skip duplicate
+dispatches within a short TTL window (60 seconds), preventing redundant
+work when multiple triggers fire in quick succession.
 """
 import logging
 from celery import shared_task
+
+from apps.core.task_utils import with_idempotency_key
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +28,7 @@ logger = logging.getLogger(__name__)
     max_retries=3,
     default_retry_delay=60,
 )
+@with_idempotency_key('flow_regen:{household_id}', ttl=60)
 def regenerate_system_flows_task(self, household_id):
     """
     Regenerate all system-generated flows for a household.
@@ -41,11 +48,15 @@ def regenerate_system_flows_task(self, household_id):
     Locking is handled by generate_system_flows_for_household() itself,
     which uses distributed locking to prevent concurrent regeneration.
 
+    Idempotency: Skips duplicate dispatches within 60 seconds of the last
+    dispatch for the same household. This prevents redundant work when
+    multiple events trigger flow regeneration in quick succession.
+
     Args:
         household_id: UUID of the household
 
     Returns:
-        dict: Regeneration statistics (or {'skipped': True} if lock held)
+        dict: Regeneration statistics (or {'skipped': True, 'duplicate': True} if duplicate)
     """
     from .services import generate_system_flows_for_household
 
@@ -53,6 +64,11 @@ def regenerate_system_flows_task(self, household_id):
         logger.info(f"Regenerating system flows for household {household_id}")
 
         result = generate_system_flows_for_household(household_id)
+
+        # Handle lock skip case
+        if result.get('skipped'):
+            logger.info(f"System flow regeneration skipped for household {household_id}: {result.get('reason')}")
+            return result
 
         logger.info(
             f"System flows regenerated for household {household_id}: "
@@ -78,6 +94,7 @@ def regenerate_system_flows_task(self, household_id):
     max_retries=2,
     default_retry_delay=60,
 )
+@with_idempotency_key('tax_withholding_regen:{household_id}', ttl=60)
 def recalculate_tax_withholding_task(self, household_id):
     """
     Recalculate tax withholding flows for all income sources.
@@ -89,11 +106,14 @@ def recalculate_tax_withholding_task(self, household_id):
     Note: This regenerates ALL flows, not just tax withholding, because
     generate_system_flows_for_household() handles all flows together.
 
+    Idempotency: Skips duplicate dispatches within 60 seconds of the last
+    dispatch for the same household.
+
     Args:
         household_id: UUID of the household
 
     Returns:
-        dict: Recalculation statistics (or {'skipped': True} if lock held)
+        dict: Recalculation statistics (or {'skipped': True} if lock held or duplicate)
     """
     from .services import generate_system_flows_for_household
 

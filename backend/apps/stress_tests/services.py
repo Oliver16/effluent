@@ -109,8 +109,13 @@ class StressTestService:
 
         # Refresh baseline to ensure it has up-to-date projections
         # Skip if already refreshed (e.g., in batch operations)
+        # Use skip_if_locked=False because stress tests need a fresh baseline
         if not skip_baseline_refresh:
-            baseline = BaselineScenarioService.refresh_baseline(self.household)
+            result = BaselineScenarioService.refresh_baseline(self.household, skip_if_locked=False)
+            # Handle the case where refresh was skipped (shouldn't happen with skip_if_locked=False)
+            if isinstance(result, dict) and result.get('skipped'):
+                raise RuntimeError("Baseline refresh is blocked by another process")
+            baseline = result
 
         # Resolve inputs
         inputs = template['default_inputs'].copy()

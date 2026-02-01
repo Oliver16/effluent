@@ -6,10 +6,16 @@ Handles async execution of expensive scenario operations:
 - Scenario projections
 - Scenario comparisons
 - Reality change event processing
+
+Idempotency: Key tasks use cache-based idempotency keys to skip duplicate
+dispatches within a short TTL window, preventing redundant work when
+multiple triggers fire in quick succession.
 """
 import logging
 from celery import shared_task
 from django.db import transaction
+
+from apps.core.task_utils import with_idempotency_key
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +98,7 @@ def cleanup_old_reality_events_task(self):
     max_retries=2,
     time_limit=1800,  # 30 minute timeout
 )
+@with_idempotency_key('baseline_refresh:{household_id}', ttl=120)
 def refresh_baseline_task(self, household_id):
     """
     Refresh the baseline scenario for a household.
@@ -101,11 +108,17 @@ def refresh_baseline_task(self, household_id):
     2. Runs ScenarioEngine.compute_projection() for 120 months
     3. Saves projections to database
 
+    Uses distributed locking to prevent concurrent refreshes.
+
+    Idempotency: Skips duplicate dispatches within 120 seconds of the last
+    dispatch for the same household. This prevents redundant work when
+    multiple events trigger baseline refresh in quick succession.
+
     Args:
         household_id: UUID of the household
 
     Returns:
-        dict: Refresh statistics
+        dict: Refresh statistics (or {'skipped': True, 'duplicate': True} if duplicate)
     """
     from apps.core.models import Household
     from .baseline import BaselineScenarioService
@@ -114,8 +127,21 @@ def refresh_baseline_task(self, household_id):
         household = Household.objects.get(id=household_id)
         logger.info(f"Refreshing baseline for household {household_id}")
 
-        baseline = BaselineScenarioService.refresh_baseline(household)
+        result = BaselineScenarioService.refresh_baseline(household, skip_if_locked=True)
 
+        # Check if refresh was skipped due to lock
+        if isinstance(result, dict) and result.get('skipped'):
+            logger.info(
+                f"Baseline refresh skipped for household {household_id}: "
+                f"another refresh already in progress"
+            )
+            return {
+                'household_id': str(household_id),
+                'skipped': True,
+                'reason': result.get('reason', 'lock_held'),
+            }
+
+        baseline = result
         logger.info(
             f"Baseline refreshed for household {household_id}: "
             f"{baseline.projections.count()} projections created"
@@ -172,23 +198,30 @@ def compute_projection_task(self, scenario_id, horizon_months=None, in_memory=Fa
                 horizon_months=horizon_months,
                 in_memory=True
             )
-            return {
+            result = {
                 'scenario_id': str(scenario_id),
                 'projection_count': len(projections),
                 'projections': projections,
             }
         else:
-            result = engine.compute_projection(horizon_months=horizon_months)
+            engine.compute_projection(horizon_months=horizon_months)
 
             logger.info(
                 f"Projection computed for scenario {scenario_id}: "
                 f"{scenario.projections.count()} projections saved"
             )
 
-            return {
+            result = {
                 'scenario_id': str(scenario_id),
                 'projection_count': scenario.projections.count(),
             }
+
+        # Include data freshness warning if applicable
+        freshness = engine.get_data_freshness()
+        if not freshness.get('is_fresh', True):
+            result['data_freshness'] = freshness
+
+        return result
     except Scenario.DoesNotExist:
         logger.error(f"Scenario {scenario_id} not found")
         raise
