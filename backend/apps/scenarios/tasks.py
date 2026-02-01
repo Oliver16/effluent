@@ -54,6 +54,8 @@ def process_reality_changes_task(self, batch_size=100):
 @shared_task(
     name='apps.scenarios.tasks.cleanup_old_reality_events_task',
     bind=True,
+    max_retries=3,
+    default_retry_delay=60,
 )
 def cleanup_old_reality_events_task(self):
     """

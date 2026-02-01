@@ -76,6 +76,7 @@ def regenerate_system_flows_task(self, household_id):
     name='apps.flows.tasks.recalculate_tax_withholding_task',
     bind=True,
     max_retries=2,
+    default_retry_delay=60,
 )
 def recalculate_tax_withholding_task(self, household_id):
     """

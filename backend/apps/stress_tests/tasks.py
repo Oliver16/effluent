@@ -49,7 +49,10 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
         )
 
         service = StressTestService(household)
-        result = service.run_stress_test(test_type, parameters or {})
+        result = service.run_stress_test(
+            test_key=test_type,
+            custom_inputs=parameters or {}
+        )
 
         logger.info(
             f"Stress test complete for household {household_id}: "
@@ -70,6 +73,7 @@ def run_stress_test_task(self, household_id, test_type, parameters=None):
                 'maxNetWorthDrawdownPercent': float(result.summary.max_net_worth_drawdown_percent),
                 'breachedThresholdsCount': result.summary.breached_thresholds_count,
             },
+            'hasBreach': result.summary.breached_thresholds_count > 0,
             'breaches': result.breaches,
             'monthlyComparison': result.monthly_comparison,
             'computedAt': result.computed_at,

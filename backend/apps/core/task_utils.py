@@ -5,13 +5,88 @@ Provides reusable decorators and utilities for task management including:
 - Distributed locking to prevent concurrent execution
 - Task deduplication
 - Error handling patterns
+- Task registration for household task tracking
 """
 import logging
 import functools
-from typing import Optional, Callable, Any
+from typing import Optional, Callable, Any, List
 from django.core.cache import cache
 
 logger = logging.getLogger(__name__)
+
+# Constants for task registry
+TASK_REGISTRY_TTL = 3600  # 1 hour TTL for task registry
+TASK_REGISTRY_MAX_SIZE = 50  # Max tasks to keep in registry per household
+
+
+def register_task_for_household(task_id: str, household_id: str, task_name: str = None) -> None:
+    """
+    Register a task ID in the household's task registry.
+
+    This allows the TaskManagementView to list all active tasks for a household.
+    The registry has a max size limit to prevent unbounded growth.
+
+    Args:
+        task_id: The Celery task ID
+        household_id: The household ID that owns this task
+        task_name: Optional name of the task for display
+    """
+    registry_key = f'household_tasks:{household_id}'
+    ownership_key = f'task_household:{task_id}'
+
+    # Store task ownership (for security validation)
+    cache.set(ownership_key, str(household_id), TASK_REGISTRY_TTL)
+
+    # Get existing task registry
+    task_registry = cache.get(registry_key, [])
+
+    # Add new task to registry
+    task_entry = {
+        'task_id': task_id,
+        'task_name': task_name,
+    }
+    task_registry.insert(0, task_entry)  # Add to beginning (most recent first)
+
+    # Limit registry size to prevent unbounded growth
+    if len(task_registry) > TASK_REGISTRY_MAX_SIZE:
+        task_registry = task_registry[:TASK_REGISTRY_MAX_SIZE]
+
+    # Save updated registry
+    cache.set(registry_key, task_registry, TASK_REGISTRY_TTL)
+
+    logger.debug(f"Registered task {task_id} for household {household_id}")
+
+
+def unregister_task_for_household(task_id: str, household_id: str) -> None:
+    """
+    Remove a task from the household's task registry.
+
+    Called when a task completes or is cleaned up.
+
+    Args:
+        task_id: The Celery task ID
+        household_id: The household ID that owns this task
+    """
+    registry_key = f'household_tasks:{household_id}'
+    ownership_key = f'task_household:{task_id}'
+
+    # Remove task ownership
+    cache.delete(ownership_key)
+
+    # Remove from registry - handle both old format (list of strings) and new format (list of dicts)
+    task_registry = cache.get(registry_key, [])
+    new_registry = []
+    for entry in task_registry:
+        if isinstance(entry, dict):
+            if entry.get('task_id') != task_id:
+                new_registry.append(entry)
+        elif isinstance(entry, str):
+            # Legacy format: entry is just the task_id string
+            if entry != task_id:
+                new_registry.append(entry)
+    cache.set(registry_key, new_registry, TASK_REGISTRY_TTL)
+
+    logger.debug(f"Unregistered task {task_id} for household {household_id}")
 
 
 class TaskLockError(Exception):
